@@ -8,6 +8,8 @@
 //   5. Concurrency (DEC-021) — query-time behavior, not a schema construct
 //   6. Hebrew search (ISSUE-010) — deferred
 //   7. Popularity — computed from OrderItem at query time, no stored column
+//
+// Product.slug added post-approval — DEC-033, for seed idempotency.
 
 generator client {
   provider = "prisma-client-js"
@@ -152,6 +154,7 @@ model HealthGoal {
 
 model Product {
   id                  String   @id @default(uuid())
+  slug                String   @unique // stable seed identifier, DEC-033 — never change once shipped
   nameHe              String   @map("name_he") // field 02 — DEC-017, paired
   nameEn              String   @map("name_en")
   categoryId          String   @map("category_id") // field 03 — exactly one category
