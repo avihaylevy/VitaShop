@@ -1,0 +1,50 @@
+# Never commit ─────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# personal overrides — project settings.json IS committed
+.claude/settings.local.json
+
+# ── Dependencies ─────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Build output ─────────────────────────────
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# ── Logs ─────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Test and coverage ────────────────────────
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# ── Editors and OS ───────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Prisma ───────────────────────────────────
+# migrations ARE committed — only local artefacts are ignored
+server/prisma/*.db
+server/prisma/*.db-journal
+
+# ── Uploads ──────────────────────────────────
+# runtime uploads are not versioned; seed images in assets/ are
+uploads/

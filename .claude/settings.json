@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "MEM=\"/c/Users/aviha/תכנות/זיכרון AI/פרוייקט ECOMMERCE/פרוייקט Ecommerce/VitaShop-Project\"; REPO=\"/c/Users/aviha/תכנות/VitaShop\"; L=$(stat -c %Y \"$MEM/operations/SESSION_LOG.md\" 2>/dev/null || echo 0); N=$(find \"$REPO\" -type f -not -path \"*/.claude/*\" -not -path \"*/node_modules/*\" -not -path \"*/.git/*\" -printf \"%T@\n\" 2>/dev/null | sort -rn | head -1 | cut -d. -f1); if [ -n \"$N\" ] && [ \"$N\" -gt \"$L\" ]; then printf %s '{\"systemMessage\":\"⚠️ VitaShop — repo files changed since the last SESSION_LOG entry. Type  סגור סשן  to update SESSION_LOG, STATUS, CURRENT_TASK, ROADMAP and release LOCK.\"}'; fi; exit 0",
+            "timeout": 10,
+            "statusMessage": "Checking VitaShop memory files..."
+          }
+        ]
+      }
+    ]
+  },
+  "language": "english"
+}

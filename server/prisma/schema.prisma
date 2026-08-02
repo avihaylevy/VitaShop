@@ -1,0 +1,335 @@
+// VitaShop — approved schema, DEC-024.
+// Open items deliberately left unresolved (not schema-blocking, DEC-024):
+//   1. Address fields — minimal, not yet specced
+//   2. TargetAudience — spec's closed list not yet transcribed; left as
+//      nullable String rather than an invented enum
+//   3. Session — none here; connect-pg-simple manages its own table (DEC-018)
+//   4. Cart guest identification mechanism — session_id is a placeholder
+//   5. Concurrency (DEC-021) — query-time behavior, not a schema construct
+//   6. Hebrew search (ISSUE-010) — deferred
+//   7. Popularity — computed from OrderItem at query time, no stored column
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Connection URL lives in prisma.config.ts (Prisma 7 requirement) — not here.
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Enums ─────────────────────────────────────────────
+
+enum UserRole {
+  customer
+  admin
+}
+
+enum UserStatus {
+  pending_verification
+  active
+  disabled
+}
+
+enum DosageForm {
+  CAPSULE @map("כמוסות")
+  TABLET  @map("טבליות")
+  DROPS   @map("טיפות")
+  POWDER  @map("אבקה")
+  SYRUP   @map("סירופ")
+}
+
+enum OrderStatus {
+  pending_payment
+  paid
+  processing
+  shipped
+  delivered
+  cancelled
+}
+
+// The four spec-mandated events (§4.7.5). Additional proposed events
+// (favorite_added, ai_agent_opened, ...) are not yet approved — KPI_ANALYTICS.md.
+enum FunnelEventType {
+  product_view
+  add_to_cart
+  checkout_started
+  purchase_completed
+}
+
+// ── Core ──────────────────────────────────────────────
+
+model User {
+  id                String    @id @default(uuid())
+  firstName         String    @map("first_name")
+  lastName          String    @map("last_name")
+  email             String    @unique
+  passwordHash      String    @map("password_hash")
+  phone             String?
+  termsAcceptedAt   DateTime  @map("terms_accepted_at")
+  role              UserRole  @default(customer)
+  status            UserStatus @default(pending_verification)
+  failedLoginCount  Int       @default(0) @map("failed_login_count")
+  lockedUntil       DateTime? @map("locked_until")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  addresses               Address[]
+  orders                  Order[]
+  favorites               Favorite[]
+  carts                   Cart[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  funnelEvents            FunnelEvent[]
+
+  @@map("users")
+}
+
+// Fields left minimal — street/city/zip breakdown not yet specced (DEC-024 open item 1)
+model Address {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  line1     String
+  city      String
+  zipCode   String?  @map("zip_code")
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime @map("expires_at") // §4.4.2 — 24-hour validity
+  usedAt    DateTime? @map("used_at") // single-use
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at") // single-use, §4.4.3
+
+  @@map("password_reset_tokens")
+}
+
+// ── Catalogue ─────────────────────────────────────────
+
+model Category {
+  id       String    @id @default(uuid())
+  nameHe   String    @map("name_he") // DEC-017 — paired
+  nameEn   String    @map("name_en")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Brand {
+  id       String    @id @default(uuid())
+  name     String    // DEC-017 — brand names not translated
+  products Product[]
+
+  @@map("brands")
+}
+
+model HealthGoal {
+  id       String               @id @default(uuid())
+  nameHe   String               @map("name_he") // DEC-017 — paired
+  nameEn   String               @map("name_en")
+  products ProductHealthGoal[]
+
+  @@map("health_goals")
+}
+
+model Product {
+  id                  String   @id @default(uuid())
+  nameHe              String   @map("name_he") // field 02 — DEC-017, paired
+  nameEn              String   @map("name_en")
+  categoryId          String   @map("category_id") // field 03 — exactly one category
+  category            Category @relation(fields: [categoryId], references: [id])
+  brandId             String   @map("brand_id") // field 04
+  brand               Brand    @relation(fields: [brandId], references: [id])
+  dosageForm          DosageForm @map("dosage_form") // field 05
+  packageQuantity     Int      @map("package_quantity") // field 06, > 0
+  usageInstructions   String   @map("usage_instructions") @db.Text // field 07 — Hebrew only, manufacturer text
+  price               Decimal  @db.Decimal(10, 2) // field 08 — never Float
+  stockQuantity       Int      @default(0) @map("stock_quantity") // field 09, >= 0
+  descriptionHe       String   @map("description_he") @db.Text // field 11 — DEC-017, paired
+  descriptionEn       String   @map("description_en") @db.Text
+  warningsAllergens   String   @map("warnings_allergens") @db.Text // field 12 — Hebrew only, manufacturer text
+  targetAudience      String?  @map("target_audience") // field 15 — TBD closed list, DEC-024 open item 2
+  createdAt           DateTime @default(now()) @map("created_at") // field 16
+  isActive            Boolean  @default(true) @map("is_active") // soft delete, INV-03, §4.7.1
+  lowStockThreshold   Int      @default(5) @map("low_stock_threshold") // §4.7.2
+
+  images      ProductImage[]        // field 10 — 1 to 4
+  ingredients ProductIngredient[]   // field 13 — structured, not JSON
+  healthGoals ProductHealthGoal[]   // field 14 — many-to-many
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  favorites   Favorite[]
+  funnelEvents FunnelEvent[]
+
+  @@index([isActive, categoryId])
+  @@index([price])
+  @@index([createdAt])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id])
+  url       String
+  sortOrder Int     @default(0) @map("sort_order")
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+// Field 13 — structured, drives search (REQ-F-010) and filtering (Table 2)
+model ActiveIngredient {
+  id       String               @id @default(uuid())
+  name     String               @unique
+  products ProductIngredient[]
+
+  @@map("active_ingredients")
+}
+
+model ProductIngredient {
+  id                 String           @id @default(uuid())
+  productId          String           @map("product_id")
+  product            Product          @relation(fields: [productId], references: [id])
+  activeIngredientId String           @map("active_ingredient_id")
+  activeIngredient   ActiveIngredient @relation(fields: [activeIngredientId], references: [id])
+  amount             Decimal          @db.Decimal(10, 2)
+  unit               String
+
+  @@index([productId])
+  @@index([activeIngredientId])
+  @@map("product_ingredients")
+}
+
+model ProductHealthGoal {
+  productId    String     @map("product_id")
+  product      Product    @relation(fields: [productId], references: [id])
+  healthGoalId String     @map("health_goal_id")
+  healthGoal   HealthGoal @relation(fields: [healthGoalId], references: [id])
+
+  @@id([productId, healthGoalId])
+  @@map("product_health_goals")
+}
+
+// ── Cart ──────────────────────────────────────────────
+
+// Guest identification mechanism — placeholder, DEC-024 open item 4
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String?    @map("user_id") // nullable — null for a guest
+  user      User?      @relation(fields: [userId], references: [id])
+  sessionId String?    @map("session_id") // nullable — placeholder for a guest
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  items CartItem[]
+
+  @@index([userId])
+  @@index([sessionId])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String  @id @default(uuid())
+  cartId    String  @map("cart_id")
+  cart      Cart    @relation(fields: [cartId], references: [id])
+  productId String  @map("product_id")
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+// ── Orders ────────────────────────────────────────────
+
+model Order {
+  id          String      @id @default(uuid())
+  orderNumber String      @unique @map("order_number") // §2.6 — unique order number
+  userId      String      @map("user_id")
+  user        User        @relation(fields: [userId], references: [id])
+  status      OrderStatus @default(pending_payment)
+  totalAmount Decimal     @map("total_amount") @db.Decimal(10, 2)
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  funnelEvents  FunnelEvent[]
+
+  @@index([userId, createdAt])
+  @@map("orders")
+}
+
+// Frozen price and name — INV-02. Never references current Product values.
+model OrderItem {
+  id                     String  @id @default(uuid())
+  orderId                String  @map("order_id")
+  order                  Order   @relation(fields: [orderId], references: [id])
+  productId              String  @map("product_id") // reference — display/linking only
+  product                Product @relation(fields: [productId], references: [id])
+  quantity               Int
+  unitPriceAtPurchase    Decimal @map("unit_price_at_purchase") @db.Decimal(10, 2)
+  productNameAtPurchase  String  @map("product_name_at_purchase")
+
+  @@index([productId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  orderId   String      @map("order_id")
+  order     Order       @relation(fields: [orderId], references: [id])
+  status    OrderStatus
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+// ── Favourites, analytics ─────────────────────────────
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, productId])
+  @@map("favorites")
+}
+
+model FunnelEvent {
+  id        String          @id @default(uuid())
+  eventType FunnelEventType @map("event_type")
+  sessionId String          @map("session_id") // works for guests too
+  userId    String?         @map("user_id")
+  user      User?           @relation(fields: [userId], references: [id])
+  productId String?         @map("product_id")
+  product   Product?        @relation(fields: [productId], references: [id])
+  orderId   String?         @map("order_id")
+  order     Order?          @relation(fields: [orderId], references: [id])
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  @@index([eventType, createdAt])
+  @@map("funnel_events")
+}
