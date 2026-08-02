@@ -1,15 +1,15 @@
 product_slug,ingredient_he,ingredient_en,amount,unit,data_source,verified
-solgar-omega-3,EPA (חומצה איקוספנטאנואית),EPA (eicosapentaenoic acid),360,מ"ג,https://www.solgar.com/products/double-strength-omega-3-700-mg-softgels,
-solgar-omega-3,DHA (חומצה דוקוסהקסאנואית),DHA (docosahexaenoic acid),240,מ"ג,https://www.solgar.com/products/double-strength-omega-3-700-mg-softgels,
+solgar-omega-3,EPA (חומצה איקוספנטאנואית),EPA (eicosapentaenoic acid),504,מ"ג,https://www.solgar.com/products/solgar-triple-strength-omega-3-950-mg-softgels,yes
+solgar-omega-3,DHA (חומצה דוקוסהקסאנואית),DHA (docosahexaenoic acid),378,מ"ג,https://www.solgar.com/products/solgar-triple-strength-omega-3-950-mg-softgels,yes
 briamil-multi-chewable,ויטמין D3,Vitamin D3,800,IU,https://truforme.com/%D7%91%D7%A8%D7%99%D7%90%D7%9E%D7%99%D7%9C/,
 britamin-multi-minerals,,,,,,
-solgar-vitamin-c-berry,ויטמין C,Vitamin C,500,מ"ג,https://www.solgar.com/products/vitamin-c-500-mg-chewable-tablets-cran-raspberry-flavor,
-solgar-vitamin-c-berry,תמצית עצבהר (Acerola),Acerola Extract,10,מ"ג,https://www.solgar.com/products/vitamin-c-500-mg-chewable-tablets-cran-raspberry-flavor,
-solgar-vitamin-c-berry,תמצית ורדים בר,Rose Hips Extract,4,מ"ג,https://www.solgar.com/products/vitamin-c-500-mg-chewable-tablets-cran-raspberry-flavor,
+solgar-vitamin-c-berry,ויטמין C,Vitamin C,500,מ"ג,https://www.solgar.com/products/vitamin-c-500-mg-chewable-tablets-cran-raspberry-flavor,yes
+solgar-vitamin-c-berry,תמצית עצבהר (Acerola),Acerola Extract,10,מ"ג,https://www.solgar.com/products/vitamin-c-500-mg-chewable-tablets-cran-raspberry-flavor,yes
+solgar-vitamin-c-berry,תמצית ורדים בר,Rose Hips Extract,4,מ"ג,https://www.solgar.com/products/vitamin-c-500-mg-chewable-tablets-cran-raspberry-flavor,yes
 solgar-gentle-iron-25,ברזל (ביסגליצינאט),Iron (as iron bisglycinate chelate),25,מ"ג,https://www.iherb.com/pr/solgar-gentle-iron-25-mg-90-vegetable-capsules/69609,
 superherb-vitamin-d,ויטמין D3,Vitamin D3,1000,יחב"ל,https://www.supherb.co.il/product/ויטמין-d-במינון-1000-יחבל/,
 ecosupp-iron-drops-c,ברזל (ביסגליצינאט),Iron (as iron bisglycinate),15,מ"ג,https://ecosupp.co.il/ironlp/,
-superherb-magnesium-max-550,מגנזיום (קומפלקס ציטראט ואוקסיד),Magnesium (citrate/oxide complex),550,מ"ג,https://www.supherb.co.il/product/מגנזיום-max-550/,
+superherb-magnesium-max-550,מגנזיום (קומפלקס ציטראט ואוקסיד),Magnesium (citrate/oxide complex),550,מ"ג,https://www.supherb.co.il/product/מגנזיום-max-550/,yes
 solgar-b12,ויטמין B12,Vitamin B12,1000,מק"ג,https://www.solgar.co.il/product/ויטמין-b12-1000-מקג/,
 solgar-cal-mag-d3,ויטמין D3,Vitamin D3,10,מק"ג,https://www.solgar.com/products/calcium-magnesium-with-vitamin-d3-tablets,
 solgar-cal-mag-d3,סידן (ציטראט),Calcium (as calcium citrate),1000,מ"ג,https://www.solgar.com/products/calcium-magnesium-with-vitamin-d3-tablets,
