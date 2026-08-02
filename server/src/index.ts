@@ -9,7 +9,9 @@ if (!clientOrigin) {
   throw new Error('CLIENT_ORIGIN is not set — see .env.example. DEC-010: never CORS *.')
 }
 
-app.use(cors({ origin: clientOrigin, credentials: true }))
+// credentials not enabled — no session cookie exists yet (DEC-018 auth is
+// not implemented). Enable when express-session is added.
+app.use(cors({ origin: clientOrigin }))
 app.use(express.json())
 
 app.get('/api/health', (_req, res) => {
