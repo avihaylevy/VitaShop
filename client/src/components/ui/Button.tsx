@@ -1,0 +1,72 @@
+import type { ButtonHTMLAttributes, ReactElement } from 'react'
+import { FOCUS_RING } from './focusRing'
+import { Icon } from './Icon'
+
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
+
+// Every variant carries its own `border` (width + colour) so toggling
+// disabled/loading only ever changes the border COLOUR, never adds a
+// border where none existed — a width-auto button must not shift size
+// when it becomes disabled.
+const VARIANT_CLASS: Record<ButtonVariant, string> = {
+  primary: 'border border-transparent bg-brand-teal text-white hover:bg-brand-teal-strong active:bg-brand-teal-strong',
+  secondary: 'border border-border-control bg-well text-text-ink hover:bg-surface-sunken',
+  ghost: 'border border-transparent bg-transparent text-text-ink hover:bg-surface-sunken',
+  // DESIGN_SYSTEM.md §1: "error is never filled, commerce is always filled" — a
+  // filled red button collides with the commerce fill visually and by rule.
+  // Destructive intent is carried by border + text colour instead.
+  danger: 'border border-state-error bg-well text-state-error hover:bg-state-error/10 active:bg-state-error/15',
+}
+
+const DISABLED_CLASS =
+  'disabled:pointer-events-none disabled:border-border-hairline disabled:bg-surface-sunken disabled:text-text-muted'
+
+type ButtonProps = {
+  variant?: ButtonVariant
+  loading?: boolean
+  icon?: ReactElement
+  fullWidth?: boolean
+  /** Allows the label to wrap to a second line instead of staying on one. Off by default (single line, fixed 44px height). */
+  wrap?: boolean
+} & ButtonHTMLAttributes<HTMLButtonElement>
+
+/**
+ * States: disabled, hover, active, focus-visible. `loading` is authoritative
+ * for `aria-busy` — a caller-supplied `aria-busy` in the spread cannot
+ * override it. The label and icon stay in the layout (just invisible) while
+ * loading, so the button's width/height never shifts when loading toggles.
+ */
+export function Button({
+  variant = 'primary',
+  loading = false,
+  icon,
+  fullWidth = false,
+  wrap = false,
+  disabled,
+  type = 'button',
+  className = '',
+  children,
+  ...rest
+}: ButtonProps) {
+  return (
+    <button
+      type={type}
+      {...rest}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={`${FOCUS_RING} relative inline-flex items-center justify-center gap-2 rounded-card px-4 text-sm font-medium transition-colors duration-150 ease-standard ${
+        wrap ? 'min-h-11 py-2 text-center leading-snug' : 'h-11 whitespace-nowrap'
+      } ${fullWidth ? 'w-full' : 'min-w-11'} ${DISABLED_CLASS} ${VARIANT_CLASS[variant]} ${className}`}
+    >
+      <span className={`inline-flex items-center justify-center gap-2 ${loading ? 'invisible' : ''}`}>
+        {icon && <Icon size={18}>{icon}</Icon>}
+        {children}
+      </span>
+      {loading && (
+        <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+          <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" />
+        </span>
+      )}
+    </button>
+  )
+}

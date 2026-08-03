@@ -115,3 +115,17 @@
 body {
   margin: 0;
 }
+
+/*
+ * Shared focus-visible treatment — DESIGN_SYSTEM.md §4, one treatment
+ * everywhere (UI_IMPLEMENTATION_PLAN.md §11). Implemented once here and
+ * applied via the `focus-ring` class from every interactive primitive,
+ * never re-declared per component.
+ */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: var(--focus-w) solid var(--brand-teal-strong);
+  outline-offset: var(--focus-off);
+}
