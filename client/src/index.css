@@ -1,5 +1,117 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens — design/DESIGN_SYSTEM.md, Accepted (DEC-035).
+ * Values here must match that document exactly. Two sources of truth is
+ * the failure mode (§14): if a value changes, change it in both places.
+ */
+@theme {
+  /* Surfaces — §1 */
+  --surface-page: #EEE8DD;
+  --surface-section: #F7F3EC;
+  --surface-header: #FAF7F1;
+  --well: #FFFFFF;
+  --surface-sunken: #E7E0D3;
+  --border-hairline: #DED6C7;
+  --border-control: #8A8278;
+  --border-card: #E2DACB;
+  --text-ink: #1F252E;
+  --text-muted: #5A6270;
+
+  /* Category tones — §1. Bind to Category, never to Product. */
+  --tone-vitamins: #F6EDDD;
+  --tone-minerals: #EFEBE4;
+  --tone-omega: #E4EDE9;
+  --tone-proteins: #F4E8DF;
+  --tone-probiotics: #F3E7E4;
+  --tone-herbs: #E9EDE2;
+
+  /* Brand and state — §1. Exactly one meaning each. */
+  --brand-teal: #15706A;
+  --brand-teal-strong: #0E5852;
+  --state-error: #A0332B;
+  --state-commerce: #9E4E14;
+  --state-lowstock: #6B5A16;
+  --state-oos: #66625A;
+
+  /*
+   * Shape — §3. 999px is circular-only: status dots, count badges.
+   * --r-sm is aliased below as --radius-compact, NOT --radius-sm —
+   * Tailwind v4 already defines a built-in --radius-sm (0.25rem);
+   * reusing that name would silently override Tailwind's own token
+   * instead of adding a project-specific one.
+   */
+  --r: 8px;
+  --r-sm: 4px;
+  --r-full: 999px;
+
+  /*
+   * Motion — §3. Plain CSS custom properties for direct use in component
+   * CSS or arbitrary-value classes (duration-[var(--motion-fast)]).
+   * Tailwind v4 has no --duration-* theme namespace, so these do not
+   * power any generated utility class — see the note near the alias
+   * block below.
+   */
+  --motion-fast: 150ms;
+  --dur: 200ms;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+
+  /* Focus — §4. One treatment, everywhere. */
+  --focus-w: 2px;
+  --focus-off: 2px;
+
+  /*
+   * Tailwind v4 utility aliases. --color-*, --radius-* and --ease-* are
+   * namespaces Tailwind recognises, so these generate real utility
+   * classes (bg-tone-vitamins, rounded-card, ...) instead of requiring
+   * bg-[var(--tone-vitamins)] everywhere. Each alias is a var()
+   * reference to the semantic token above — the semantic tokens stay
+   * the single source of truth for values (§14).
+   */
+  --color-surface-page: var(--surface-page);
+  --color-surface-section: var(--surface-section);
+  --color-surface-header: var(--surface-header);
+  --color-well: var(--well);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-border-hairline: var(--border-hairline);
+  --color-border-control: var(--border-control);
+  --color-border-card: var(--border-card);
+  --color-text-ink: var(--text-ink);
+  --color-text-muted: var(--text-muted);
+
+  --color-tone-vitamins: var(--tone-vitamins);
+  --color-tone-minerals: var(--tone-minerals);
+  --color-tone-omega: var(--tone-omega);
+  --color-tone-proteins: var(--tone-proteins);
+  --color-tone-probiotics: var(--tone-probiotics);
+  --color-tone-herbs: var(--tone-herbs);
+
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-teal-strong: var(--brand-teal-strong);
+  --color-state-error: var(--state-error);
+  --color-state-commerce: var(--state-commerce);
+  --color-state-lowstock: var(--state-lowstock);
+  --color-state-oos: var(--state-oos);
+
+  --radius-card: var(--r);
+  --radius-compact: var(--r-sm);
+  --radius-round: var(--r-full);
+
+  --ease-standard: var(--ease);
+
+  /*
+   * No --duration-* alias. Tailwind v4 has no --duration-* theme
+   * namespace — verified against the built CSS: a named "duration-fast"
+   * utility is never emitted. Tailwind's native bare-number scale
+   * (duration-150, duration-200) is a separate, independent mechanism:
+   * it matches --motion-fast (150ms) and --dur (200ms) only NUMERICALLY.
+   * It does not read from either custom property. If --motion-fast or
+   * --dur is ever changed, duration-150/duration-200 must be updated by
+   * hand in every component that uses them — they are not wired
+   * together.
+   */
+}
+
 body {
   margin: 0;
 }
