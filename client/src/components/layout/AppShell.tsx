@@ -10,7 +10,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SkipLink />
       <Header />
       <MobileHeader />
-      <main id="main">{children}</main>
+      {/*
+        tabIndex={-1} makes <main> a real focus target without adding it to
+        the tab sequence. Two things depend on it: the skip link, whose
+        target must actually receive focus, and useReturnFocus's fallback
+        for when an overlay's trigger has been removed before it closed.
+      */}
+      <main id="main" tabIndex={-1} className="focus:outline-none">
+        {children}
+      </main>
     </>
   )
 }

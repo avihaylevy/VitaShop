@@ -87,7 +87,7 @@ export function AccountMenu() {
         <div
           role="menu"
           aria-label={t('account.menuLabel')}
-          className="absolute end-0 top-full z-40 mt-2 w-56 rounded-card border border-border-hairline bg-well p-2 shadow-[0_8px_24px_rgba(31,37,46,0.12)]"
+          className="absolute end-0 top-full z-[var(--z-dropdown)] mt-2 w-56 rounded-card border border-border-hairline bg-well p-2 shadow-[0_8px_24px_rgba(31,37,46,0.12)]"
         >
           {isSignedIn ? (
             <>

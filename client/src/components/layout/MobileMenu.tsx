@@ -1,85 +1,55 @@
-import { useEffect, useId, useRef } from 'react'
+import { useRef } from 'react'
 import { Link, NavLink } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { CloseIcon } from '../icons'
-import { IconButton } from '../ui/IconButton'
+import { Modal } from '../ui/Modal'
 import { FOCUS_RING } from '../ui/focusRing'
 import type { NavItem } from './navItems'
 
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
 type MobileMenuProps = {
   open: boolean
-  /** Must also return focus to the hamburger trigger — this component only traps/cycles focus while open. */
+  /** Modal now owns returning focus to the trigger; this only closes. */
   onClose: () => void
   navItems: readonly NavItem[]
 }
 
 /**
- * Full-screen mobile navigation. Implements 3 of the 4 obligations
- * DESIGN_SYSTEM.md §8 defines for modal dialogs — focus trap, Escape
- * closes, focus returns to the trigger (via the caller's `onClose`). It
- * deliberately does NOT make the background `inert`: STATUS.md records the
- * mobile menu as "the reference" for items 1–3, with item 4 (background
- * inert) "not implemented anywhere yet" — that lands with `Modal`/`Drawer`
- * in TASK-010 build order step 4, still out of scope here. `hidden` when
- * closed removes it from the accessibility tree and tab order without a
- * separate `aria-hidden`.
+ * Full-screen mobile navigation, now a `Modal` consumer.
+ *
+ * It previously hand-implemented 3 of DESIGN_SYSTEM.md §8's 4 obligations
+ * and explicitly deferred the fourth. All four now come from `Modal`, so
+ * the duplicated FOCUSABLE_SELECTOR, keydown handler and Tab-wrap logic
+ * are gone, and the background is finally `inert` while the menu is open —
+ * the one intended behavioural change in this migration.
+ *
+ * 🔴 Everything else is deliberately unchanged: initial focus stays on the
+ * close button (passed explicitly via closeButtonRef + initialFocusRef
+ * rather than relying on it happening to be first in DOM order), Tab and
+ * Shift+Tab still wrap, Escape still closes, focus still returns to the
+ * hamburger, and the content, labels, routes and visual design are
+ * untouched.
+ *
+ * No scrim: this is an opaque full-screen panel, so there is nothing
+ * behind it to dim. `md:hidden` lives on the Modal container because the
+ * panel is portalled to document.body and no longer inherits it from the
+ * mobile <header>.
  */
 export function MobileMenu({ open, onClose, navItems }: MobileMenuProps) {
   const { t } = useTranslation('layout')
-  const containerRef = useRef<HTMLDivElement>(null)
-  const titleId = useId()
-
-  useEffect(() => {
-    if (!open) return
-    const container = containerRef.current
-    if (!container) return
-
-    const focusables = container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-    focusables[0]?.focus()
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onClose()
-        return
-      }
-      if (event.key !== 'Tab' || !container) return
-      const nodes = container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-      if (nodes.length === 0) return
-      const first = nodes[0]
-      const last = nodes[nodes.length - 1]
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose])
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   return (
-    <div
-      ref={containerRef}
-      hidden={!open}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      className="fixed inset-0 z-50 flex flex-col bg-surface-page md:hidden"
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t('mobileMenu.title')}
+      closeLabel={t('mobileMenu.closeLabel')}
+      closeButtonRef={closeButtonRef}
+      initialFocusRef={closeButtonRef}
+      scrim={false}
+      containerClassName="items-stretch justify-start md:hidden"
+      panelClassName="h-full w-full overflow-hidden bg-surface-page"
     >
-      <div className="flex items-center justify-between border-b border-border-hairline px-4 py-3">
-        <h2 id={titleId} className="text-base font-semibold text-text-ink">
-          {t('mobileMenu.title')}
-        </h2>
-        <IconButton icon={<CloseIcon />} aria-label={t('mobileMenu.closeLabel')} onClick={onClose} />
-      </div>
-      <nav aria-label={t('nav.mobileLabel')} className="flex-1 overflow-y-auto px-2 py-2">
+      <nav aria-label={t('nav.mobileLabel')} className="px-2 py-2">
         <ul className="flex flex-col">
           {navItems.map((item) => (
             <li key={item.key}>
@@ -117,6 +87,6 @@ export function MobileMenu({ open, onClose, navItems }: MobileMenuProps) {
           </Link>
         </div>
       </nav>
-    </div>
+    </Modal>
   )
 }

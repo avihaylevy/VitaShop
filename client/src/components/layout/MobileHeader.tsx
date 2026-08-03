@@ -10,6 +10,7 @@ import { AccountMenu } from './AccountMenu'
 import { FavouritesControl, CartControl } from './UtilityCluster'
 import { MobileMenu } from './MobileMenu'
 import { NAV_ITEMS } from './navItems'
+import { useCloseAboveBreakpoint } from '../../hooks/useCloseAboveBreakpoint'
 
 /**
  * Mobile header — row 1 (hamburger, logo, account, favourites, cart) + row 2
@@ -21,9 +22,16 @@ export function MobileHeader() {
   const [menuOpen, setMenuOpen] = useState(false)
   const hamburgerRef = useRef<HTMLButtonElement>(null)
 
+  // The menu's container is `md:hidden`, so growing past md while it is
+  // open would leave a display:none dialog mounted — and #root inert with
+  // the body scroll locked behind it.
+  useCloseAboveBreakpoint(menuOpen, () => setMenuOpen(false))
+
+  // No manual hamburgerRef.current?.focus() here any more: Modal captures
+  // the trigger on open and restores focus on unmount (DESIGN_SYSTEM.md §8
+  // obligation 3). Doing it here as well would fight the Modal for focus.
   function closeMenu() {
     setMenuOpen(false)
-    hamburgerRef.current?.focus()
   }
 
   return (

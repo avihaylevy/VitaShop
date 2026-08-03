@@ -61,6 +61,13 @@
   --focus-off: 2px;
 
   /*
+   * Scrim colour alias — DESIGN_SYSTEM.md §3, Accepted (DEC-039). The
+   * VALUE lives in the :root block below, not here: --color-* is a real
+   * Tailwind namespace, so this line's only job is to generate `bg-scrim`.
+   */
+  --color-scrim: var(--scrim);
+
+  /*
    * Tailwind v4 utility aliases. --color-*, --radius-* and --ease-* are
    * namespaces Tailwind recognises, so these generate real utility
    * classes (bg-tone-vitamins, rounded-card, ...) instead of requiring
@@ -110,6 +117,58 @@
    * hand in every component that uses them — they are not wired
    * together.
    */
+
+  /*
+   * No --z-* alias either, and for the same reason as --duration-*:
+   * Tailwind v4 has no --z-* / --z-index-* theme namespace, so
+   * `--z-modal: 60` above generates NO `z-modal` utility class. Overlay
+   * stacking is written with an arbitrary value that reads the custom
+   * property directly:
+   *
+   *     z-[var(--z-modal)]
+   *
+   * `z-50` and `--z-overlay: 50` match only NUMERICALLY — Tailwind's bare
+   * z-scale does not read the custom property. Write z-[var(--z-*)] in
+   * overlay code so the token stays the single source of truth.
+   *
+   * --scrim is different: --color-* IS a real Tailwind namespace, so
+   * --color-scrim does generate `bg-scrim`. Use it.
+   */
+}
+
+/*
+ * Overlay stacking + scrim — DESIGN_SYSTEM.md §3, Accepted (DEC-039,
+ * 2026-08-04). Values here must match that document exactly (§14: two
+ * sources of truth is the failure mode).
+ *
+ * 🔴 These live in a plain :root block, NOT in @theme, and that is
+ * deliberate — DEC-039 records it as binding. Tailwind v4 prunes @theme
+ * variables nothing references: verified against the built CSS, where
+ * --z-dropdown and --z-overlay were dropped entirely while --z-modal
+ * survived only because a source comment happened to contain the text
+ * `z-[var(--z-modal)]`. Token emission must not depend on scanner
+ * heuristics, or on comment text a later edit could innocently remove.
+ * A plain :root declaration is always emitted, consumer or not.
+ *
+ * Three layers is the whole scale, deliberately: a non-modal disclosure
+ * (dropdown), the scrim, and the panel above it. Nothing else. This
+ * replaces three unrelated literals — AccountMenu z-40, MobileMenu z-50,
+ * SkipLink z-50, the last two a silent tie decided only by stylesheet
+ * order (the same class of bug as ISSUE-021).
+ *
+ * Scrim is --text-ink (#1F252E = rgb(31 37 46)) at 45%, not black: the
+ * palette is warm, and a neutral-black scrim reads as a cold hole punched
+ * through it.
+ *
+ * Consumed as z-[var(--z-modal)] — Tailwind has no --z-* namespace, so no
+ * `z-modal` utility class exists (same mechanism as the --duration-* note
+ * above). --scrim is reached through `bg-scrim` via --color-scrim.
+ */
+:root {
+  --z-dropdown: 40;
+  --z-overlay: 50;
+  --z-modal: 60;
+  --scrim: rgb(31 37 46 / 0.45);
 }
 
 body {
