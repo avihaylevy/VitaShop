@@ -1,0 +1,138 @@
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
+import { UserIcon, ChevronDownIcon } from '../icons'
+import { Icon } from '../ui/Icon'
+import { FOCUS_RING } from '../ui/focusRing'
+import { useSession } from '../../state/SessionContext'
+
+/**
+ * Account control + its dropdown. A WAI-ARIA menu-button disclosure, not a
+ * modal — Escape closes and returns focus to the trigger, and a
+ * pointerdown outside the menu closes it, but the background is not made
+ * inert (that obligation is reserved for real modal dialogs — the cart
+ * drawer and the mobile menu — per DESIGN_SYSTEM.md §8 / UI_IMPLEMENTATION_
+ * PLAN.md §2, neither of which this is).
+ *
+ * Real `/login` and `/register` navigation, not a fake instant sign-in —
+ * DESIGN_SYSTEM.md §5: "authentication is never communicated by the user
+ * icon alone... the signed-out menu exposes התחברות (primary) and
+ * יצירת חשבון as two distinct actions." Neither route is built yet
+ * (out of scope this slice), same gap as SearchBox's /catalog target.
+ */
+export function AccountMenu() {
+  const { t } = useTranslation('layout')
+  const { isSignedIn, signOut } = useSession()
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  const triggerLabel = isSignedIn ? t('account.myAccount') : t('account.signInCta')
+
+  function closeAndReturnFocus() {
+    setOpen(false)
+    triggerRef.current?.focus()
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t('account.menuLabel')}
+        onClick={() => setOpen((value) => !value)}
+        className={`${FOCUS_RING} group flex h-11 min-w-11 items-center justify-center rounded-card`}
+      >
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-compact px-1.5 py-1 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard ${
+            open ? 'bg-surface-sunken' : 'group-hover:bg-surface-sunken'
+          }`}
+        >
+          <Icon size={18}>
+            <UserIcon />
+          </Icon>
+          <span className="hidden lg:inline">{triggerLabel}</span>
+          <Icon size={14} className={`hidden transition-transform duration-150 ease-standard lg:inline-flex ${open ? 'rotate-180' : ''}`}>
+            <ChevronDownIcon />
+          </Icon>
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          aria-label={t('account.menuLabel')}
+          className="absolute end-0 top-full z-40 mt-2 w-56 rounded-card border border-border-hairline bg-well p-2 shadow-[0_8px_24px_rgba(31,37,46,0.12)]"
+        >
+          {isSignedIn ? (
+            <>
+              <Link
+                role="menuitem"
+                to="/account"
+                onClick={() => setOpen(false)}
+                className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+              >
+                {t('account.myAccount')}
+              </Link>
+              <button
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  signOut()
+                  closeAndReturnFocus()
+                }}
+                className={`${FOCUS_RING} block w-full rounded-compact px-3 py-2 text-start text-sm text-text-ink hover:bg-surface-sunken`}
+              >
+                {t('account.signOut')}
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                role="menuitem"
+                to="/login"
+                onClick={() => setOpen(false)}
+                className={`${FOCUS_RING} mb-2 flex h-11 items-center justify-center rounded-card border border-transparent bg-brand-teal px-4 text-sm font-medium text-white hover:bg-brand-teal-strong`}
+              >
+                {t('account.signInCta')}
+              </Link>
+              <Link
+                role="menuitem"
+                to="/register"
+                onClick={() => setOpen(false)}
+                className={`${FOCUS_RING} flex h-11 items-center justify-center rounded-card px-3 text-sm font-medium text-text-ink hover:bg-surface-sunken`}
+              >
+                {t('account.registerCta')}
+              </Link>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

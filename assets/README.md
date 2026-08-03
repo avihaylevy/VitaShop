@@ -12,9 +12,15 @@ Source: DEC-016, DEC-026
 assets/
 ├── README.md              ← this file
 ├── brand/
-│   ├── logo.png           ← the site logo. REPLACEABLE
-│   ├── logo.svg           ← vector version, if available
-│   └── favicon.png
+│   ├── source/            ← 🔴 ORIGINAL artwork, never edited. User's.
+│   │   ├── logo-with-name.png   full lockup, opaque off-white ground
+│   │   └── just-logo.png        standalone symbol, opaque off-white ground
+│   └── web/               ← derived, web-ready re-exports. Additions
+│       │                     alongside source/, never replacements of it
+│       └── vitashop-logo-transparent.png   full lockup, transparent —
+│                                            supplied 2026-08-03, see
+│                                            design/CONTENT_ASSETS.md and
+│                                            operations/ISSUES.md ISSUE-018
 ├── products/
 │   ├── products.csv       ← 🔴 the source of truth for product data
 │   ├── placeholder.svg    ← fallback for a product with no image
@@ -22,6 +28,8 @@ assets/
 └── ui/
     └── (icons, backgrounds — only if the design direction needs them)
 ```
+
+⚠️ **This structure diagram previously showed a single `brand/logo.png` that never existed** — corrected 2026-08-02/2026-08-03 to the real files above.
 
 ⚠️ **Product images are flat, not in per-product folders.** `products.csv` maps each row to its image via the `image_file` column. This suits how images actually arrive — dropped in one at a time — and avoids renaming files the user placed.
 
@@ -31,12 +39,14 @@ assets/
 
 ## 🔴 The logo is swappable by design
 
-`brand/logo.png` is referenced through **one** constant in the code. Replacing the file replaces the logo everywhere — no code change, no search-and-replace.
+The header logo is referenced through **one** import in `client/src/components/brand/Logo.tsx`. Replacing that file replaces the logo everywhere — no code change elsewhere, no search-and-replace.
 
 ```
-✅ import logo from '@/assets/brand/logo.png'   — one import, reused
+✅ import logoTransparent from '../../assets/brand/vitashop-logo-transparent.png'
 ❌ hardcoding the filename in each component
 ```
+
+🔴 **`assets/brand/source/` files are never edited, renamed, converted, moved or overwritten** — standing user instruction, 2026-08-03. Any new variant (transparent, SVG, etc.) is added under `assets/brand/web/` alongside them.
 
 Keep the same filename when swapping. If dimensions change materially, check the header and the mobile layout.
 

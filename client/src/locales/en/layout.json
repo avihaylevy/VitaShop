@@ -1,0 +1,46 @@
+{
+  "skipLink": "Skip to main content",
+  "search": {
+    "placeholder": "Search products…",
+    "label": "Search products",
+    "submit": "Search"
+  },
+  "nav": {
+    "mainLabel": "Main navigation",
+    "mobileLabel": "Mobile navigation",
+    "home": "Home",
+    "catalog": "Catalog",
+    "sales": "Sales",
+    "about": "About",
+    "contact": "Contact"
+  },
+  "language": {
+    "toggleLabel": "Change language",
+    "he": "עברית",
+    "en": "English"
+  },
+  "account": {
+    "signInCta": "Sign in",
+    "registerCta": "Create account",
+    "myAccount": "My account",
+    "menuLabel": "Account menu",
+    "signOut": "Sign out",
+    "guestGreeting": "Not signed in",
+    "signedInGreeting": "Signed in"
+  },
+  "favourites": {
+    "label": "Favourites",
+    "ariaLabelEmpty": "Favourites, empty",
+    "ariaLabelWithCount": "Favourites, {{count}} items"
+  },
+  "cart": {
+    "label": "Cart",
+    "ariaLabelEmpty": "Cart, empty",
+    "ariaLabelWithCount": "Cart, {{count}} items"
+  },
+  "mobileMenu": {
+    "openLabel": "Open menu",
+    "closeLabel": "Close menu",
+    "title": "Menu"
+  }
+}

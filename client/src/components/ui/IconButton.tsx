@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactElement } from 'react'
+import { forwardRef, type ButtonHTMLAttributes, type ReactElement } from 'react'
 import { FOCUS_RING } from './focusRing'
 import { Icon } from './Icon'
 
@@ -24,17 +24,14 @@ type IconButtonProps = {
   variant?: IconButtonVariant
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'>
 
-/** aria-label is required by type, not convention. Square 44x44 touch target, never smaller. Same radius family as Button (DESIGN_SYSTEM §3 reserves the full circle for status dots/count badges, not buttons). */
-export function IconButton({
-  icon,
-  variant = 'ghost',
-  disabled,
-  type = 'button',
-  className = '',
-  ...rest
-}: IconButtonProps) {
+/** aria-label is required by type, not convention. Square 44x44 touch target, never smaller. Same radius family as Button (DESIGN_SYSTEM §3 reserves the full circle for status dots/count badges, not buttons). Ref-forwarding so callers can return focus to it (e.g. the mobile menu's hamburger trigger). */
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  { icon, variant = 'ghost', disabled, type = 'button', className = '', ...rest },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       {...rest}
       disabled={disabled}
@@ -43,4 +40,4 @@ export function IconButton({
       <Icon size={18}>{icon}</Icon>
     </button>
   )
-}
+})

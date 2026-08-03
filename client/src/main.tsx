@@ -4,11 +4,20 @@ import { BrowserRouter } from 'react-router'
 import './i18n'
 import './index.css'
 import App from './App.tsx'
+import { SessionProvider } from './state/SessionContext'
+import { CartProvider } from './state/CartContext'
+import { FavouritesProvider } from './state/FavouritesContext'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <SessionProvider>
+        <CartProvider>
+          <FavouritesProvider>
+            <App />
+          </FavouritesProvider>
+        </CartProvider>
+      </SessionProvider>
     </BrowserRouter>
   </StrictMode>,
 )

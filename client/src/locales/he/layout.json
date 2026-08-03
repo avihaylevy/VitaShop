@@ -1,0 +1,46 @@
+{
+  "skipLink": "דלג לתוכן הראשי",
+  "search": {
+    "placeholder": "חיפוש מוצרים…",
+    "label": "חיפוש מוצרים",
+    "submit": "חפש"
+  },
+  "nav": {
+    "mainLabel": "ניווט ראשי",
+    "mobileLabel": "ניווט נייד",
+    "home": "בית",
+    "catalog": "קטלוג",
+    "sales": "מבצעים",
+    "about": "אודות",
+    "contact": "צור קשר"
+  },
+  "language": {
+    "toggleLabel": "שינוי שפה",
+    "he": "עברית",
+    "en": "English"
+  },
+  "account": {
+    "signInCta": "התחברות",
+    "registerCta": "יצירת חשבון",
+    "myAccount": "החשבון שלי",
+    "menuLabel": "תפריט חשבון",
+    "signOut": "התנתקות",
+    "guestGreeting": "לא מחוברים",
+    "signedInGreeting": "מחוברים"
+  },
+  "favourites": {
+    "label": "מועדפים",
+    "ariaLabelEmpty": "מועדפים, ריק",
+    "ariaLabelWithCount": "מועדפים, {{count}} פריטים"
+  },
+  "cart": {
+    "label": "עגלה",
+    "ariaLabelEmpty": "עגלה, ריקה",
+    "ariaLabelWithCount": "עגלה, {{count}} פריטים"
+  },
+  "mobileMenu": {
+    "openLabel": "פתיחת תפריט",
+    "closeLabel": "סגירת תפריט",
+    "title": "תפריט"
+  }
+}

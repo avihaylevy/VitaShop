@@ -3,6 +3,8 @@ import { initReactI18next } from 'react-i18next'
 
 import commonHe from '../locales/he/common.json'
 import commonEn from '../locales/en/common.json'
+import layoutHe from '../locales/he/layout.json'
+import layoutEn from '../locales/en/layout.json'
 
 export const supportedLanguages = ['he', 'en'] as const
 export type SupportedLanguage = (typeof supportedLanguages)[number]
@@ -19,8 +21,8 @@ void i18next.use(initReactI18next).init({
   fallbackLng: defaultLanguage,
   supportedLngs: supportedLanguages,
   resources: {
-    he: { common: commonHe },
-    en: { common: commonEn },
+    he: { common: commonHe, layout: layoutHe },
+    en: { common: commonEn, layout: layoutEn },
   },
   defaultNS: 'common',
   interpolation: {
