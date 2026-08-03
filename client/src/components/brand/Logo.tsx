@@ -12,8 +12,16 @@ type LogoProps = {
 
 function Lockup({ frame, className }: { frame: LogoFrame; className: string }) {
   return (
+    // No unconditional `inline-block` here — each caller's `className` supplies
+    // its own single, unconditional display utility (`inline-block md:hidden`
+    // for mobile, `hidden md:inline-block` for desktop). Two unconditional
+    // display utilities of equal specificity on the same element is exactly
+    // the bug that shipped: `inline-block` and `hidden` compete, and Tailwind's
+    // compiled stylesheet order (`.hidden` before `.inline-block`) means
+    // `inline-block` always won — the desktop lockup was never actually
+    // hidden below 768px, at any width, confirmed by runtime measurement.
     <span
-      className={`relative inline-block overflow-hidden align-middle ${className}`}
+      className={`relative overflow-hidden align-middle ${className}`}
       style={{ width: frame.wrapperWidth, height: frame.wrapperHeight }}
     >
       {/*
@@ -72,7 +80,7 @@ export function Logo({ variant = 'full', size = 28, className = '' }: LogoProps)
 
   return (
     <span role="img" aria-label={alt} className={`inline-block ${className}`}>
-      <Lockup frame={MOBILE_LOGO_FRAME} className="md:hidden" />
+      <Lockup frame={MOBILE_LOGO_FRAME} className="inline-block md:hidden" />
       <Lockup frame={DESKTOP_LOGO_FRAME} className="hidden md:inline-block" />
     </span>
   )
