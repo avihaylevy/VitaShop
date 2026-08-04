@@ -12,7 +12,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -b",
     "start": "node dist/src/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run src/routes/catalog.integration.test.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {

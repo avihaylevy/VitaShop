@@ -1,19 +1,16 @@
-import { useTranslation } from 'react-i18next'
 import { Route, Routes } from 'react-router'
 import { AppShell } from './components/layout/AppShell'
 import { OverlayShowcase } from './components/dev/OverlayShowcase'
 import { CatalogShowcase } from './components/dev/CatalogShowcase'
-
-function HomePage() {
-  const { t } = useTranslation()
-  return <h1 className="px-7 py-8 text-2xl font-semibold text-text-ink">{t('app.name')}</h1>
-}
+import { HomePage } from './pages/HomePage'
+import { CatalogPage } from './pages/CatalogPage'
 
 function App() {
   return (
     <AppShell>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/catalog" element={<CatalogPage />} />
         {/*
           Dev-only. Vite substitutes `false` for import.meta.env.DEV in a
           production build, so this branch and the OverlayShowcase import

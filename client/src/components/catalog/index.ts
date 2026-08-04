@@ -1,0 +1,1 @@
+export { CategoryShelf } from './CategoryShelf'

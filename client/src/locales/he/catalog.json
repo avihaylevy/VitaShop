@@ -3,5 +3,31 @@
   "stock": {
     "low": "מלאי מוגבל",
     "out": "אזל מהמלאי"
-  }
+  },
+  "dosageForm": {
+    "CAPSULE": "כמוסות",
+    "TABLET": "טבליות",
+    "DROPS": "טיפות",
+    "POWDER": "אבקה",
+    "SYRUP": "סירופ"
+  },
+  "categoryShelf": {
+    "navLabel": "ניווט קטגוריות",
+    "allProducts": "כל המוצרים"
+  },
+  "home": {
+    "loading": "טוען קטגוריות…",
+    "error": "לא ניתן לטעון את הקטגוריות כעת.",
+    "retry": "נסה שוב"
+  },
+  "catalogPage": {
+    "loading": "טוען מוצרים…",
+    "error": "לא ניתן לטעון את הקטלוג כעת.",
+    "retry": "נסה שוב",
+    "emptyCategoryMessage": "לקטגוריה \"{{category}}\" אין כרגע מוצרים.",
+    "invalidCategoryHeading": "קטגוריה לא נמצאה",
+    "invalidCategoryMessage": "הקטגוריה המבוקשת אינה קיימת.",
+    "backToAll": "חזרה לכל המוצרים"
+  },
+  "addToCartUnavailable": "הוספה לעגלה אינה זמינה עדיין."
 }

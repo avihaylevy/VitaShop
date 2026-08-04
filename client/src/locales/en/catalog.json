@@ -3,5 +3,31 @@
   "stock": {
     "low": "Low stock",
     "out": "Out of stock"
-  }
+  },
+  "dosageForm": {
+    "CAPSULE": "Capsules",
+    "TABLET": "Tablets",
+    "DROPS": "Drops",
+    "POWDER": "Powder",
+    "SYRUP": "Syrup"
+  },
+  "categoryShelf": {
+    "navLabel": "Category navigation",
+    "allProducts": "All products"
+  },
+  "home": {
+    "loading": "Loading categories…",
+    "error": "Categories could not be loaded right now.",
+    "retry": "Try again"
+  },
+  "catalogPage": {
+    "loading": "Loading products…",
+    "error": "The catalogue could not be loaded right now.",
+    "retry": "Try again",
+    "emptyCategoryMessage": "\"{{category}}\" has no products right now.",
+    "invalidCategoryHeading": "Category not found",
+    "invalidCategoryMessage": "The requested category does not exist.",
+    "backToAll": "Back to all products"
+  },
+  "addToCartUnavailable": "Add to cart is not available yet."
 }
