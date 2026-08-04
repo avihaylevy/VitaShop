@@ -22,14 +22,9 @@ export function MobileHeader() {
   const [menuOpen, setMenuOpen] = useState(false)
   const hamburgerRef = useRef<HTMLButtonElement>(null)
 
-  // The menu's container is `md:hidden`, so growing past md while it is
-  // open would leave a display:none dialog mounted — and #root inert with
-  // the body scroll locked behind it.
+  // Close the mobile-only disclosure if the desktop header takes over.
   useCloseAboveBreakpoint(menuOpen, () => setMenuOpen(false))
 
-  // No manual hamburgerRef.current?.focus() here any more: Modal captures
-  // the trigger on open and restores focus on unmount (DESIGN_SYSTEM.md §8
-  // obligation 3). Doing it here as well would fight the Modal for focus.
   function closeMenu() {
     setMenuOpen(false)
   }
@@ -37,14 +32,22 @@ export function MobileHeader() {
   return (
     <header className="border-b border-border-hairline bg-surface-header md:hidden">
       <div className="flex items-center gap-0 px-1 py-2 min-[375px]:gap-1 min-[375px]:px-3">
-        <IconButton
-          ref={hamburgerRef}
-          icon={<HamburgerIcon />}
-          aria-label={t('mobileMenu.openLabel')}
-          aria-haspopup="dialog"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen(true)}
-        />
+        <div className="relative shrink-0">
+          <IconButton
+            ref={hamburgerRef}
+            icon={<HamburgerIcon />}
+            aria-label={t('mobileMenu.openLabel')}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-navigation-menu"
+            onClick={() => setMenuOpen((value) => !value)}
+          />
+          <MobileMenu
+            open={menuOpen}
+            onClose={closeMenu}
+            triggerRef={hamburgerRef}
+            navItems={NAV_ITEMS}
+          />
+        </div>
         <Link to="/" className={`${FOCUS_RING} shrink-0 rounded-card min-[375px]:mx-1`}>
           <Logo variant="full" />
         </Link>
@@ -53,10 +56,11 @@ export function MobileHeader() {
         <FavouritesControl />
         <CartControl />
       </div>
-      <div className="px-3 pb-2">
-        <SearchBox />
+      <div className="px-4 pb-2">
+        <div className="mx-auto w-full max-w-[320px]">
+          <SearchBox />
+        </div>
       </div>
-      <MobileMenu open={menuOpen} onClose={closeMenu} navItems={NAV_ITEMS} />
     </header>
   )
 }

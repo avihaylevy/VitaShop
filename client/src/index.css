@@ -221,10 +221,11 @@ body {
 
 /*
  * SearchBox's one exception to "every control has its own ring"
- * (DESIGN_SYSTEM.md §4): the ring lives on the wrapper via :focus-within,
- * not on the input. The submit IconButton keeps its own .focus-ring.
+ * (DESIGN_SYSTEM.md §4): keyboard focus on the input outlines the wrapper.
+ * The submit IconButton keeps its own .focus-ring without also triggering a
+ * second wrapper outline around the whole field.
  */
-.searchbox:focus-within {
+.searchbox:has(input:focus-visible) {
   outline: var(--focus-w) solid var(--brand-teal-strong);
   outline-offset: var(--focus-off);
 }

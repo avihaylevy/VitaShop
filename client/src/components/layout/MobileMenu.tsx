@@ -1,55 +1,68 @@
-import { useRef } from 'react'
-import { Link, NavLink } from 'react-router'
+import { useEffect, useRef, type RefObject } from 'react'
+import { NavLink } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Modal } from '../ui/Modal'
 import { FOCUS_RING } from '../ui/focusRing'
 import type { NavItem } from './navItems'
+import { applyDocumentDirection, type SupportedLanguage } from '../../i18n'
 
 type MobileMenuProps = {
   open: boolean
-  /** Modal now owns returning focus to the trigger; this only closes. */
   onClose: () => void
+  triggerRef: RefObject<HTMLButtonElement | null>
   navItems: readonly NavItem[]
 }
 
 /**
- * Full-screen mobile navigation, now a `Modal` consumer.
- *
- * It previously hand-implemented 3 of DESIGN_SYSTEM.md §8's 4 obligations
- * and explicitly deferred the fourth. All four now come from `Modal`, so
- * the duplicated FOCUSABLE_SELECTOR, keydown handler and Tab-wrap logic
- * are gone, and the background is finally `inert` while the menu is open —
- * the one intended behavioural change in this migration.
- *
- * 🔴 Everything else is deliberately unchanged: initial focus stays on the
- * close button (passed explicitly via closeButtonRef + initialFocusRef
- * rather than relying on it happening to be first in DOM order), Tab and
- * Shift+Tab still wrap, Escape still closes, focus still returns to the
- * hamburger, and the content, labels, routes and visual design are
- * untouched.
- *
- * No scrim: this is an opaque full-screen panel, so there is nothing
- * behind it to dim. `md:hidden` lives on the Modal container because the
- * panel is portalled to document.body and no longer inherits it from the
- * mobile <header>.
+ * Compact non-modal navigation disclosure anchored to its trigger. It does
+ * not trap focus, lock scrolling, make the page inert, or claim modal
+ * semantics. Escape and outside pointer interaction dismiss it.
  */
-export function MobileMenu({ open, onClose, navItems }: MobileMenuProps) {
-  const { t } = useTranslation('layout')
-  const closeButtonRef = useRef<HTMLButtonElement>(null)
+export function MobileMenu({ open, onClose, triggerRef, navItems }: MobileMenuProps) {
+  const { t, i18n } = useTranslation('layout')
+  const panelRef = useRef<HTMLDivElement>(null)
+  const current = i18n.language as SupportedLanguage
+  const next: SupportedLanguage = current === 'he' ? 'en' : 'he'
+
+  useEffect(() => {
+    if (!open) return
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (!panelRef.current?.contains(target) && !triggerRef.current?.contains(target)) {
+        onClose()
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose()
+        triggerRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, onClose, triggerRef])
+
+  if (!open) return null
+
+  function changeLanguage() {
+    void i18n.changeLanguage(next)
+    applyDocumentDirection(next)
+    onClose()
+  }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={t('mobileMenu.title')}
-      closeLabel={t('mobileMenu.closeLabel')}
-      closeButtonRef={closeButtonRef}
-      initialFocusRef={closeButtonRef}
-      scrim={false}
-      containerClassName="items-stretch justify-start md:hidden"
-      panelClassName="h-full w-full overflow-hidden bg-surface-page"
+    <div
+      ref={panelRef}
+      id="mobile-navigation-menu"
+      className="absolute start-0 top-full z-[var(--z-dropdown)] mt-2 w-72 max-w-[calc(100vw-24px)] rounded-card border border-border-hairline bg-well p-2 shadow-[0_8px_24px_rgba(31,37,46,0.12)]"
     >
-      <nav aria-label={t('nav.mobileLabel')} className="px-2 py-2">
+      <nav aria-label={t('nav.mobileLabel')}>
         <ul className="flex flex-col">
           {navItems.map((item) => (
             <li key={item.key}>
@@ -58,7 +71,7 @@ export function MobileMenu({ open, onClose, navItems }: MobileMenuProps) {
                 end={item.end}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `${FOCUS_RING} flex h-12 items-center rounded-card border-s-[3px] px-3 text-base font-medium text-text-ink transition-colors duration-150 ease-standard ${
+                  `${FOCUS_RING} flex min-h-11 items-center rounded-compact border-s-[3px] px-3 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard ${
                     isActive
                       ? 'border-brand-teal bg-surface-sunken font-semibold'
                       : 'border-transparent hover:border-border-hairline hover:bg-surface-sunken/40'
@@ -70,23 +83,18 @@ export function MobileMenu({ open, onClose, navItems }: MobileMenuProps) {
             </li>
           ))}
         </ul>
-        <div className="mt-4 flex flex-col gap-2 border-t border-border-hairline px-3 pt-4">
-          <Link
-            to="/login"
-            onClick={onClose}
-            className={`${FOCUS_RING} flex h-12 items-center justify-center rounded-card border border-transparent bg-brand-teal text-base font-medium text-white`}
+        <div className="mt-2 border-t border-border-hairline pt-2">
+          <button
+            type="button"
+            onClick={changeLanguage}
+            aria-label={t('language.toggleLabel')}
+            className={`${FOCUS_RING} flex min-h-11 w-full items-center justify-between rounded-compact px-3 text-sm font-medium text-text-ink hover:bg-surface-sunken`}
           >
-            {t('account.signInCta')}
-          </Link>
-          <Link
-            to="/register"
-            onClick={onClose}
-            className={`${FOCUS_RING} flex h-12 items-center justify-center rounded-card text-base font-medium text-text-ink hover:bg-surface-sunken`}
-          >
-            {t('account.registerCta')}
-          </Link>
+            <span>{t('language.toggleLabel')}</span>
+            <span lang={next}>{t(`language.${next}` as const)}</span>
+          </button>
         </div>
       </nav>
-    </Modal>
+    </div>
   )
 }
