@@ -36,7 +36,7 @@ export function MobileHeader() {
 
   return (
     <header className="border-b border-border-hairline bg-surface-header md:hidden">
-      <div className="flex items-center gap-1 px-3 py-2">
+      <div className="flex items-center gap-0 px-1 py-2 min-[375px]:gap-1 min-[375px]:px-3">
         <IconButton
           ref={hamburgerRef}
           icon={<HamburgerIcon />}
@@ -45,7 +45,7 @@ export function MobileHeader() {
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen(true)}
         />
-        <Link to="/" className={`${FOCUS_RING} mx-1 shrink-0 rounded-card`}>
+        <Link to="/" className={`${FOCUS_RING} shrink-0 rounded-card min-[375px]:mx-1`}>
           <Logo variant="full" />
         </Link>
         <div className="flex-1" />

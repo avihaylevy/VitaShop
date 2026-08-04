@@ -77,9 +77,11 @@ export function AccountMenu() {
             <UserIcon />
           </Icon>
           <span className="hidden lg:inline">{triggerLabel}</span>
-          <Icon size={14} className={`hidden transition-transform duration-150 ease-standard lg:inline-flex ${open ? 'rotate-180' : ''}`}>
-            <ChevronDownIcon />
-          </Icon>
+          <span className="hidden lg:inline-flex">
+            <Icon size={14} className={`transition-transform duration-150 ease-standard ${open ? 'rotate-180' : ''}`}>
+              <ChevronDownIcon />
+            </Icon>
+          </span>
         </span>
       </button>
 
