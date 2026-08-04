@@ -53,7 +53,22 @@ export function ProductCard({
       as="article"
       variant="section"
       bordered
-      className="flex flex-col gap-3 p-4"
+      // DESIGN_SYSTEM.md §3: card hover is translateY(-4px) scale(1.012),
+      // 200ms, transform only — gated by motion-safe so the transform
+      // disappears entirely under prefers-reduced-motion, leaving only the
+      // (non-motion) shadow. hover:z-10 keeps the raised card from being
+      // clipped by neighbouring grid cells; it never fights the app's
+      // dropdown/overlay/modal z-scale (40/50/60), which sits far above it.
+      // The shadow itself is --shadow-card-hover (DEC-041) — a plain
+      // :root custom property (index.css), not @theme, since it is only
+      // ever reached via this arbitrary-value reference, never through a
+      // generated Tailwind utility class name.
+      // DESIGN_SYSTEM.md §4: focus-within is a SEPARATE, supporting cue — a
+      // 1px teal border (existing border-brand-teal token/utility, same
+      // width Surface's `bordered` prop already reserves) — never the only
+      // indicator, since the link/button keep their own FOCUS_RING outline.
+      // A colour-only change, so it survives prefers-reduced-motion.
+      className="group relative flex flex-col gap-3 p-4 transition-[box-shadow,border-color] duration-200 ease-standard hover:z-10 hover:shadow-[var(--shadow-card-hover)] motion-safe:transition-transform motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.012] focus-within:border-brand-teal"
       style={{ backgroundColor: categoryTone }}
     >
       <ProductImage imageFile={imageFile} alt={name} />

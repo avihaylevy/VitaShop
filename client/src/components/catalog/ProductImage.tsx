@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { getProductImageUrl } from '../../lib/productImages'
 import { getImageFraming } from '../../lib/imageFraming'
 
@@ -26,12 +26,23 @@ export function ProductImage({ imageFile, alt, className = '' }: ProductImagePro
           src={url}
           alt={alt}
           onError={() => setFailed(true)}
-          className="absolute inset-0 m-auto object-contain"
-          style={{
-            width: `${framing.frameWidthPct}%`,
-            height: `${framing.frameHeightPct}%`,
-            transform: `translate(${framing.shiftXPct}%, ${framing.shiftYPct}%)`,
-          }}
+          // DESIGN_SYSTEM.md §3: card hover scales the image to 1.025. The
+          // framing offset above is a static, per-image inline transform, so
+          // the hover scale can't be a competing inline style (it would just
+          // overwrite the offset) — it's threaded through as a CSS custom
+          // property instead, referenced from the one `transform` value
+          // below. motion-safe: gates only the property that changes it, so
+          // under prefers-reduced-motion the scale term stays permanently 1
+          // and the image never moves.
+          className="absolute inset-0 m-auto object-contain transition-transform duration-200 ease-standard [--img-hover-scale:1] motion-safe:group-hover:[--img-hover-scale:1.025] [transform:translate(var(--img-shift-x),var(--img-shift-y))_scale(var(--img-hover-scale))]"
+          style={
+            {
+              width: `${framing.frameWidthPct}%`,
+              height: `${framing.frameHeightPct}%`,
+              '--img-shift-x': `${framing.shiftXPct}%`,
+              '--img-shift-y': `${framing.shiftYPct}%`,
+            } as CSSProperties
+          }
         />
       )}
     </div>

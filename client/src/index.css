@@ -163,12 +163,26 @@
  * Consumed as z-[var(--z-modal)] — Tailwind has no --z-* namespace, so no
  * `z-modal` utility class exists (same mechanism as the --duration-* note
  * above). --scrim is reached through `bg-scrim` via --color-scrim.
+ *
+ * --shadow-card-hover — DESIGN_SYSTEM.md §3, Accepted (DEC-041, 2026-08-04).
+ * The one soft, low-elevation shadow for a transient card hover/focus state
+ * (§3's "soft low-elevation shadow ONLY in transient hover and keyboard-
+ * focus states"). Lives here for the same reason as the z-scale above:
+ * there is no --shadow-* Tailwind theme namespace to alias into a real
+ * utility class, so this is a plain custom property, consumed as
+ * shadow-[var(--shadow-card-hover)]. Deliberately distinct from
+ * AccountMenu's own inline dropdown shadow (0 8px 24px rgba(31,37,46,0.12))
+ * — that is a heavier, persistent-while-open popover elevation, not this
+ * card's restrained transient one; the two are not the same scale and this
+ * is not the start of a broader elevation system (DEC-041 is explicit that
+ * it is not).
  */
 :root {
   --z-dropdown: 40;
   --z-overlay: 50;
   --z-modal: 60;
   --scrim: rgb(31 37 46 / 0.45);
+  --shadow-card-hover: 0 4px 16px rgb(31 37 46 / 0.10);
 }
 
 body {
