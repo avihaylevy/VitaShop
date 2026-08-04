@@ -32,6 +32,11 @@ coverage/
 playwright-report/
 test-results/
 
+# Playwright CLI artifacts (DEC-040) — verification sessions only, not a
+# test suite; .claude/skills/playwright-cli/ (the skill itself) is NOT ignored
+.playwright-cli/
+.playwright/
+
 # ── Editors and OS ───────────────────────────
 .vscode/*
 !.vscode/extensions.json

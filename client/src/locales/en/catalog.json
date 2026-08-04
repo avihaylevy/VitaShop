@@ -1,0 +1,7 @@
+{
+  "addToCart": "Add to cart",
+  "stock": {
+    "low": "Low stock",
+    "out": "Out of stock"
+  }
+}

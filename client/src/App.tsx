@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Route, Routes } from 'react-router'
 import { AppShell } from './components/layout/AppShell'
 import { OverlayShowcase } from './components/dev/OverlayShowcase'
+import { CatalogShowcase } from './components/dev/CatalogShowcase'
 
 function HomePage() {
   const { t } = useTranslation()
@@ -21,6 +22,7 @@ function App() {
           Verified by grepping dist/.
         */}
         {import.meta.env.DEV && <Route path="/ui-showcase" element={<OverlayShowcase />} />}
+        {import.meta.env.DEV && <Route path="/catalog-showcase" element={<CatalogShowcase />} />}
       </Routes>
     </AppShell>
   )
