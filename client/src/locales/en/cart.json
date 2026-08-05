@@ -1,0 +1,36 @@
+{
+  "page": {
+    "title": "Shopping cart",
+    "summary_one": "1 item in cart",
+    "summary_other": "{{count}} items in cart",
+    "backToCatalog": "Continue shopping"
+  },
+  "item": {
+    "packageQuantity": "Package quantity: {{quantity}}",
+    "unitPrice": "Unit price"
+  },
+  "quantity": {
+    "groupLabel": "Quantity — {{product}}",
+    "valueLabel": "Quantity:",
+    "decrease": "Decrease quantity — {{product}}",
+    "increase": "Increase quantity — {{product}}",
+    "atStockCap": "The cart has reached the stock last seen in the catalogue. This is not a live stock check."
+  },
+  "remove": {
+    "label": "Remove",
+    "ariaLabel": "Remove {{product}} from the cart"
+  },
+  "undo": {
+    "message": "{{product}} was removed from the cart",
+    "action": "Undo removal",
+    "actionAriaLabel": "Undo removing {{product}} from the cart"
+  },
+  "subtotal": {
+    "label": "Subtotal based on prices when items were added"
+  },
+  "empty": {
+    "heading": "Your cart is empty",
+    "message": "No products have been added to the cart yet.",
+    "browseCatalog": "Go to the catalogue"
+  }
+}

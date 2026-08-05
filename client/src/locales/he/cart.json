@@ -1,0 +1,38 @@
+{
+  "page": {
+    "title": "עגלת הקניות",
+    "summary_one": "פריט אחד בעגלה",
+    "summary_two": "שני פריטים בעגלה",
+    "summary_many": "{{count}} פריטים בעגלה",
+    "summary_other": "{{count}} פריטים בעגלה",
+    "backToCatalog": "המשך קנייה"
+  },
+  "item": {
+    "packageQuantity": "כמות באריזה: {{quantity}}",
+    "unitPrice": "מחיר ליחידה"
+  },
+  "quantity": {
+    "groupLabel": "כמות — {{product}}",
+    "valueLabel": "כמות:",
+    "decrease": "הפחתת הכמות — {{product}}",
+    "increase": "הוספת הכמות — {{product}}",
+    "atStockCap": "הכמות בעגלה הגיעה למלאי שנצפה בקטלוג בפעם האחרונה. אין כאן בדיקת מלאי בזמן אמת."
+  },
+  "remove": {
+    "label": "הסרה",
+    "ariaLabel": "הסרת {{product}} מהעגלה"
+  },
+  "undo": {
+    "message": "{{product}} הוסר מהעגלה",
+    "action": "ביטול הסרה",
+    "actionAriaLabel": "ביטול הסרת {{product}} מהעגלה"
+  },
+  "subtotal": {
+    "label": "סכום ביניים לפי המחירים בעת ההוספה לעגלה"
+  },
+  "empty": {
+    "heading": "העגלה ריקה",
+    "message": "עדיין לא נוספו מוצרים לעגלה.",
+    "browseCatalog": "מעבר לקטלוג"
+  }
+}

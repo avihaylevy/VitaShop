@@ -26,6 +26,13 @@ export type CartAction =
   | { type: 'increment'; slug: string }
   | { type: 'decrement'; slug: string }
   | { type: 'remove'; slug: string }
+  /**
+   * Undo for exactly one explicit removal — Slice 7b. Carries the removed
+   * snapshot verbatim plus the index it occupied, so a restore puts the line
+   * back where it was instead of appending it. Nothing is re-fetched and no
+   * product data is refreshed: restoring is an undo, not a new add.
+   */
+  | { type: 'restore'; item: CartItem; index: number }
 
 /**
  * Dev-only diagnostics. Production stays silent: a rejected transition is
@@ -172,6 +179,62 @@ function changeQuantity(state: CartState, slug: string, delta: 1 | -1): CartStat
   return acceptCandidateState(state, { items: replaceItem(state.items, index, { ...existing, quantity }) })
 }
 
+/**
+ * Restores one previously removed line at its original index — Slice 7b.
+ *
+ * 🔴 Error policy is the reducer's existing one, unchanged: an invalid
+ * TRANSITION is refused and the previous state is returned referentially
+ * unchanged (with a dev-only warning), exactly like `add`'s price/stock
+ * refusals. A corrupt INCOMING state still throws, via `assertIncomingState`.
+ * Nothing here clamps, merges, repairs or re-fetches.
+ *
+ * The snapshot is validated in full before it can re-enter the cart, because
+ * it has been outside the reducer's custody since it was removed — this
+ * function trusts nothing about it.
+ *
+ * `index === items.length` is a legal restore position (the line was last).
+ */
+function restoreRemovedItem(state: CartState, item: CartItem, index: number): CartState {
+  if (!Number.isSafeInteger(index) || index < 0 || index > state.items.length) {
+    warnInDev(`refused to restore "${item.slug}": index is outside the current cart`)
+    return state
+  }
+
+  if (!isValidQuantity(item.quantity)) {
+    warnInDev(`refused to restore "${item.slug}": quantity is not a positive integer`)
+    return state
+  }
+
+  if (!isValidQuantity(item.stockQuantity)) {
+    warnInDev(`refused to restore "${item.slug}": stockQuantity is not a positive integer`)
+    return state
+  }
+
+  if (item.quantity > item.stockQuantity) {
+    warnInDev(`refused to restore "${item.slug}": quantity exceeds stockQuantity`)
+    return state
+  }
+
+  if (!Number.isSafeInteger(item.unitPriceMinor) || item.unitPriceMinor < 0) {
+    warnInDev(`refused to restore "${item.slug}": unitPriceMinor is not a non-negative safe integer`)
+    return state
+  }
+
+  // 🔴 One line per slug, always. A restore never merges into an existing
+  // line and never creates a second one — if the slug is back in the cart by
+  // any route, the undo is simply stale and is refused.
+  if (state.items.some((existing) => existing.slug === item.slug)) {
+    warnInDev(`refused to restore "${item.slug}": the slug is already in the cart`)
+    return state
+  }
+
+  // Same boundary as every other transition: a candidate whose derived totals
+  // leave the safe-integer range is discarded whole.
+  return acceptCandidateState(state, {
+    items: [...state.items.slice(0, index), item, ...state.items.slice(index)],
+  })
+}
+
 export function cartReducer(state: CartState, action: CartAction): CartState {
   // 🔴 Before anything else, and for every action without exception.
   assertIncomingState(state)
@@ -183,6 +246,8 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
       return changeQuantity(state, action.slug, 1)
     case 'decrement':
       return changeQuantity(state, action.slug, -1)
+    case 'restore':
+      return restoreRemovedItem(state, action.item, action.index)
     case 'remove': {
       const next = state.items.filter((item) => item.slug !== action.slug)
       // Routed through the same helper as every other path, for one

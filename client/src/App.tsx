@@ -4,6 +4,7 @@ import { OverlayShowcase } from './components/dev/OverlayShowcase'
 import { CatalogShowcase } from './components/dev/CatalogShowcase'
 import { HomePage } from './pages/HomePage'
 import { CatalogPage } from './pages/CatalogPage'
+import { CartPage } from './components/cart'
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/catalog" element={<CatalogPage />} />
+        <Route path="/cart" element={<CartPage />} />
         {/*
           Dev-only. Vite substitutes `false` for import.meta.env.DEV in a
           production build, so this branch and the OverlayShowcase import

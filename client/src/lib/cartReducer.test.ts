@@ -289,6 +289,144 @@ describe('remove', () => {
   })
 })
 
+describe('restore', () => {
+  /** A removed snapshot, exactly as `remove` left it. */
+  function removedItem(overrides: Partial<CartItem> = {}): CartItem {
+    return stateOf({ slug: 'solgar-omega-3', ...overrides }).items[0]
+  }
+
+  /** Three lines, so an index can be genuinely first, middle or last. */
+  function threeLines(): CartState {
+    return reduceAll(
+      { type: 'add', product: product() },
+      { type: 'add', product: VITAMIN_C },
+      { type: 'add', product: MAGNESIUM },
+    )
+  }
+
+  it('restores a removed line at index 0, ahead of everything else', () => {
+    const full = threeLines()
+    const removed = full.items[0]
+    const without = cartReducer(full, { type: 'remove', slug: removed.slug })
+
+    const restored = cartReducer(without, { type: 'restore', item: removed, index: 0 })
+
+    expect(restored.items.map((item) => item.slug)).toEqual(full.items.map((item) => item.slug))
+    expect(restored.items[0]).toEqual(removed)
+  })
+
+  it('restores a removed line in the middle, preserving the order of the others', () => {
+    const full = threeLines()
+    const removed = full.items[1]
+    const without = cartReducer(full, { type: 'remove', slug: removed.slug })
+
+    const restored = cartReducer(without, { type: 'restore', item: removed, index: 1 })
+
+    expect(restored.items.map((item) => item.slug)).toEqual(full.items.map((item) => item.slug))
+  })
+
+  it('restores a removed line at the end, where index equals the current length', () => {
+    const full = threeLines()
+    const removed = full.items[2]
+    const without = cartReducer(full, { type: 'remove', slug: removed.slug })
+
+    const restored = cartReducer(without, { type: 'restore', item: removed, index: without.items.length })
+
+    expect(restored.items.map((item) => item.slug)).toEqual(full.items.map((item) => item.slug))
+  })
+
+  it('restores the snapshot verbatim — no refreshed price, stock or name', () => {
+    const removed = removedItem({ quantity: 3, unitPriceMinor: 1234, stockQuantity: 9, name: 'שם ישן' })
+
+    const restored = cartReducer(EMPTY_CART, { type: 'restore', item: removed, index: 0 })
+
+    expect(restored.items[0]).toEqual(removed)
+  })
+
+  it('produces a state every selector accepts', () => {
+    const removed = removedItem({ quantity: 2, unitPriceMinor: 9490 })
+
+    const restored = cartReducer(EMPTY_CART, { type: 'restore', item: removed, index: 0 })
+
+    expect(getTotalQuantity(restored)).toBe(2)
+    expect(getSubtotalMinor(restored)).toBe(18_980)
+  })
+
+  describe('refuses the transition and returns the SAME state object', () => {
+    const populated = reduceAll({ type: 'add', product: product() }, { type: 'add', product: VITAMIN_C })
+
+    it.each([
+      ['a negative index', { item: removedItem({ slug: 'other' }), index: -1 }],
+      ['a fractional index', { item: removedItem({ slug: 'other' }), index: 1.5 }],
+      ['an index past the end', { item: removedItem({ slug: 'other' }), index: 3 }],
+      ['a duplicate slug', { item: removedItem({ slug: 'solgar-omega-3' }), index: 0 }],
+      ['a zero quantity', { item: removedItem({ slug: 'other', quantity: 0 }), index: 0 }],
+      ['a fractional quantity', { item: removedItem({ slug: 'other', quantity: 1.5 }), index: 0 }],
+      ['a negative quantity', { item: removedItem({ slug: 'other', quantity: -2 }), index: 0 }],
+      ['a zero stock quantity', { item: removedItem({ slug: 'other', stockQuantity: 0 }), index: 0 }],
+      ['a fractional stock quantity', { item: removedItem({ slug: 'other', stockQuantity: 2.5 }), index: 0 }],
+      ['a quantity above stock', { item: removedItem({ slug: 'other', quantity: 5, stockQuantity: 3 }), index: 0 }],
+      ['a negative unit price', { item: removedItem({ slug: 'other', unitPriceMinor: -1 }), index: 0 }],
+      ['a fractional unit price', { item: removedItem({ slug: 'other', unitPriceMinor: 12.5 }), index: 0 }],
+      ['a NaN unit price', { item: removedItem({ slug: 'other', unitPriceMinor: Number.NaN }), index: 0 }],
+    ])('%s', (_label, { item, index }) => {
+      expect(cartReducer(populated, { type: 'restore', item, index })).toBe(populated)
+    })
+
+    it('never merges a duplicate slug into the existing line', () => {
+      const before = populated.items.find((item) => item.slug === 'solgar-omega-3')!
+
+      const after = cartReducer(populated, {
+        type: 'restore',
+        item: removedItem({ slug: 'solgar-omega-3', quantity: 4 }),
+        index: 0,
+      })
+
+      expect(after.items.filter((item) => item.slug === 'solgar-omega-3')).toHaveLength(1)
+      expect(after.items.find((item) => item.slug === 'solgar-omega-3')).toBe(before)
+    })
+
+    it('a resulting total quantity outside the safe range', () => {
+      // Priced at 0 agorot on purpose, so the SUBTOTAL stays safe and this
+      // test isolates the total-quantity guard rather than passing for the
+      // wrong reason. The incoming state is itself valid.
+      const huge = stateOf({ slug: 'huge', quantity: 2 ** 52, stockQuantity: 2 ** 52, unitPriceMinor: 0 })
+      expect(getTotalQuantity(huge)).toBe(2 ** 52)
+      expect(getSubtotalMinor(huge)).toBe(0)
+
+      expect(
+        cartReducer(huge, {
+          type: 'restore',
+          item: removedItem({ slug: 'other', quantity: 2 ** 52, stockQuantity: 2 ** 52, unitPriceMinor: 0 }),
+          index: 0,
+        }),
+      ).toBe(huge)
+    })
+
+    it('a resulting subtotal outside the safe range', () => {
+      const priced = stateOf({ slug: 'priced', quantity: 1, unitPriceMinor: MAX_PRICE_MINOR })
+      const overflowing = removedItem({
+        slug: 'other',
+        quantity: MAX_PRICE_SAFE_UNITS + 1,
+        stockQuantity: MAX_PRICE_SAFE_UNITS + 1,
+        unitPriceMinor: MAX_PRICE_MINOR,
+      })
+
+      expect(cartReducer(priced, { type: 'restore', item: overflowing, index: 0 })).toBe(priced)
+    })
+  })
+
+  it('warns in development on a refused restore, and only in development', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      cartReducer(EMPTY_CART, { type: 'restore', item: removedItem({ quantity: 0 }), index: 0 })
+      expect(warn).toHaveBeenCalledTimes(import.meta.env.DEV ? 1 : 0)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
+
 describe('getTotalQuantity', () => {
   it('is 0 for an empty cart', () => {
     expect(getTotalQuantity(EMPTY_CART)).toBe(0)
@@ -753,6 +891,14 @@ describe('corrupt incoming state fails loudly, for every action', () => {
     ['unknown-slug decrement', { type: 'decrement', slug: 'does-not-exist' }],
     ['unknown-slug remove', { type: 'remove', slug: 'does-not-exist' }],
     ['remove', { type: 'remove', slug: 'solgar-omega-3' }],
+    [
+      'restore',
+      { type: 'restore', item: stateOf({ slug: 'restored-line' }).items[0], index: 0 },
+    ],
+    [
+      'refused restore',
+      { type: 'restore', item: stateOf({ slug: 'restored-line', quantity: 0 }).items[0], index: 0 },
+    ],
   ] as const satisfies readonly (readonly [string, Parameters<typeof cartReducer>[1]])[]
 
   it.each(ACTIONS)('throws RangeError on %s when a unit price is corrupt', (_label, action) => {

@@ -30,6 +30,16 @@ type CartContextValue = {
   incrementItem: (slug: string) => void
   decrementItem: (slug: string) => void
   removeItem: (slug: string) => void
+  /**
+   * Undo for exactly one explicit removal — Slice 7b. Takes the removed
+   * snapshot and the index it occupied. The reducer refuses a stale or
+   * corrupt restore (duplicate slug, quantity above stock, invalid money,
+   * unsafe totals) and leaves the cart untouched; it never merges or repairs.
+   *
+   * 🔴 There is no undo stack, no timer and no persistence. The caller owns
+   * the single pending undo and it dies with the page.
+   */
+  restoreItem: (item: CartItem, index: number) => void
   /** Total units across every line — derived, never stored separately. */
   totalQuantity: number
   /** Integer agorot. Derived. Not rendered anywhere in Slice 7. */
@@ -45,6 +55,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const incrementItem = useCallback((slug: string) => dispatch({ type: 'increment', slug }), [])
   const decrementItem = useCallback((slug: string) => dispatch({ type: 'decrement', slug }), [])
   const removeItem = useCallback((slug: string) => dispatch({ type: 'remove', slug }), [])
+  const restoreItem = useCallback(
+    (item: CartItem, index: number) => dispatch({ type: 'restore', item, index }),
+    [],
+  )
 
   const value = useMemo<CartContextValue>(
     () => ({
@@ -53,12 +67,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       incrementItem,
       decrementItem,
       removeItem,
+      restoreItem,
       // Recomputed from the items on every state change rather than tracked
       // alongside them, so the badge cannot drift from the cart it counts.
       totalQuantity: getTotalQuantity(state),
       subtotalMinor: getSubtotalMinor(state),
     }),
-    [state, addItem, incrementItem, decrementItem, removeItem],
+    [state, addItem, incrementItem, decrementItem, removeItem, restoreItem],
   )
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>

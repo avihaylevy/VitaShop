@@ -93,3 +93,32 @@ export function ChevronDownIcon(props: IconSvgProps) {
     </svg>
   )
 }
+
+export function MinusIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <line x1="6" y1="12" x2="18" y2="12" />
+    </svg>
+  )
+}
+
+export function PlusIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <line x1="6" y1="12" x2="18" y2="12" />
+      <line x1="12" y1="6" x2="12" y2="18" />
+    </svg>
+  )
+}
+
+export function TrashIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <path d="M9 7V5.2A1.2 1.2 0 0 1 10.2 4h3.6A1.2 1.2 0 0 1 15 5.2V7" />
+      <path d="M6.4 7l.8 11.4A1.7 1.7 0 0 0 8.9 20h6.2a1.7 1.7 0 0 0 1.7-1.6L17.6 7" />
+      <line x1="10.4" y1="10.6" x2="10.7" y2="16.6" />
+      <line x1="13.6" y1="10.6" x2="13.3" y2="16.6" />
+    </svg>
+  )
+}
