@@ -72,8 +72,12 @@ export function FavouritesControl() {
 
 export function CartControl() {
   const { t } = useTranslation('layout')
-  const { count } = useCart()
-  const ariaLabel = count > 0 ? t('cart.ariaLabelWithCount', { count }) : t('cart.ariaLabelEmpty')
+  // Total UNITS across every cart line, not the number of distinct lines:
+  // adding the same product twice moves the badge 1 -> 2, so the badge and
+  // the add-to-cart confirmation can never contradict each other.
+  const { totalQuantity } = useCart()
+  const ariaLabel =
+    totalQuantity > 0 ? t('cart.ariaLabelWithCount', { count: totalQuantity }) : t('cart.ariaLabelEmpty')
 
   return (
     <Link
@@ -86,12 +90,12 @@ export function CartControl() {
           <CartIcon />
         </Icon>
       </span>
-      {count > 0 && (
+      {totalQuantity > 0 && (
         <span
           aria-hidden="true"
           className="absolute -top-1 -end-1 flex h-5 min-w-5 items-center justify-center rounded-round bg-brand-teal px-1 text-[11px] font-medium leading-none text-white"
         >
-          {count}
+          {totalQuantity}
         </span>
       )}
     </Link>

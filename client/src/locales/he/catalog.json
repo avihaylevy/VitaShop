@@ -29,5 +29,8 @@
     "invalidCategoryMessage": "הקטגוריה המבוקשת אינה קיימת.",
     "backToAll": "חזרה לכל המוצרים"
   },
-  "addToCartUnavailable": "הוספה לעגלה אינה זמינה עדיין."
+  "addedToCart_one": "{{product}} נוסף לעגלה. בעגלה פריט אחד.",
+  "addedToCart_two": "{{product}} נוסף לעגלה. בעגלה שני פריטים.",
+  "addedToCart_many": "{{product}} נוסף לעגלה. בעגלה {{count}} פריטים.",
+  "addedToCart_other": "{{product}} נוסף לעגלה. בעגלה {{count}} פריטים."
 }

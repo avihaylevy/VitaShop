@@ -36,7 +36,10 @@
   "cart": {
     "label": "עגלה",
     "ariaLabelEmpty": "עגלה, ריקה",
-    "ariaLabelWithCount": "עגלה, {{count}} פריטים"
+    "ariaLabelWithCount_one": "עגלה, פריט אחד",
+    "ariaLabelWithCount_two": "עגלה, שני פריטים",
+    "ariaLabelWithCount_many": "עגלה, {{count}} פריטים",
+    "ariaLabelWithCount_other": "עגלה, {{count}} פריטים"
   },
   "mobileMenu": {
     "openLabel": "פתיחת תפריט",

@@ -29,5 +29,6 @@
     "invalidCategoryMessage": "The requested category does not exist.",
     "backToAll": "Back to all products"
   },
-  "addToCartUnavailable": "Add to cart is not available yet."
+  "addedToCart_one": "{{product}} added to cart. 1 item in cart.",
+  "addedToCart_other": "{{product}} added to cart. {{count}} items in cart."
 }

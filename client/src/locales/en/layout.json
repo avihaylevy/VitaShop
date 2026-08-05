@@ -36,7 +36,8 @@
   "cart": {
     "label": "Cart",
     "ariaLabelEmpty": "Cart, empty",
-    "ariaLabelWithCount": "Cart, {{count}} items"
+    "ariaLabelWithCount_one": "Cart, 1 item",
+    "ariaLabelWithCount_other": "Cart, {{count}} items"
   },
   "mobileMenu": {
     "openLabel": "Open menu",

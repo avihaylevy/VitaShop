@@ -1,47 +1,64 @@
-import { createContext, useContext, useMemo, useReducer, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useReducer, type ReactNode } from 'react'
+import type { CartItem } from '../types/cart'
+import type { ProductCardModel } from '../types/product'
+import { cartReducer, EMPTY_CART, getSubtotalMinor, getTotalQuantity } from '../lib/cartReducer'
 
 /**
- * Count-only interim state for the header cart badge
- * (UI_IMPLEMENTATION_PLAN.md §4 lists `CartProvider` as the eventual home
- * of full cart contents/reducer — that lands with the cart page itself,
- * build order step 7). Nothing here computes a price or a stock decision;
- * §4's rule that the server is the source of truth for those is not
- * touched by this slice, since there is no server cart integration yet.
+ * Real cart state — Slice 7 (UI_IMPLEMENTATION_PLAN.md §4, build-order
+ * step 7, partial: context only; CartItemRow, QuantityStepper and the full
+ * cart page are not in this slice, and CartDrawer is Slice 8).
+ *
+ * This file is deliberately thin. Every rule — identity, the stock ceiling,
+ * the minimum of 1, duplicate handling, price validation, the safe-integer
+ * guards — lives in `lib/cartReducer.ts`, where it is covered by pure tests
+ * that need no renderer. What remains here is wiring.
+ *
+ * 🔴 The client is not a source of truth (CLAUDE.md rule 1 / spec §3.4).
+ * The stock ceiling enforced below is a UI affordance, re-validated
+ * server-side once a cart API exists (REQ-F-022). `subtotalMinor` is
+ * exposed but rendered nowhere in Slice 7, by decision.
+ *
+ * 🔴 In-memory only, by decision. No localStorage, sessionStorage,
+ * IndexedDB or cookie is read or written here — the cart resets on a full
+ * reload, and the accepted server-side session cart (DEC-018/DEC-019)
+ * remains the eventual single source of truth.
  */
 
-type CartState = { count: number }
-
-type CartAction = { type: 'add'; quantity?: number } | { type: 'remove'; quantity?: number } | { type: 'set'; count: number }
-
-function cartReducer(state: CartState, action: CartAction): CartState {
-  switch (action.type) {
-    case 'add':
-      return { count: state.count + (action.quantity ?? 1) }
-    case 'remove':
-      return { count: Math.max(0, state.count - (action.quantity ?? 1)) }
-    case 'set':
-      return { count: Math.max(0, action.count) }
-  }
-}
-
 type CartContextValue = {
-  count: number
-  addItem: (quantity?: number) => void
-  removeItem: (quantity?: number) => void
+  items: readonly CartItem[]
+  addItem: (product: ProductCardModel) => void
+  incrementItem: (slug: string) => void
+  decrementItem: (slug: string) => void
+  removeItem: (slug: string) => void
+  /** Total units across every line — derived, never stored separately. */
+  totalQuantity: number
+  /** Integer agorot. Derived. Not rendered anywhere in Slice 7. */
+  subtotalMinor: number
 }
 
 const CartContext = createContext<CartContextValue | null>(null)
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(cartReducer, { count: 0 })
+  const [state, dispatch] = useReducer(cartReducer, EMPTY_CART)
+
+  const addItem = useCallback((product: ProductCardModel) => dispatch({ type: 'add', product }), [])
+  const incrementItem = useCallback((slug: string) => dispatch({ type: 'increment', slug }), [])
+  const decrementItem = useCallback((slug: string) => dispatch({ type: 'decrement', slug }), [])
+  const removeItem = useCallback((slug: string) => dispatch({ type: 'remove', slug }), [])
 
   const value = useMemo<CartContextValue>(
     () => ({
-      count: state.count,
-      addItem: (quantity) => dispatch({ type: 'add', quantity }),
-      removeItem: (quantity) => dispatch({ type: 'remove', quantity }),
+      items: state.items,
+      addItem,
+      incrementItem,
+      decrementItem,
+      removeItem,
+      // Recomputed from the items on every state change rather than tracked
+      // alongside them, so the badge cannot drift from the cart it counts.
+      totalQuantity: getTotalQuantity(state),
+      subtotalMinor: getSubtotalMinor(state),
     }),
-    [state.count],
+    [state, addItem, incrementItem, decrementItem, removeItem],
   )
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>

@@ -1,6 +1,10 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router'
 import { useCatalogData } from '../hooks/useCatalogData'
+import { useCart } from '../state/CartContext'
+import type { CartItem } from '../types/cart'
+import type { ProductCardModel } from '../types/product'
 import { CategoryShelf } from '../components/catalog'
 import { ProductGrid } from '../components/catalog/ProductGrid'
 import { Button } from '../components/ui/Button'
@@ -8,20 +12,23 @@ import { Surface } from '../components/ui/Surface'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import type { SupportedLanguage } from '../i18n/index'
 
-// Shared, visible explanation for every disabled add-to-cart button on this
-// page (Slice 6 Checkpoint A/E — cart ships in Slice 7). One DOM node,
-// referenced by every card's aria-describedby via this fixed id.
-const ADD_TO_CART_UNAVAILABLE_ID = 'catalog-add-to-cart-unavailable'
-
 const SKELETON_COUNT = 8
 
-// Every card on this page always has addToCartUnavailableId set, so the
-// button is always disabled — this is structurally unreachable. Not a
-// silent no-op: it fails loudly if the disabled contract is ever violated.
-function handleAddToCartUnreachable(): never {
-  throw new Error(
-    'onAddToCart must be unreachable on CatalogPage: every ProductCard here has addToCartUnavailableId set (Slice 6 Checkpoint E — cart ships in Slice 7).',
-  )
+/**
+ * One queued add-to-cart attempt, with everything needed to prove — not
+ * assume — that this specific attempt is what increased the cart.
+ */
+type AddAttempt = {
+  slug: string
+  /** Cart-wide unit total captured immediately before this attempt dispatched. */
+  totalBefore: number
+  /** This slug's own line quantity at the same moment; 0 when not yet in the cart. */
+  quantityBefore: number
+}
+
+/** This slug's current line quantity, or 0 when it has no line. */
+function quantityOf(items: readonly CartItem[], slug: string): number {
+  return items.find((item) => item.slug === slug)?.quantity ?? 0
 }
 
 function ProductGridSkeleton() {
@@ -63,12 +70,130 @@ export function CatalogPage() {
   const [searchParams] = useSearchParams()
   const categorySlug = searchParams.get('category') ?? undefined
   const { loading, products, categories, error, retry } = useCatalogData(language)
+  const { addItem, items, totalQuantity } = useCart()
+  // One attempt at a time, in click order. See the add-queue comment below.
+  const queueRef = useRef<ProductCardModel[]>([])
+  const processingRef = useRef(false)
+  const mountedRef = useRef(true)
+  const totalQuantityRef = useRef(totalQuantity)
+  const itemsRef = useRef(items)
+  const [activeAttempt, setActiveAttempt] = useState<AddAttempt | null>(null)
+  const [announced, setAnnounced] = useState<{ slug: string; count: number } | null>(null)
+
+  // 🔴 Updated in a layout effect, never during render. A render can be
+  // interrupted or discarded under concurrent React, and a ref written during
+  // one would keep values from a commit that never happened — an event handled
+  // by the committed tree could then snapshot uncommitted cart state, making
+  // `totalBefore`/`quantityBefore` attribute an increase to the wrong attempt.
+  // Layout effects run before passive effects in the same commit, so these are
+  // already fresh when the reconciliation effect starts the next attempt.
+  useLayoutEffect(() => {
+    itemsRef.current = items
+    totalQuantityRef.current = totalQuantity
+  }, [items, totalQuantity])
 
   const activeCategory = categorySlug ? categories.find((c) => c.slug === categorySlug) : undefined
   const isInvalidCategory = categorySlug !== undefined && !loading && !error && activeCategory === undefined
   const filteredProducts = activeCategory
     ? products.filter((product) => product.categoryNameHe === activeCategory.nameHe)
     : products
+
+  /**
+   * 🔴 An add is announced only once it is PROVEN to have increased the cart,
+   * and attempts are serialized so one can never be lost or misattributed.
+   *
+   * The reducer legitimately refuses or clamps a transition (stock ceiling,
+   * invalid price, safe-integer guard) and returns the previous state.
+   * Announcing straight from the click handler would report those failures as
+   * successes and overwrite a previous product's true confirmation.
+   *
+   * Comparing before/after totals fixes that for one attempt, but a single
+   * pending slot is still wrong under rapid clicking: two handlers in the same
+   * tick would both read the same stale total and one attempt would go
+   * unreconciled. So attempts go through a FIFO queue with exactly one active
+   * at a time:
+   *
+   *   click        -> push to the queue, then try to start
+   *   start        -> shift one, capture the CURRENT total, dispatch once
+   *   reconcile    -> success iff total > totalBefore; resolve; start the next
+   *
+   * `processingRef` is a ref, not state, so it flips synchronously — two click
+   * handlers from the same render cannot both start an attempt. No timeout, no
+   * storage, no dependency, and no change to the CartContext API or reducer.
+   */
+  const startNextAttempt = useCallback(() => {
+    if (!mountedRef.current || processingRef.current) {
+      return
+    }
+    const next = queueRef.current.shift()
+    if (!next) {
+      return
+    }
+    processingRef.current = true
+    setActiveAttempt({
+      slug: next.slug,
+      totalBefore: totalQuantityRef.current,
+      // Captured immediately before dispatch, from the committed items.
+      quantityBefore: quantityOf(itemsRef.current, next.slug),
+    })
+    addItem(next)
+  }, [addItem])
+
+  function handleAddToCart(slug: string) {
+    const product = filteredProducts.find((candidate) => candidate.slug === slug)
+    if (!product) {
+      return
+    }
+    queueRef.current.push(product)
+    startNextAttempt()
+  }
+
+  useEffect(() => {
+    if (!activeAttempt) {
+      return
+    }
+    // 🔴 BOTH conditions, not just the cart-wide total. A rising total alone
+    // does not prove THIS product grew — some other cart operation could have
+    // increased a different line while this attempt was refused, which would
+    // attribute someone else's increase to this slug. The per-slug check is
+    // what makes the announcement provably about the product it names.
+    const grewOverall = totalQuantity > activeAttempt.totalBefore
+    const grewThisLine = quantityOf(items, activeAttempt.slug) > activeAttempt.quantityBefore
+
+    if (grewOverall && grewThisLine) {
+      // The count stays the cart-wide committed total, so the spoken number
+      // always matches the Header badge.
+      setAnnounced({ slug: activeAttempt.slug, count: totalQuantity })
+    }
+    // Resolved exactly once, success or rejection. On a rejection nothing is
+    // published, so the previous announcement's text survives byte-for-byte.
+    setActiveAttempt(null)
+    processingRef.current = false
+    startNextAttempt()
+  }, [activeAttempt, items, totalQuantity, startNextAttempt])
+
+  // Set in the effect body, not just at ref init, so StrictMode's
+  // mount/unmount/remount cycle restores the mounted flag instead of leaving
+  // the queue permanently disabled. Nothing dispatches or publishes after
+  // unmount, and a pending queue does not survive navigation away.
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      processingRef.current = false
+      queueRef.current = []
+    }
+  }, [])
+
+  // Stored as slug + count, not as a rendered string, so the sentence
+  // re-resolves through i18n on a language toggle instead of freezing in the
+  // language it was announced in. The name comes from live catalogue data;
+  // if the product is not present, nothing is invented and nothing is said.
+  const announcedProduct = announced ? products.find((p) => p.slug === announced.slug) : undefined
+  const addedToCartMessage =
+    announced && announcedProduct
+      ? t('addedToCart', { ns: 'catalog', product: announcedProduct.name, count: announced.count })
+      : ''
 
   const gridHeading = isInvalidCategory
     ? t('catalogPage.invalidCategoryHeading', { ns: 'catalog' })
@@ -125,14 +250,17 @@ export function CatalogPage() {
               </div>
             ) : (
               <>
-                <p id={ADD_TO_CART_UNAVAILABLE_ID} className="mt-4 text-xs text-text-muted">
-                  {t('addToCartUnavailable', { ns: 'catalog' })}
+                {/*
+                  One shared polite live region for the whole grid, rather
+                  than one per card: a single announcement per add, never a
+                  burst. Visible text, so the confirmation is not carried by
+                  colour or by the badge alone. Renders empty until the first
+                  add, so nothing is announced on load.
+                */}
+                <p role="status" className={addedToCartMessage ? 'mt-4 text-sm text-text-ink' : ''}>
+                  {addedToCartMessage}
                 </p>
-                <ProductGrid
-                  products={filteredProducts}
-                  onAddToCart={handleAddToCartUnreachable}
-                  addToCartUnavailableId={ADD_TO_CART_UNAVAILABLE_ID}
-                />
+                <ProductGrid products={filteredProducts} onAddToCart={handleAddToCart} />
               </>
             )}
           </section>

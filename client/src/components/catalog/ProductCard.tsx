@@ -16,15 +16,6 @@ type ProductCardProps = ProductCardModel & {
   headingLevel?: 'h2' | 'h3' | 'h4'
   /** Defaults to true — unchanged from the Checkpoint B contract. ProductGrid passes this through. */
   showCategoryEyebrow?: boolean
-  /**
-   * Additive, Slice 6 Checkpoint A/E. `undefined` preserves the Slice 5
-   * contract exactly. When defined, the id of a shared, visible explanation
-   * element elsewhere on the page (rendered once by the caller, e.g.
-   * CatalogPage) — the button is disabled and describes itself via
-   * `aria-describedby`. Never merged with the separate `StockState`
-   * out-of-stock explanation. `CatalogShowcase` does not pass this.
-   */
-  addToCartUnavailableId?: string
 }
 
 /**
@@ -47,13 +38,14 @@ export function ProductCard({
   onAddToCart,
   headingLevel = 'h3',
   showCategoryEyebrow = true,
-  addToCartUnavailableId,
 }: ProductCardProps) {
   const { t, i18n } = useTranslation('catalog')
   const Heading = headingLevel
   const categoryLabel = i18n.language === 'he' ? categoryNameHe : categoryName
+  // Slice 7: the only reason add-to-cart is ever disabled is real stock.
+  // The Slice 6 `addToCartUnavailableId` boundary — which force-disabled
+  // every button while the cart did not exist — is gone.
   const isOut = getStockState(stockQuantity, lowStockThreshold) === 'out'
-  const isAddToCartDisabled = isOut || addToCartUnavailableId !== undefined
   // DESIGN_SYSTEM.md §1: tone binds to Category (via categoryNameHe, regardless
   // of display language), carried alongside — never instead of — the visible
   // category text below.
@@ -104,12 +96,7 @@ export function ProductCard({
       <PriceBlock price={price} />
       <StockState stockQuantity={stockQuantity} lowStockThreshold={lowStockThreshold} />
 
-      <Button
-        variant="primary"
-        disabled={isAddToCartDisabled}
-        aria-describedby={addToCartUnavailableId}
-        onClick={() => onAddToCart(slug)}
-      >
+      <Button variant="primary" disabled={isOut} onClick={() => onAddToCart(slug)}>
         {t('addToCart')}
       </Button>
     </Surface>

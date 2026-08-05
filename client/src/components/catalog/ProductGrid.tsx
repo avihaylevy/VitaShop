@@ -7,8 +7,6 @@ type ProductGridProps = {
   onAddToCart: (slug: string) => void
   showCategoryEyebrow?: boolean
   emptyState?: ReactNode
-  /** Additive, Slice 6 Checkpoint E — forwarded to every ProductCard unchanged. */
-  addToCartUnavailableId?: string
 }
 
 /**
@@ -21,7 +19,7 @@ type ProductGridProps = {
  * own `lg`), 4 from 1280px (Tailwind's own `xl`) — 420px has no built-in
  * Tailwind screen, so it's the one arbitrary `min-[420px]:` variant.
  */
-export function ProductGrid({ products, onAddToCart, showCategoryEyebrow, emptyState, addToCartUnavailableId }: ProductGridProps) {
+export function ProductGrid({ products, onAddToCart, showCategoryEyebrow, emptyState }: ProductGridProps) {
   if (products.length === 0) {
     return emptyState ?? null
   }
@@ -34,7 +32,6 @@ export function ProductGrid({ products, onAddToCart, showCategoryEyebrow, emptyS
             {...product}
             onAddToCart={onAddToCart}
             showCategoryEyebrow={showCategoryEyebrow}
-            addToCartUnavailableId={addToCartUnavailableId}
           />
         </li>
       ))}
