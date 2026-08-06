@@ -19,6 +19,19 @@ type ProductCardProps = ProductCardModel & {
 }
 
 /**
+ * Slug-bound hook onto the native add-to-cart button — Slice 8
+ * (technical/SLICE_8_PLAN.md §3.1, DEC-047-A). Lets `CatalogPage` resolve
+ * the EXACT control that triggered a successful add, scoped to its own grid
+ * container, without a document-wide query or a translated-text selector.
+ *
+ * Reaches the native `<button>` through `Button`'s existing `{...rest}`
+ * prop spread (components/ui/Button.tsx) — no `Button` change, no
+ * `forwardRef`. Same technique already shipped for `CartItemRow`'s
+ * `CART_ROW_ATTRIBUTE`.
+ */
+export const ADD_TO_CART_ATTRIBUTE = 'data-add-to-cart'
+
+/**
  * DESIGN_SYSTEM.md §6 / UI_IMPLEMENTATION_PLAN.md §14: article container, one
  * link (the product name), no nested interactive elements. Add-to-cart is a
  * sibling button, not nested inside the link.
@@ -96,7 +109,12 @@ export function ProductCard({
       <PriceBlock price={price} />
       <StockState stockQuantity={stockQuantity} lowStockThreshold={lowStockThreshold} />
 
-      <Button variant="primary" disabled={isOut} onClick={() => onAddToCart(slug)}>
+      <Button
+        variant="primary"
+        disabled={isOut}
+        onClick={() => onAddToCart(slug)}
+        {...{ [ADD_TO_CART_ATTRIBUTE]: slug }}
+      >
         {t('addToCart')}
       </Button>
     </Surface>

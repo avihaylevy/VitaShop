@@ -7,6 +7,8 @@ import type { CartItem } from '../types/cart'
 import type { ProductCardModel } from '../types/product'
 import { CategoryShelf } from '../components/catalog'
 import { ProductGrid } from '../components/catalog/ProductGrid'
+import { ADD_TO_CART_ATTRIBUTE } from '../components/catalog/ProductCard'
+import { CartDrawer } from '../components/cart/CartDrawer'
 import { Button } from '../components/ui/Button'
 import { Surface } from '../components/ui/Surface'
 import { FOCUS_RING } from '../components/ui/focusRing'
@@ -79,6 +81,25 @@ export function CatalogPage() {
   const itemsRef = useRef(items)
   const [activeAttempt, setActiveAttempt] = useState<AddAttempt | null>(null)
   const [announced, setAnnounced] = useState<{ slug: string; count: number } | null>(null)
+
+  /**
+   * 🔴 Slice 8 (DEC-047, technical/SLICE_8_PLAN.md §5). Owned locally by
+   * CatalogPage — never in CartContext, the reducer, App or a global UI
+   * context — since CatalogPage is the only add-to-cart surface today.
+   *
+   * Parent invariant: drawerSlug === null <=> drawer closed. `open` is
+   * always DERIVED as drawerSlug !== null at the render below, so the two
+   * can never disagree.
+   */
+  const [drawerSlug, setDrawerSlug] = useState<string | null>(null)
+  // The exact control that opened the drawer (DEC-047-A, R1) — written ONLY
+  // on the closed->open transition inside the reconciliation effect below,
+  // never on a later successful add while the drawer is already open.
+  const returnFocusRef = useRef<HTMLElement>(null)
+  // Scopes the return-focus lookup to this page's own grid — never a
+  // document-wide query, never by translated text (SLICE_8_PLAN.md §3.1).
+  const gridRef = useRef<HTMLElement>(null)
+  const closeDrawer = useCallback(() => setDrawerSlug(null), [])
 
   // 🔴 Updated in a layout effect, never during render. A render can be
   // interrupted or discarded under concurrent React, and a ref written during
@@ -164,13 +185,36 @@ export function CatalogPage() {
       // The count stays the cart-wide committed total, so the spoken number
       // always matches the Header badge.
       setAnnounced({ slug: activeAttempt.slug, count: totalQuantity })
+
+      // 🔴 Slice 8 — the SAME proven-success branch the announcement above
+      // uses opens the drawer. Never from the click handler, never
+      // optimistically, never on a refusal (SLICE_8_PLAN.md §3.3, DEC-047 D1).
+      if (drawerSlug === null) {
+        // Closed -> open. This transition, and only this one, establishes
+        // the return-focus owner (DEC-047-A, R1). The lookup is scoped to
+        // this page's own grid container, keyed by the successful slug —
+        // never document-wide, never by translated text. A miss (element
+        // not found) is not fabricated and does not throw: returnFocusRef
+        // is simply left null, and Modal's own #main fallback applies later.
+        const trigger = gridRef.current?.querySelector<HTMLElement>(
+          `[${ADD_TO_CART_ATTRIBUTE}="${CSS.escape(activeAttempt.slug)}"]`,
+        )
+        returnFocusRef.current = trigger ?? null
+        setDrawerSlug(activeAttempt.slug)
+      } else {
+        // Already open — content only (DEC-047 D8). No target resolved, no
+        // returnFocusRef write, no re-key, no close/reopen, no replayed
+        // focus entry or opening animation. The first successful add keeps
+        // return-focus ownership for the whole opening.
+        setDrawerSlug(activeAttempt.slug)
+      }
     }
     // Resolved exactly once, success or rejection. On a rejection nothing is
     // published, so the previous announcement's text survives byte-for-byte.
     setActiveAttempt(null)
     processingRef.current = false
     startNextAttempt()
-  }, [activeAttempt, items, totalQuantity, startNextAttempt])
+  }, [activeAttempt, items, totalQuantity, startNextAttempt, drawerSlug])
 
   // Set in the effect body, not just at ref init, so StrictMode's
   // mount/unmount/remount cycle restores the mounted flag instead of leaving
@@ -228,7 +272,7 @@ export function CatalogPage() {
         <>
           <CategoryShelf categories={categories} activeCategorySlug={categorySlug} className="mt-6" />
 
-          <section aria-labelledby="catalog-grid-heading" className="mt-8">
+          <section ref={gridRef} aria-labelledby="catalog-grid-heading" className="mt-8">
             <h2 id="catalog-grid-heading" className="text-lg font-semibold text-text-ink">
               {gridHeading}
             </h2>
@@ -268,6 +312,21 @@ export function CatalogPage() {
       )}
 
       {loading && <ProductGridSkeleton />}
+
+      {/*
+        🔴 Rendered exactly once, unconditionally, regardless of loading or
+        error state — never re-keyed per product, never duplicated, no
+        second CartDrawer anywhere. Its own internal open/closed and
+        missing-line lifecycle (SLICE_8_PLAN.md §4) governs everything else;
+        CatalogPage owns only drawerSlug, returnFocusRef and the stable
+        closeDrawer identity.
+      */}
+      <CartDrawer
+        open={drawerSlug !== null}
+        slug={drawerSlug}
+        onClose={closeDrawer}
+        returnFocusRef={returnFocusRef}
+      />
     </div>
   )
 }

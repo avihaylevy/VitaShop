@@ -30,6 +30,12 @@
   "subtotal": {
     "label": "סכום ביניים לפי המחירים בעת ההוספה לעגלה"
   },
+  "drawer": {
+    "title": "נוסף לעגלה",
+    "quantityLabel": "כמות בעגלה: {{quantity}}",
+    "goToCart": "מעבר לעגלה",
+    "continue": "המשך קנייה"
+  },
   "empty": {
     "heading": "העגלה ריקה",
     "message": "עדיין לא נוספו מוצרים לעגלה.",

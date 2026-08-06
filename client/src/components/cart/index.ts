@@ -1,3 +1,5 @@
+export { CartDrawer } from './CartDrawer'
+export { CartDrawerLine } from './CartDrawerLine'
 export { CartItemRow } from './CartItemRow'
 export { CartPage } from './CartPage'
 export { EmptyCart } from './EmptyCart'

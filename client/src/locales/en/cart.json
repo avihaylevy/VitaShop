@@ -28,6 +28,12 @@
   "subtotal": {
     "label": "Subtotal based on prices when items were added"
   },
+  "drawer": {
+    "title": "Added to cart",
+    "quantityLabel": "In cart: {{quantity}}",
+    "goToCart": "Go to cart",
+    "continue": "Continue shopping"
+  },
   "empty": {
     "heading": "Your cart is empty",
     "message": "No products have been added to the cart yet.",
