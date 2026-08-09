@@ -1,14 +1,7 @@
 import i18next from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
-import commonHe from '../locales/he/common.json'
-import commonEn from '../locales/en/common.json'
-import layoutHe from '../locales/he/layout.json'
-import layoutEn from '../locales/en/layout.json'
-import catalogHe from '../locales/he/catalog.json'
-import catalogEn from '../locales/en/catalog.json'
-import cartHe from '../locales/he/cart.json'
-import cartEn from '../locales/en/cart.json'
+import { resources } from './resources'
 
 export const supportedLanguages = ['he', 'en'] as const
 export type SupportedLanguage = (typeof supportedLanguages)[number]
@@ -24,10 +17,7 @@ void i18next.use(initReactI18next).init({
   lng: defaultLanguage,
   fallbackLng: defaultLanguage,
   supportedLngs: supportedLanguages,
-  resources: {
-    he: { common: commonHe, layout: layoutHe, catalog: catalogHe, cart: cartHe },
-    en: { common: commonEn, layout: layoutEn, catalog: catalogEn, cart: cartEn },
-  },
+  resources,
   defaultNS: 'common',
   interpolation: {
     escapeValue: false,

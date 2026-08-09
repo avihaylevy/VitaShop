@@ -7,10 +7,5 @@
   },
   "dialog": {
     "close": "סגירה"
-  },
-  "health": {
-    "checking": "בודק חיבור לשרת…",
-    "connected": "מחובר לשרת",
-    "disconnected": "לא ניתן להתחבר לשרת"
   }
 }

@@ -7,10 +7,5 @@
   },
   "dialog": {
     "close": "Close"
-  },
-  "health": {
-    "checking": "Checking connection to server…",
-    "connected": "Connected to server",
-    "disconnected": "Unable to connect to server"
   }
 }
