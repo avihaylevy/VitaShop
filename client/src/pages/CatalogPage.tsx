@@ -1,20 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { useCatalogData } from '../hooks/useCatalogData'
 import { useCart } from '../state/CartContext'
 import type { CartItem } from '../types/cart'
 import type { ProductCardModel } from '../types/product'
-import { CategoryShelf } from '../components/catalog'
+import { CategoryShelf, CatalogLoadingState, CatalogErrorState, CatalogEmptyState } from '../components/catalog'
 import { ProductGrid } from '../components/catalog/ProductGrid'
 import { ADD_TO_CART_ATTRIBUTE } from '../components/catalog/ProductCard'
 import { CartDrawer } from '../components/cart/CartDrawer'
-import { Button } from '../components/ui/Button'
-import { Surface } from '../components/ui/Surface'
-import { FOCUS_RING } from '../components/ui/focusRing'
+import { catalogViewState } from '../features/catalog/catalogViewState'
 import type { SupportedLanguage } from '../i18n/index'
-
-const SKELETON_COUNT = 8
 
 /**
  * One queued add-to-cart attempt, with everything needed to prove — not
@@ -31,31 +27,6 @@ type AddAttempt = {
 /** This slug's current line quantity, or 0 when it has no line. */
 function quantityOf(items: readonly CartItem[], slug: string): number {
   return items.find((item) => item.slug === slug)?.quantity ?? 0
-}
-
-function ProductGridSkeleton() {
-  return (
-    <ul className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-4" aria-hidden="true">
-      {Array.from({ length: SKELETON_COUNT }, (_, index) => (
-        <li key={index}>
-          <Surface variant="section" bordered className="flex flex-col gap-3 p-4">
-            <div className="aspect-[4/3] w-full animate-pulse rounded-card bg-well motion-reduce:animate-none" />
-            <div className="h-4 w-3/4 animate-pulse rounded-compact bg-surface-sunken motion-reduce:animate-none" />
-            <div className="h-4 w-1/2 animate-pulse rounded-compact bg-surface-sunken motion-reduce:animate-none" />
-            <div className="h-11 w-full animate-pulse rounded-card bg-surface-sunken motion-reduce:animate-none" />
-          </Surface>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function BackToAllProductsLink({ label }: { label: string }) {
-  return (
-    <Link to="/catalog" className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline`}>
-      {label}
-    </Link>
-  )
 }
 
 /**
@@ -113,11 +84,13 @@ export function CatalogPage() {
     totalQuantityRef.current = totalQuantity
   }, [items, totalQuantity])
 
+  // Still owned by CatalogPage per §8 — the resolver's output does not
+  // always carry activeCategory (e.g. 'loading', 'error', 'invalid-category',
+  // 'catalog-empty' do not), but gridHeading needs it in every state.
   const activeCategory = categorySlug ? categories.find((c) => c.slug === categorySlug) : undefined
-  const isInvalidCategory = categorySlug !== undefined && !loading && !error && activeCategory === undefined
-  const filteredProducts = activeCategory
-    ? products.filter((product) => product.categoryNameHe === activeCategory.nameHe)
-    : products
+  const viewState = catalogViewState({ loading, error, categorySlug, categories, products })
+  const navigate = useNavigate()
+  const goToAllProducts = useCallback(() => navigate('/catalog'), [navigate])
 
   /**
    * 🔴 An add is announced only once it is PROVEN to have increased the cart,
@@ -161,7 +134,7 @@ export function CatalogPage() {
   }, [addItem])
 
   function handleAddToCart(slug: string) {
-    const product = filteredProducts.find((candidate) => candidate.slug === slug)
+    const product = products.find((candidate) => candidate.slug === slug)
     if (!product) {
       return
     }
@@ -239,59 +212,89 @@ export function CatalogPage() {
       ? t('addedToCart', { ns: 'catalog', product: announcedProduct.name, count: announced.count })
       : ''
 
-  const gridHeading = isInvalidCategory
-    ? t('catalogPage.invalidCategoryHeading', { ns: 'catalog' })
-    : activeCategory
-      ? language === 'he'
-        ? activeCategory.nameHe
-        : activeCategory.nameEn
-      : t('categoryShelf.allProducts', { ns: 'catalog' })
+  const gridHeading =
+    viewState.state === 'invalid-category'
+      ? t('catalogPage.invalidCategoryHeading', { ns: 'catalog' })
+      : activeCategory
+        ? language === 'he'
+          ? activeCategory.nameHe
+          : activeCategory.nameEn
+        : t('categoryShelf.allProducts', { ns: 'catalog' })
 
   return (
     <div className="px-7 py-8">
       <h1 className="text-2xl font-semibold text-text-ink">{t('nav.catalog', { ns: 'layout' })}</h1>
 
-      {loading && (
-        <p className="mt-6 text-sm text-text-muted" role="status">
-          {t('catalogPage.loading', { ns: 'catalog' })}
-        </p>
-      )}
+      {/*
+        🔴 Exactly one resolved catalogue state renders below, per
+        technical/UI_SLICES.md §7/§8 — the resolver call replaces the
+        page's own inline predicate computation, it does not run alongside
+        it.
+      */}
+      {viewState.state === 'loading' && <CatalogLoadingState />}
 
-      {!loading && error && (
-        <div className="mt-6 flex flex-col items-start gap-3">
-          <p className="text-sm text-state-error" role="alert">
-            {t('catalogPage.error', { ns: 'catalog' })}
-          </p>
-          <Button variant="secondary" onClick={retry}>
-            {t('catalogPage.retry', { ns: 'catalog' })}
-          </Button>
-        </div>
-      )}
+      {viewState.state === 'error' && <CatalogErrorState onRetry={retry} />}
 
-      {!loading && !error && (
+      {(viewState.state === 'invalid-category' ||
+        viewState.state === 'catalog-empty' ||
+        viewState.state === 'filtered-empty' ||
+        viewState.state === 'ready') && (
         <>
           <CategoryShelf categories={categories} activeCategorySlug={categorySlug} className="mt-6" />
 
-          <section ref={gridRef} aria-labelledby="catalog-grid-heading" className="mt-8">
-            <h2 id="catalog-grid-heading" className="text-lg font-semibold text-text-ink">
-              {gridHeading}
-            </h2>
+          {/*
+            🔴 Checkpoint E fix, corrected in the E correction pass:
+            invalid-category is the one branch where `gridHeading` and
+            `CatalogEmptyState`'s own heading resolve to the exact same
+            translated string (both `invalidCategoryHeading`) — rendering
+            both as separate <h2> elements duplicated the heading both
+            visually and to assistive tech (confirmed live in the
+            Checkpoint D ARIA snapshot). The first correction attempt
+            replaced the outer <h2> with an `aria-label` carrying the same
+            text — a Codex Major finding caught that this still duplicates
+            the announcement, just via a different mechanism (the
+            section's accessible name plus the heading's accessible name,
+            both "Category not found"). The actual fix: leave the section
+            UNNAMED for this one branch — no aria-label, no aria-labelledby
+            substitute — since `CatalogEmptyState`'s own <h2> already gives
+            assistive tech everything it needs; a landmark does not require
+            an accessible name to be usable. Every other state's outer
+            heading names something CatalogEmptyState's own heading does
+            not (the region/category name vs. why it is empty), so only
+            this one branch skips the outer <h2>. No component prop,
+            translation key, or visual style changed.
+          */}
+          <section
+            ref={gridRef}
+            aria-labelledby={viewState.state === 'invalid-category' ? undefined : 'catalog-grid-heading'}
+            className="mt-8"
+          >
+            {viewState.state !== 'invalid-category' && (
+              <h2 id="catalog-grid-heading" className="text-lg font-semibold text-text-ink">
+                {gridHeading}
+              </h2>
+            )}
 
-            {isInvalidCategory ? (
-              <div className="mt-4 flex flex-col items-start gap-3">
-                <p className="text-sm text-text-muted">{t('catalogPage.invalidCategoryMessage', { ns: 'catalog' })}</p>
-                <BackToAllProductsLink label={t('catalogPage.backToAll', { ns: 'catalog' })} />
-              </div>
-            ) : filteredProducts.length === 0 ? (
-              <div className="mt-4 flex flex-col items-start gap-3">
-                <p className="text-sm text-text-muted">
-                  {t('catalogPage.emptyCategoryMessage', {
-                    ns: 'catalog',
-                    category: language === 'he' ? activeCategory?.nameHe : activeCategory?.nameEn,
-                  })}
-                </p>
-                <BackToAllProductsLink label={t('catalogPage.backToAll', { ns: 'catalog' })} />
-              </div>
+            {viewState.state === 'invalid-category' ? (
+              <CatalogEmptyState
+                heading={t('catalogPage.invalidCategoryHeading', { ns: 'catalog' })}
+                message={t('catalogPage.invalidCategoryMessage', { ns: 'catalog' })}
+                action={{ label: t('catalogPage.backToAll', { ns: 'catalog' }), onClick: goToAllProducts }}
+              />
+            ) : viewState.state === 'catalog-empty' ? (
+              <CatalogEmptyState
+                heading={t('catalogPage.catalogEmptyHeading', { ns: 'catalog' })}
+                message={t('catalogPage.catalogEmptyMessage', { ns: 'catalog' })}
+              />
+            ) : viewState.state === 'filtered-empty' ? (
+              <CatalogEmptyState
+                heading={t('catalogPage.filteredEmptyHeading', { ns: 'catalog' })}
+                message={t('catalogPage.emptyCategoryMessage', {
+                  ns: 'catalog',
+                  category: language === 'he' ? viewState.activeCategory.nameHe : viewState.activeCategory.nameEn,
+                })}
+                action={{ label: t('catalogPage.backToAll', { ns: 'catalog' }), onClick: goToAllProducts }}
+              />
             ) : (
               <>
                 {/*
@@ -304,14 +307,12 @@ export function CatalogPage() {
                 <p role="status" className={addedToCartMessage ? 'mt-4 text-sm text-text-ink' : ''}>
                   {addedToCartMessage}
                 </p>
-                <ProductGrid products={filteredProducts} onAddToCart={handleAddToCart} />
+                <ProductGrid products={viewState.products} onAddToCart={handleAddToCart} />
               </>
             )}
           </section>
         </>
       )}
-
-      {loading && <ProductGridSkeleton />}
 
       {/*
         🔴 Rendered exactly once, unconditionally, regardless of loading or

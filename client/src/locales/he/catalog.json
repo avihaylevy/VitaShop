@@ -22,12 +22,15 @@
   },
   "catalogPage": {
     "loading": "טוען מוצרים…",
-    "error": "לא ניתן לטעון את הקטלוג כעת.",
+    "error": "לא ניתן לטעון את הקטלוג כרגע.",
     "retry": "נסה שוב",
-    "emptyCategoryMessage": "לקטגוריה \"{{category}}\" אין כרגע מוצרים.",
-    "invalidCategoryHeading": "קטגוריה לא נמצאה",
+    "emptyCategoryMessage": "אין כרגע מוצרים בקטגוריה \"{{category}}\".",
+    "invalidCategoryHeading": "הקטגוריה לא נמצאה",
     "invalidCategoryMessage": "הקטגוריה המבוקשת אינה קיימת.",
-    "backToAll": "חזרה לכל המוצרים"
+    "backToAll": "חזרה לכל המוצרים",
+    "catalogEmptyHeading": "אין מוצרים להצגה כרגע",
+    "catalogEmptyMessage": "המוצרים יופיעו כאן כאשר יהיו זמינים בקטלוג.",
+    "filteredEmptyHeading": "אין מוצרים בקטגוריה הזו"
   },
   "addedToCart_one": "{{product}} נוסף לעגלה. בעגלה פריט אחד.",
   "addedToCart_two": "{{product}} נוסף לעגלה. בעגלה שני פריטים.",
