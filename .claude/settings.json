@@ -5,9 +5,29 @@
         "hooks": [
           {
             "type": "command",
-            "command": "MEM=\"/c/Users/aviha/תכנות/זיכרון AI/פרוייקט ECOMMERCE/פרוייקט Ecommerce/VitaShop-Project\"; REPO=\"/c/Users/aviha/תכנות/VitaShop\"; L=$(stat -c %Y \"$MEM/operations/SESSION_LOG.md\" 2>/dev/null || echo 0); N=$(find \"$REPO\" -type f -not -path \"*/.claude/*\" -not -path \"*/node_modules/*\" -not -path \"*/.git/*\" -printf \"%T@\n\" 2>/dev/null | sort -rn | head -1 | cut -d. -f1); if [ -n \"$N\" ] && [ \"$N\" -gt \"$L\" ]; then printf %s '{\"systemMessage\":\"⚠️ VitaShop — repo files changed since the last SESSION_LOG entry. Type  סגור סשן  to update SESSION_LOG, STATUS, CURRENT_TASK, ROADMAP and release LOCK.\"}'; fi; exit 0",
+            "command": "MEM=\"/c/Users/aviha/\u05ea\u05db\u05e0\u05d5\u05ea/\u05d6\u05d9\u05db\u05e8\u05d5\u05df AI/\u05e4\u05e8\u05d5\u05d9\u05d9\u05e7\u05d8 ECOMMERCE/\u05e4\u05e8\u05d5\u05d9\u05d9\u05e7\u05d8 Ecommerce/VitaShop-Project\"; REPO=\"/c/Users/aviha/\u05ea\u05db\u05e0\u05d5\u05ea/VitaShop\"; L=$(stat -c %Y \"$MEM/operations/SESSION_LOG.md\" 2>/dev/null || echo 0); N=$(find \"$REPO\" -type f -not -path \"*/.claude/*\" -not -path \"*/node_modules/*\" -not -path \"*/.git/*\" -printf \"%T@\n\" 2>/dev/null | sort -rn | head -1 | cut -d. -f1); if [ -n \"$N\" ] && [ \"$N\" -gt \"$L\" ]; then printf %s '{\"systemMessage\":\"\u26a0\ufe0f VitaShop \u2014 repo files changed since the last SESSION_LOG entry. Type  \u05e1\u05d2\u05d5\u05e8 \u05e1\u05e9\u05df  to update SESSION_LOG, STATUS, CURRENT_TASK, ROADMAP and release LOCK.\"}'; fi; exit 0",
             "timeout": 10,
             "statusMessage": "Checking VitaShop memory files..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/aviha/.local/bin/graphify.EXE hook-guard search"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/aviha/.local/bin/graphify.EXE hook-guard read"
           }
         ]
       }

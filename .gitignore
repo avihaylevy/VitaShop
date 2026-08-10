@@ -8,6 +8,14 @@
 # personal overrides — project settings.json IS committed
 .claude/settings.local.json
 
+# ── Generated ────────────────────────────────
+# graphify knowledge graph — derived data, rebuilt by `graphify update .`
+# Committing it churns a large diff on every code change. DEC-037 / ISSUE-019
+graphify-out/
+# tooling backups of .claude/settings.json — the live file IS committed, so a
+# local backup is redundant and must never be staged. ISSUE-036
+*.graphify-bak
+
 # ── Dependencies ─────────────────────────────
 node_modules/
 .pnp
