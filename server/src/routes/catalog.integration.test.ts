@@ -67,6 +67,13 @@ let baseUrl: string
 let readonlyPrisma: PrismaClient
 
 beforeAll(async () => {
+  // MILESTONE-006 Checkpoint C: the app now mounts express-session, which
+  // refuses to start without SESSION_SECRET (clause A6 — no default, no
+  // generated fallback). This is a throwaway value for the test process
+  // only; it is never a real secret and never leaves this file. Set before
+  // the dynamic import below, because the middleware is built at module load.
+  process.env.SESSION_SECRET ??= 'integration-test-only-not-a-real-secret'
+
   // Fails clearly (throws, does not skip) if the DB is unreachable — the
   // app under test performs the actual round-trip once a request is made.
   const { app } = await import('../index.js')

@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { pathToFileURL } from 'node:url'
 import cors from 'cors'
 import express from 'express'
+import { createSessionMiddleware } from './lib/session.js'
 import { catalogRouter } from './routes/catalog.js'
 
 export const app = express()
@@ -11,10 +12,17 @@ if (!clientOrigin) {
   throw new Error('CLIENT_ORIGIN is not set — see .env.example. DEC-010: never CORS *.')
 }
 
-// credentials not enabled — no session cookie exists yet (DEC-018 auth is
-// not implemented). Enable when express-session is added.
-app.use(cors({ origin: clientOrigin }))
+// `credentials: true` is required for the session cookie to travel between the
+// Vite client and this API, which are different origins in development.
+// 🔴 Safe only because `origin` is one exact origin and never "*" — DEC-010,
+// and DEC-018's condition for allowing credentials at all.
+app.use(cors({ origin: clientOrigin, credentials: true }))
 app.use(express.json())
+
+// MILESTONE-006 Checkpoint C. Attaches `req.session` to every request.
+// 🔴 It authenticates nothing — no route reads a session yet. Registration,
+// login and logout are Checkpoints D, E and F.
+app.use(createSessionMiddleware())
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
