@@ -92,6 +92,61 @@ export async function registerUser(
   const passwordHash = await argon2.hash(input.password, ARGON2_OPTIONS)
   const token = issueVerificationToken(now)
 
+  try {
+    return await createUserAndToken(input, guestSessionId, deps, {
+      passwordHash,
+      token,
+      now,
+    })
+  } catch (error) {
+    // 🔴 THE CHECK-THEN-CREATE RACE. The `findUnique` above and the `create`
+    // below are not atomic: two concurrent registrations of the same address
+    // both read `null`, both proceed, and the second violates the `email`
+    // unique constraint (VALIDATION_RULES field 22 — uniqueness is enforced in
+    // the DATABASE precisely because a code check alone races).
+    //
+    // Left unhandled that surfaces as a 500, which is a response shape
+    // DISTINGUISHABLE from the 201 both 4b paths return — re-opening the
+    // account-enumeration oracle clause 4b exists to close, and leaving an
+    // unhandled rejection besides. So the loser of the race is treated as
+    // what it actually is: an already-registered address.
+    //
+    // 🔴 THIS CATCH IS DELIBERATELY NARROW — P2002 on the email target only.
+    // A blanket catch would turn a database outage into a fake success and
+    // lose the registration silently, which is far worse than the 500.
+    if (isEmailUniqueViolation(error)) {
+      return { created: false, userId: null, verificationToken: null }
+    }
+    throw error
+  }
+}
+
+/**
+ * Prisma P2002 = unique constraint violation. `meta.target` names the
+ * constraint's field(s); anything other than `email` is a different bug and
+ * must keep propagating.
+ */
+function isEmailUniqueViolation(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const candidate = error as { code?: unknown; meta?: { target?: unknown } }
+  if (candidate.code !== 'P2002') return false
+
+  const target = candidate.meta?.target
+  if (typeof target === 'string') return target.includes('email')
+  if (Array.isArray(target)) return target.includes('email')
+  // P2002 with no usable target: do NOT swallow it. A unique violation we
+  // cannot attribute to `email` is not a race we understand.
+  return false
+}
+
+async function createUserAndToken(
+  input: RegistrationInput & { phone: string },
+  guestSessionId: string,
+  deps: RegistrationDeps,
+  built: { passwordHash: string; token: ReturnType<typeof issueVerificationToken>; now: Date },
+): Promise<RegistrationOutcome> {
+  const { passwordHash, token, now } = built
+
   // ── DEC-053 Part 2 step 3: THE TRANSACTION ───────────────────────────────
   // 🔴 No external call and no session-store write inside it (INV-04).
   const user = await deps.prisma.$transaction(async (tx) => {

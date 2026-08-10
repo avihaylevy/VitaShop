@@ -130,6 +130,65 @@ describe('DEC-053 clause 4b — the already-registered path', () => {
     expect(recorded.events).not.toContain('tx.begin')
   })
 
+  it('🔴 treats a P2002 email collision as already-registered, not a 500', async () => {
+    // THE CHECK-THEN-CREATE RACE. findUnique returns null (the other request
+    // has not committed yet), then create loses the race against the unique
+    // constraint. Simulated by making create throw, rather than by racing two
+    // real requests — the point is the handling, and a real race is
+    // non-deterministic.
+    const recorded: Recorded = { events: [] }
+    const prisma = fakePrisma(null, recorded)
+    ;(prisma as unknown as { $transaction: unknown }).$transaction = vi.fn(async () => {
+      throw Object.assign(new Error('Unique constraint failed'), {
+        code: 'P2002',
+        meta: { target: ['email'] },
+      })
+    })
+
+    const outcome = await registerUser(input, 'guest-sid', deps(prisma))
+
+    // Identical to the findUnique path — same shape, so the response stays
+    // indistinguishable and 4b's oracle stays closed.
+    expect(outcome).toEqual({ created: false, userId: null, verificationToken: null })
+  })
+
+  it('🔴 does NOT swallow a P2002 on a different constraint', async () => {
+    const recorded: Recorded = { events: [] }
+    const prisma = fakePrisma(null, recorded)
+    ;(prisma as unknown as { $transaction: unknown }).$transaction = vi.fn(async () => {
+      throw Object.assign(new Error('Unique constraint failed'), {
+        code: 'P2002',
+        meta: { target: ['token'] },
+      })
+    })
+
+    await expect(registerUser(input, 'guest-sid', deps(prisma))).rejects.toThrow()
+  })
+
+  it('🔴 does NOT swallow a non-P2002 error — a DB outage must not fake success', async () => {
+    // The catch is narrow on purpose. A blanket catch would turn an outage
+    // into a 201 and lose the registration with no trace.
+    const recorded: Recorded = { events: [] }
+    const prisma = fakePrisma(null, recorded)
+    ;(prisma as unknown as { $transaction: unknown }).$transaction = vi.fn(async () => {
+      throw Object.assign(new Error('connection terminated'), { code: 'P1001' })
+    })
+
+    await expect(registerUser(input, 'guest-sid', deps(prisma))).rejects.toThrow(
+      /connection terminated/,
+    )
+  })
+
+  it('🔴 does NOT swallow a P2002 whose target cannot be attributed', async () => {
+    const recorded: Recorded = { events: [] }
+    const prisma = fakePrisma(null, recorded)
+    ;(prisma as unknown as { $transaction: unknown }).$transaction = vi.fn(async () => {
+      throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
+    })
+
+    await expect(registerUser(input, 'guest-sid', deps(prisma))).rejects.toThrow()
+  })
+
   it('🔴 still burns an argon2 hash, so it cannot be told apart by TIMING', async () => {
     // A2's reasoning applied to /register. The response shape is identical by
     // 4b; without this the existing-email path would skip hashing and return

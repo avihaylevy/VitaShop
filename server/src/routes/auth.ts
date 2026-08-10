@@ -108,7 +108,13 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     // stored, so this is the only way to find the row.
     const record = await deps.prisma.emailVerificationToken.findUnique({
       where: { token: hashToken(raw) },
-      select: { id: true, userId: true, expiresAt: true, usedAt: true },
+      select: {
+        id: true,
+        userId: true,
+        expiresAt: true,
+        usedAt: true,
+        user: { select: { status: true } },
+      },
     })
 
     // One message for "no such token", "already used" and "expired" — the
@@ -124,18 +130,47 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
       return
     }
 
+    // 🔴 ONLY `pending_verification` MAY BECOME `active`.
+    //
+    // An unconditional `status: 'active'` would let a DISABLED user restore
+    // their own account by clicking an old, unexpired verification link —
+    // silent privilege restoration. No disable flow exists yet; Checkpoint F
+    // adds one, and by then this would already be live.
+    //
+    // An already-`active` account is also not re-activated: there is nothing
+    // to do, and the token is spent either way.
+    const isVerifiable = record.user.status === 'pending_verification'
+
     await deps.prisma.$transaction(async (tx) => {
       // Single-use (REQ-F-031): stamping `usedAt` is what spends it. The row
       // is kept — a record of a completed verification is worth having.
+      // 🔴 The token is spent even when the status is NOT changed, so a
+      // rejected link cannot be retried until it happens to be accepted.
       await tx.emailVerificationToken.update({
         where: { id: record.id },
         data: { usedAt: new Date() },
       })
-      await tx.user.update({
-        where: { id: record.userId },
-        data: { status: 'active' },
-      })
+
+      if (isVerifiable) {
+        await tx.user.update({
+          where: { id: record.userId },
+          data: { status: 'active' },
+        })
+      }
     })
+
+    if (!isVerifiable) {
+      // 🔴 The SAME generic response as an invalid link. Saying "this account
+      // is disabled" would confirm both that the address is registered and
+      // what state it is in — the enumeration reasoning of A1, applied here.
+      res.status(400).json({
+        error: {
+          code: 'VERIFICATION_TOKEN_INVALID',
+          message: 'This verification link is not valid.',
+        },
+      })
+      return
+    }
 
     res.json({ status: 'verified' })
   })
