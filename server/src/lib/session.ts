@@ -45,6 +45,23 @@ export function createSessionMiddleware(): RequestHandler {
     resave: false,
     // Do not persist untouched anonymous sessions — a row per visitor,
     // written on every request, for no information.
+    //
+    // 🔴 CONSEQUENCE MILESTONE-007 MUST HANDLE (open item O8, DEC-053 Part 3).
+    // An untouched session is never written and issues no Set-Cookie, so the
+    // browser sends nothing back and `req.sessionID` is a NEW value on every
+    // request. `Cart.session_id` IS that identity, and DEC-053 step 1 captures
+    // it as the guest identity at registration — so a guest cart created
+    // without anything having written to `req.session` is keyed to an id that
+    // never recurs. The cart is orphaned on the NEXT request, long before
+    // registration, and nothing throws.
+    //
+    // THE FIX BELONGS AT CART CREATION, NOT HERE: when M-007 creates a guest
+    // cart it must write a value into `req.session` — forcing persistence and
+    // a cookie — before or as it writes `Cart.session_id`.
+    //
+    // 🔴 DO NOT set this to `true` to make a cart bug go away. That trades a
+    // silent orphan for a persisted session row per anonymous visitor on every
+    // request, which is the waste this line exists to avoid.
     saveUninitialized: false,
     cookie: {
       httpOnly: true, // A6 — never readable from JavaScript
