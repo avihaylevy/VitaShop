@@ -1,0 +1,170 @@
+import { ipKeyGenerator, rateLimit, type Options } from 'express-rate-limit'
+import type { Request, RequestHandler, Response } from 'express'
+import { normalizeEmail } from './normalizeEmail.js'
+
+/**
+ * MILESTONE-006 Checkpoint G — rate limiting on every auth route.
+ * REQ-F-030..034 cross-cut. Closes open item O1.
+ *
+ * 🔴 READ THIS BEFORE CHANGING A NUMBER OR A KEY: A RATE LIMITER CAN REOPEN
+ * A1 AND A3.
+ *
+ * A3 requires `/auth/password-reset` to answer identically whether or not the
+ * account exists. **A 429 is not a 200.** So if an email-keyed limiter only
+ * counted attempts when the account exists:
+ *
+ *     known address,   4th attempt -> 429
+ *     unknown address, 4th attempt -> 200
+ *
+ * …the limiter hands back the exact enumeration oracle A3 closes. The same
+ * applies to `/register` under DEC-053 4b and to `/login` under A1.
+ *
+ * 🔴 THE CONTRACT, FROZEN:
+ *   1. The email-keyed limiter counts EVERY attempt against the SUBMITTED
+ *      address — whether or not a user exists, is disabled, or is locked. The
+ *      counter is keyed on WHAT THE REQUESTER TYPED, never on what the
+ *      database holds. Nothing in this module may consult the database.
+ *   2. The 429 body and shape are IDENTICAL everywhere, and carry no hint of
+ *      account existence.
+ *   3. No `skip`, no `skipSuccessfulRequests`, no `skipFailedRequests`, no
+ *      `requestWasSuccessful`. Each of those makes the count depend on the
+ *      OUTCOME, and the outcome is exactly what must not be observable.
+ */
+
+/**
+ * 🔴 ONE response for every limiter. Deliberately says nothing about which
+ * limit was hit, or about the address — "too many attempts for this email"
+ * would confirm the address is worth rate-limiting.
+ */
+const TOO_MANY_REQUESTS = {
+  error: {
+    code: 'TOO_MANY_REQUESTS',
+    message: 'Too many attempts. Please try again later.',
+  },
+} as const
+
+function sendLimited(_req: Request, res: Response): void {
+  res.status(429).json(TOO_MANY_REQUESTS)
+}
+
+/**
+ * 🔴 THE STORE IS IN-MEMORY, and that is a DECISION, not an inherited default.
+ *
+ * express-rate-limit's default `MemoryStore` means:
+ *   · counters RESET ON EVERY RESTART — a redeploy clears every limit
+ *   · counters are PER-PROCESS — two instances mean two independent budgets,
+ *     so the effective limit is N × the configured number
+ *
+ * Accepted for now: this project runs one local instance, and both properties
+ * are harmless there. 🔴 A deployed multi-instance setup would need a SHARED
+ * store (Redis or the PostgreSQL store) before these numbers mean anything —
+ * recorded as a deployment-checklist item in technical/DEPLOYMENT.md, because
+ * the failure is quiet: the limiter keeps working, just with a ceiling nobody
+ * chose.
+ */
+const SHARED: Partial<Options> = {
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: sendLimited,
+}
+
+/**
+ * Key on the SUBMITTED email address.
+ *
+ * 🔴 Falls back to the IP when no address was submitted, rather than to a
+ * constant. A keyGenerator that returns the same value for every malformed
+ * request buckets all of them together, which throttles unrelated callers and
+ * looks like a working limiter. `ipKeyGenerator` is express-rate-limit's own
+ * helper and handles IPv6 prefixes correctly — a raw `req.ip` lets an IPv6
+ * client rotate through a /64 for free.
+ *
+ * ⚠️ This reads `req.body`, so **body parsing must be mounted before the
+ * limiter**. If it is not, `req.body` is undefined, every request keys on the
+ * IP instead, and the email limit silently never applies. There is a test for
+ * the ordering.
+ */
+function emailKey(req: Request, res: Response): string {
+  const submitted = (req.body as { email?: unknown } | undefined)?.email
+  if (typeof submitted === 'string' && submitted.trim() !== '') {
+    // 🔴 normalizeEmail, the same function registration and login use —
+    // otherwise `A@b.com` and `a@b.com` are two buckets and the limit is
+    // trivially bypassed by changing case.
+    return `email:${normalizeEmail(submitted)}`
+  }
+  return `ip:${ipKeyGenerator(req.ip ?? '')}`
+}
+
+function ipKey(req: Request, _res: Response): string {
+  return ipKeyGenerator(req.ip ?? '')
+}
+
+const MINUTE = 60 * 1000
+const HOUR = 60 * MINUTE
+
+/**
+ * 🔴 THE NUMBERS ARE JUDGEMENT CALLS, NOT DERIVED VALUES. They are recorded in
+ * MILESTONE-006 §6.7's O1 closure with the same caveat. Tune them against real
+ * traffic; do not treat them as a spec.
+ */
+export const AUTH_RATE_LIMITS = {
+  login: { windowMs: 15 * MINUTE, limit: 10 },
+  registerIp: { windowMs: HOUR, limit: 5 },
+  registerEmail: { windowMs: HOUR, limit: 3 },
+  passwordResetIp: { windowMs: HOUR, limit: 5 },
+  passwordResetEmail: { windowMs: HOUR, limit: 3 },
+  verifyEmail: { windowMs: HOUR, limit: 20 },
+  logout: { windowMs: 15 * MINUTE, limit: 60 },
+} as const
+
+/**
+ * An explicit shape rather than `Record<string, RequestHandler>`: a typo in a
+ * key would otherwise type-check and mount `undefined` as middleware, leaving
+ * that route silently unlimited.
+ */
+export interface AuthRateLimiters {
+  login: RequestHandler
+  registerIp: RequestHandler
+  registerEmail: RequestHandler
+  passwordResetIp: RequestHandler
+  passwordResetEmail: RequestHandler
+  verifyEmail: RequestHandler
+  logout: RequestHandler
+}
+
+export function createAuthRateLimiters(): AuthRateLimiters {
+  return {
+    // A1's endpoint. The IP limit protects MANY accounts from ONE source;
+    // REQ-F-033's 5-attempt lockout protects ONE account from MANY sources.
+    // Different scopes — see §6.7. Neither replaces the other.
+    login: rateLimit({ ...SHARED, ...AUTH_RATE_LIMITS.login, keyGenerator: ipKey }),
+
+    registerIp: rateLimit({ ...SHARED, ...AUTH_RATE_LIMITS.registerIp, keyGenerator: ipKey }),
+    // 🔴 DEC-053 4b makes /register mail an address the requester chooses.
+    registerEmail: rateLimit({
+      ...SHARED,
+      ...AUTH_RATE_LIMITS.registerEmail,
+      keyGenerator: emailKey,
+    }),
+
+    passwordResetIp: rateLimit({
+      ...SHARED,
+      ...AUTH_RATE_LIMITS.passwordResetIp,
+      keyGenerator: ipKey,
+    }),
+    // 🔴 A3 mails an address the requester chooses. Same vector as /register.
+    passwordResetEmail: rateLimit({
+      ...SHARED,
+      ...AUTH_RATE_LIMITS.passwordResetEmail,
+      keyGenerator: emailKey,
+    }),
+
+    // A GET that users double-click, so the ceiling is generous.
+    verifyEmail: rateLimit({ ...SHARED, ...AUTH_RATE_LIMITS.verifyEmail, keyGenerator: ipKey }),
+
+    // Nothing to protect — a limit only so the route is not an unbounded
+    // no-auth endpoint.
+    logout: rateLimit({ ...SHARED, ...AUTH_RATE_LIMITS.logout, keyGenerator: ipKey }),
+  }
+}
+
+export const RATE_LIMIT_RESPONSE = TOO_MANY_REQUESTS

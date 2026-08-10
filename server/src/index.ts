@@ -11,6 +11,29 @@ import { catalogRouter } from './routes/catalog.js'
 
 export const app = express()
 
+// 🔴 TRUST PROXY — Checkpoint G's decision, recorded rather than inherited.
+//
+// DECISION: (b) — NO trust proxy is set here, and the rate limits are correct
+// ONLY FOR DIRECT CONNECTIONS.
+//
+// Why not set it now: `trust proxy` tells Express to believe `X-Forwarded-For`.
+// With no proxy in front, that header is attacker-controlled, so enabling it
+// would let anyone forge an IP and get a fresh rate-limit bucket per request —
+// turning the IP limiter off while it still looks enabled. The number must
+// also match the REAL proxy depth; a guess is not safer than nothing.
+//
+// 🔴 This is now LOAD-BEARING FOR A SECURITY CONTROL, not just for the Secure
+// cookie flag it was first raised for at Checkpoint C. Behind a proxy without
+// it, every request reads the proxy's address, all users share ONE bucket, and
+// the limiter blocks everyone or nobody. It is trap 4 and trap 6 in
+// technical/DEPLOYMENT.md, and it is a deployment-checklist item — not
+// something to switch on speculatively.
+//
+// express-rate-limit will warn about this if a forwarded header ever appears.
+// 🔴 If that warning shows up, it means a proxy is present and this decision
+// must be revisited — do NOT silence the warning.
+app.set('trust proxy', false)
+
 const clientOrigin = process.env.CLIENT_ORIGIN
 if (!clientOrigin) {
   throw new Error('CLIENT_ORIGIN is not set — see .env.example. DEC-010: never CORS *.')

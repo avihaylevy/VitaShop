@@ -12,6 +12,7 @@ import {
   completePasswordReset,
   requestPasswordReset,
 } from '../lib/passwordResetService.js'
+import { createAuthRateLimiters, type AuthRateLimiters } from '../lib/rateLimit.js'
 import { parseRegistration, resetPasswordSchema } from '../lib/registrationForm.js'
 import { SESSION_COOKIE_NAME, sessionCookieOptions } from '../lib/session.js'
 import {
@@ -32,10 +33,27 @@ export interface AuthRouterDeps {
   prisma: PrismaClient
   emailService: EmailService
   appBaseUrl: string
+  /** Tests inject fresh limiters so counters do not leak between cases. */
+  rateLimiters?: AuthRateLimiters
 }
 
 export function createAuthRouter(deps: AuthRouterDeps): Router {
   const router = Router()
+
+  // MILESTONE-006 Checkpoint G — rate limiting. See lib/rateLimit.ts for the
+  // contract; the short version is that a limiter can reopen A1 and A3,
+  // because a 429 is not a 200.
+  //
+  // 🔴 ORDERING: the email-keyed limiters read `req.body`, so `express.json()`
+  // must already be mounted when these run. It is — index.ts mounts it before
+  // this router. If that ever changes, `req.body` is undefined, every request
+  // keys on the IP instead, and the email limit silently stops applying while
+  // still looking like a working limiter. There is a test that proves the
+  // email key is actually used.
+  //
+  // The IP limiter is listed first so a flood from one source is rejected
+  // before it can consume another address's email budget.
+  const limit = deps.rateLimiters ?? createAuthRateLimiters()
 
   // POST /api/auth/register — REQ-F-030, REQ-F-031.
   //
@@ -44,7 +62,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   //   RULE 1  capture before regenerate — else the guest cart is orphaned
   //   RULE 2  COMMIT before regenerate — else a rollback leaves a PHANTOM
   //           SESSION authenticated as a user row that does not exist
-  router.post('/auth/register', async (req, res) => {
+  router.post('/auth/register', limit.registerIp, limit.registerEmail, async (req, res) => {
     // ── Step 1: CAPTURE the guest session identity, before anything else ──
     // 🔴 Must be read here. After step 5 this is a different value, and
     // `Cart.session_id` is keyed to THIS one.
@@ -111,7 +129,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   // 🔴 DEC-053 RULE 3: the SAME capture → commit → regenerate ordering as
   // registration. A6 regenerates here too, and DEC-019's cart MERGE branch
   // attaches at the same seam.
-  router.post('/auth/login', async (req, res) => {
+  router.post('/auth/login', limit.login, async (req, res) => {
     // ── Step 1: capture the guest identity, before regeneration ────────────
     // Same reason as registration: `Cart.session_id` IS this value, and after
     // step 5 it is a different one. O8's precondition applies equally here.
@@ -189,7 +207,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   // sends the cookie on top-level cross-site GET. One convenience link here
   // would not just add a logout CSRF; it would invalidate the reasoning that
   // lets this project ship without CSRF tokens at all.
-  router.post('/auth/logout', async (req, res) => {
+  router.post('/auth/logout', limit.logout, async (req, res) => {
     await new Promise<void>((resolve, reject) => {
       req.session.destroy((err) => (err ? reject(err) : resolve()))
     })
@@ -213,7 +231,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   // tempting change — telling the user their address is not registered so they
   // can correct a typo — is an account-enumeration oracle, and an unauthenticated
   // one.
-  router.post('/auth/password-reset', async (req, res) => {
+  router.post('/auth/password-reset', limit.passwordResetIp, limit.passwordResetEmail, async (req, res) => {
     const email = (req.body as { email?: unknown })?.email
     if (typeof email !== 'string') {
       // Even a malformed body gets the same shape. A validation error here
@@ -243,7 +261,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   })
 
   // POST /api/auth/password-reset/complete — REQ-F-032, A4 + A8.
-  router.post('/auth/password-reset/complete', async (req, res) => {
+  router.post('/auth/password-reset/complete', limit.passwordResetIp, async (req, res) => {
     const body = req.body as { token?: unknown; password?: unknown }
     if (typeof body?.token !== 'string' || typeof body?.password !== 'string') {
       res.status(400).json({
@@ -290,7 +308,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   })
 
   // GET /api/auth/verify-email?token=… — REQ-F-031.
-  router.get('/auth/verify-email', async (req, res) => {
+  router.get('/auth/verify-email', limit.verifyEmail, async (req, res) => {
     const raw = req.query.token
     if (typeof raw !== 'string' || raw.length === 0) {
       res.status(400).json({
