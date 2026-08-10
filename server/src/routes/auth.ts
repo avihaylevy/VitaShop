@@ -170,6 +170,31 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     res.json({ status: 'authenticated' })
   })
 
+  // POST /api/auth/logout — clause A7. Checkpoint F2.
+  //
+  // 🔴 DESTROY, not regenerate. A7 exists precisely because regeneration
+  // alone leaves the PREVIOUS server-side record alive in the store: the
+  // browser gets a new sid, and the old row — still carrying `userId` — sits
+  // there redeemable by anyone holding the old cookie. `req.session.destroy()`
+  // removes the row; clearing the cookie is the client-side half.
+  //
+  // THREAT-009 records this as a control. Until F2 it claimed one that no code
+  // implemented.
+  router.post('/auth/logout', async (req, res) => {
+    await new Promise<void>((resolve, reject) => {
+      req.session.destroy((err) => (err ? reject(err) : resolve()))
+    })
+
+    // The cookie name must match the one `createSessionMiddleware` sets, or
+    // the browser keeps sending a cookie whose row no longer exists.
+    res.clearCookie('vitashop.sid')
+
+    // 🔴 The SAME response whether or not a session existed. There is nothing
+    // to disclose — "you were not logged in" tells an attacker only what they
+    // already knew about their own request — and no reason to branch.
+    res.json({ status: 'logged_out' })
+  })
+
   // POST /api/auth/password-reset — REQ-F-032, clause A3. Checkpoint F.
   //
   // 🔴 A3: THE SAME 200 EITHER WAY. No 404, no branch, no field that differs
