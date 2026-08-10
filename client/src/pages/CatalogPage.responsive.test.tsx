@@ -9,6 +9,7 @@ import layoutHe from '../locales/he/layout.json'
 import type { CatalogCategoryDto } from '../types/catalog'
 import type { ProductCardModel } from '../types/product'
 import type { UseCatalogDataResult } from '../hooks/useCatalogData'
+import { EMPTY_CATALOG_URL_STATE } from '../features/catalog/catalogUrlState'
 
 /**
  * Slice 9 Checkpoint F — durable responsive/directionality invariants for
@@ -50,6 +51,11 @@ vi.mock('../hooks/useCatalogData', () => ({
   useCatalogData: () => mockUseCatalogData(),
 }))
 
+const mockUseCatalogCategories = vi.fn()
+vi.mock('../hooks/useCatalogCategories', () => ({
+  useCatalogCategories: () => mockUseCatalogCategories(),
+}))
+
 const mockUseCart = vi.fn()
 vi.mock('../state/CartContext', () => ({
   useCart: () => mockUseCart(),
@@ -76,8 +82,15 @@ function setCatalogData(result: Partial<UseCatalogDataResult>) {
   mockUseCatalogData.mockReturnValue({
     loading: false,
     products: [],
-    categories: CATEGORIES,
     error: null,
+    invalidCategory: false,
+    hasNarrowingQuery: false,
+    totalItems: 0,
+    // Checkpoint I additions — the response-reported page numbers.
+    page: 1,
+    totalPages: 0,
+    fallback: null,
+    urlState: EMPTY_CATALOG_URL_STATE,
     retry: vi.fn(),
     ...result,
   })
@@ -149,6 +162,8 @@ function physicalDirectionClasses(html: string): string[] {
 
 beforeEach(() => {
   mockUseCatalogData.mockReset()
+  mockUseCatalogCategories.mockReset()
+  mockUseCatalogCategories.mockReturnValue({ loading: false, categories: CATEGORIES, error: null, retry: vi.fn() })
   mockUseCart.mockReset()
   mockUseCart.mockReturnValue({ addItem: vi.fn(), items: [], totalQuantity: 0 })
 })
@@ -160,7 +175,7 @@ describe('CatalogPage responsive — skeleton/grid breakpoint parity', () => {
     const skeletonUl = /<ul class="([^"]*grid[^"]*)" aria-hidden="true">/.exec(loadingHtml)?.[1]
     expect(skeletonUl).toBeDefined()
 
-    setCatalogData({ products: [product()] })
+    setCatalogData({ products: [product()], totalItems: 1 })
     const readyHtml = await renderCatalog()
     const readyUl = /<ul class="([^"]*grid[^"]*)">/.exec(readyHtml)?.[1]
     expect(readyUl).toBeDefined()
@@ -178,10 +193,18 @@ type PhysicalDirectionCase = { name: string; data: Partial<UseCatalogDataResult>
 const PHYSICAL_DIRECTION_CASES: PhysicalDirectionCase[] = [
   { name: 'loading', data: { loading: true } },
   { name: 'error', data: { error: new CatalogApiError('UNKNOWN_ERROR', 'boom') } },
-  { name: 'invalid-category', data: { products: [product()] }, url: '/catalog?category=not-a-real-category' },
+  {
+    name: 'invalid-category',
+    data: { products: [product()], invalidCategory: true, urlState: { ...EMPTY_CATALOG_URL_STATE, category: 'not-a-real-category' } },
+    url: '/catalog?category=not-a-real-category',
+  },
   { name: 'catalog-empty', data: { products: [] } },
-  { name: 'filtered-empty', data: { products: [product({ categoryNameHe: 'other' })] }, url: '/catalog?category=vitamins' },
-  { name: 'ready', data: { products: [product()] } },
+  {
+    name: 'filtered-empty',
+    data: { products: [], hasNarrowingQuery: true, totalItems: 0, urlState: { ...EMPTY_CATALOG_URL_STATE, category: 'vitamins' } },
+    url: '/catalog?category=vitamins',
+  },
+  { name: 'ready', data: { products: [product()], totalItems: 1 } },
 ]
 
 describe('CatalogPage responsive — no physical-direction CSS (design/DESIGN_SYSTEM.md §11)', () => {
@@ -253,6 +276,54 @@ describe('physicalDirectionClasses — detector contract', () => {
     // mistaken for border-l/border-r.
     const html =
       '<div class="mt-2 mb-4 gap-3 grid-cols-4 border-t border-b border-x border-y border collapse"></div>'
+    expect(physicalDirectionClasses(html)).toEqual([])
+  })
+})
+
+/**
+ * MILESTONE-005 Checkpoint I — the responsive filter surface. One panel,
+ * two mountings: a desktop rail and (below `md`) the shared `Drawer`.
+ * The breakpoint here is `md` (768px) deliberately, because
+ * `useCloseAboveBreakpoint` — which closes the drawer when the viewport
+ * grows — hardcodes that same `md` query. If the trigger were hidden at a
+ * DIFFERENT breakpoint than the auto-close, there would be a band of widths
+ * where the drawer is open with its trigger invisible, or closed while the
+ * rail is still hidden.
+ */
+describe('CatalogPage responsive — filter surface breakpoint parity (Checkpoint I)', () => {
+  it('hides the mobile filter trigger and shows the rail at exactly the same breakpoint useCloseAboveBreakpoint uses', async () => {
+    setCatalogData({ products: [product()], totalItems: 1 })
+    const html = await renderCatalog()
+
+    // The trigger: visible below md, hidden from md up.
+    expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*class="[^"]*md:hidden/)
+    // The rail: hidden below md, shown from md up — the exact complement.
+    expect(html).toMatch(/<aside[^>]*class="hidden [^"]*md:block/)
+  })
+
+  it('renders the filter panel exactly once in the accessibility tree (the drawer copy is unmounted while closed)', async () => {
+    setCatalogData({ products: [product()], totalItems: 1 })
+    const html = await renderCatalog()
+
+    // Only the rail's copy exists; Drawer mounts nothing while closed, so
+    // the availability fieldset — present in every panel — appears once.
+    expect(html.split('רק מוצרים במלאי').length - 1).toBe(1)
+    expect(html).not.toContain('role="dialog"')
+  })
+
+  it('renders fallback suggestions through the same grid as the primary results', async () => {
+    setCatalogData({
+      products: [],
+      totalItems: 0,
+      hasNarrowingQuery: true,
+      urlState: { ...EMPTY_CATALOG_URL_STATE, q: 'no-match' },
+      fallback: { kind: 'popular', limit: 8, items: [product({ slug: 'suggested' })] },
+    })
+    const html = await renderCatalog('/catalog?q=no-match')
+
+    // The same responsive column contract as the primary grid — one grid
+    // implementation, not a second one for suggestions.
+    expect(html).toContain('grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-4')
     expect(physicalDirectionClasses(html)).toEqual([])
   })
 })

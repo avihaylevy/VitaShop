@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { CANONICAL_CATEGORIES, findCanonicalCategoryByNameHe } from './catalogCategories.js'
+import {
+  CANONICAL_CATEGORIES,
+  findCanonicalCategoryByNameHe,
+  findCanonicalCategoryBySlug,
+} from './catalogCategories.js'
 
 describe('CANONICAL_CATEGORIES', () => {
   it('has exactly the six REQ-F-001 categories, in spec order', () => {
@@ -36,5 +40,25 @@ describe('findCanonicalCategoryByNameHe', () => {
 
   it('returns undefined for an empty string', () => {
     expect(findCanonicalCategoryByNameHe('')).toBeUndefined()
+  })
+})
+
+describe('findCanonicalCategoryBySlug', () => {
+  it('returns the matching entry for every canonical slug', () => {
+    for (const category of CANONICAL_CATEGORIES) {
+      expect(findCanonicalCategoryBySlug(category.slug)).toEqual(category)
+    }
+  })
+
+  it('returns undefined for an unknown slug', () => {
+    expect(findCanonicalCategoryBySlug('not-a-real-category')).toBeUndefined()
+  })
+
+  it('returns undefined for a display name instead of a slug', () => {
+    expect(findCanonicalCategoryBySlug('Omega & Fats')).toBeUndefined()
+  })
+
+  it('returns undefined for an empty string', () => {
+    expect(findCanonicalCategoryBySlug('')).toBeUndefined()
   })
 })

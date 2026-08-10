@@ -101,6 +101,73 @@ describe('catalog namespace — the shipped locale pair', () => {
     }
   })
 
+  /**
+   * MILESTONE-005 Checkpoint J, §7c — Product Details lives in the EXISTING
+   * `catalog` namespace. These keys are held to exactly the same contract as
+   * every other key here: the shared 9-rule validator above already covers
+   * he/en symmetry and placeholder agreement, so this block pins the
+   * specific keys the page cannot render without, plus `imageAlt`'s
+   * interpolation contract.
+   */
+  it.each([
+    'productDetails.loading',
+    'productDetails.error',
+    'productDetails.retry',
+    'productDetails.notFoundHeading',
+    'productDetails.notFoundMessage',
+    'productDetails.backToCatalog',
+    'productDetails.imageAlt',
+    'productDetails.gallery',
+    'productDetails.description',
+    'productDetails.usageInstructions',
+    'productDetails.warningsAllergens',
+    'productDetails.ingredients',
+    'productDetails.ingredientName',
+    'productDetails.ingredientAmount',
+    'productDetails.healthGoals',
+    'productDetails.specifications',
+    'productDetails.brand',
+    'productDetails.category',
+    'productDetails.dosageForm',
+    'productDetails.packageQuantity',
+    'productDetails.targetAudience',
+    'productDetails.createdAt',
+    'productDetails.serialNumber',
+  ])('defines the required Product Details key "%s" in both locales, non-empty', (path) => {
+    const heValue = valueAt(HE, path)
+    const enValue = valueAt(EN, path)
+    expect(typeof heValue).toBe('string')
+    expect(typeof enValue).toBe('string')
+    expect((heValue as string).trim()).not.toBe('')
+    expect((enValue as string).trim()).not.toBe('')
+  })
+
+  it('carries exactly the {{product}}, {{index}} and {{total}} placeholders on imageAlt, in both locales', () => {
+    for (const tree of [HE, EN]) {
+      expect(placeholders(valueAt(tree, 'productDetails.imageAlt') as string).sort()).toEqual([
+        'index',
+        'product',
+        'total',
+      ])
+    }
+  })
+
+  it('rejects a dropped placeholder on imageAlt', () => {
+    const he = setKey(clone(HE), 'productDetails.imageAlt', 'תמונה {{index}} מתוך {{total}}')
+    expect(validateNamespacePair(he, EN).join('\n')).toContain(
+      '"productDetails.imageAlt" uses different interpolation placeholders',
+    )
+  })
+
+  it('does NOT create a separate productDetails namespace — §7c freezes these into `catalog`', () => {
+    // The guard is structural: these keys live under a `productDetails`
+    // OBJECT inside the catalog namespace, not in a namespace of their own.
+    // `i18n/resources.test.ts` independently guards the registered
+    // namespace list against drift.
+    expect(typeof valueAt(HE, 'productDetails')).toBe('object')
+    expect(typeof valueAt(EN, 'productDetails')).toBe('object')
+  })
+
   it('requires exactly the four Hebrew and two English plural categories for addedToCart', () => {
     const he = indexKeys(HE).get('addedToCart')!
     const en = indexKeys(EN).get('addedToCart')!

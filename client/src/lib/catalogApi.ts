@@ -1,11 +1,17 @@
 import { getApiBaseUrl } from './apiBaseUrl.js'
 import type {
   CatalogApiErrorBody,
+  CatalogBilingualFacetOptionDto,
   CatalogCategoriesEnvelope,
   CatalogCategoryDto,
+  CatalogDosageFormFacetDto,
+  CatalogFacetOptionDto,
+  CatalogFacetsDto,
+  CatalogFallbackDto,
   CatalogProductDto,
   CatalogProductsEnvelope,
   DosageFormKey,
+  ProductDetailDto,
 } from '../types/catalog.js'
 
 const DOSAGE_FORM_KEYS: readonly DosageFormKey[] = ['CAPSULE', 'TABLET', 'DROPS', 'POWDER', 'SYRUP']
@@ -65,6 +71,16 @@ function isCatalogProductDto(value: unknown): value is CatalogProductDto {
   )
 }
 
+function isCatalogFallbackDto(value: unknown): value is CatalogFallbackDto {
+  if (!isPlainObject(value)) return false
+  return (
+    (value.kind === 'category' || value.kind === 'popular') &&
+    Array.isArray(value.items) &&
+    value.items.every(isCatalogProductDto) &&
+    typeof value.limit === 'number'
+  )
+}
+
 function isCatalogProductsEnvelope(value: unknown): value is CatalogProductsEnvelope {
   if (!isPlainObject(value)) return false
   return (
@@ -73,7 +89,8 @@ function isCatalogProductsEnvelope(value: unknown): value is CatalogProductsEnve
     typeof value.page === 'number' &&
     typeof value.pageSize === 'number' &&
     typeof value.totalItems === 'number' &&
-    typeof value.totalPages === 'number'
+    typeof value.totalPages === 'number' &&
+    (value.fallback === null || isCatalogFallbackDto(value.fallback))
   )
 }
 
@@ -87,6 +104,41 @@ function isCatalogCategoriesEnvelope(value: unknown): value is CatalogCategories
   return Array.isArray(value.items) && value.items.every(isCatalogCategoryDto)
 }
 
+function isCatalogFacetOptionDto(value: unknown): value is CatalogFacetOptionDto {
+  if (!isPlainObject(value)) return false
+  return typeof value.id === 'string' && typeof value.label === 'string'
+}
+
+function isCatalogBilingualFacetOptionDto(value: unknown): value is CatalogBilingualFacetOptionDto {
+  if (!isPlainObject(value)) return false
+  return typeof value.id === 'string' && typeof value.labelHe === 'string' && typeof value.labelEn === 'string'
+}
+
+function isCatalogDosageFormFacetDto(value: unknown): value is CatalogDosageFormFacetDto {
+  if (!isPlainObject(value)) return false
+  return (
+    typeof value.value === 'string' &&
+    DOSAGE_FORM_KEYS.includes(value.value as DosageFormKey) &&
+    typeof value.labelHe === 'string' &&
+    typeof value.labelEn === 'string'
+  )
+}
+
+// §9d's payload is returned UNWRAPPED by the server — no `items` envelope.
+function isCatalogFacetsDto(value: unknown): value is CatalogFacetsDto {
+  if (!isPlainObject(value)) return false
+  return (
+    Array.isArray(value.brands) &&
+    value.brands.every(isCatalogFacetOptionDto) &&
+    Array.isArray(value.ingredients) &&
+    value.ingredients.every(isCatalogFacetOptionDto) &&
+    Array.isArray(value.healthGoals) &&
+    value.healthGoals.every(isCatalogBilingualFacetOptionDto) &&
+    Array.isArray(value.dosageForms) &&
+    value.dosageForms.every(isCatalogDosageFormFacetDto)
+  )
+}
+
 async function requestCatalogJson(path: string, signal?: AbortSignal): Promise<unknown> {
   const base = getApiBaseUrl()
   if (!base.ok) {
@@ -97,9 +149,14 @@ async function requestCatalogJson(path: string, signal?: AbortSignal): Promise<u
   try {
     response = await fetch(`${base.value}${path}`, { signal })
   } catch (error) {
-    // An aborted fetch rejects with a DOMException/Error named "AbortError" —
-    // propagate it unchanged so callers can tell "cancelled" from "failed".
-    if (error instanceof Error && error.name === 'AbortError') throw error
+    // An aborted fetch rejects because `signal` was aborted — propagate
+    // it unchanged so callers can tell "cancelled" from "failed".
+    // `signal?.aborted` answers that directly and realm-independently,
+    // unlike `error instanceof Error && error.name === 'AbortError'`,
+    // which depends on whatever `DOMException` happens to inherit from
+    // in the caller's environment (jsdom's does not extend `Error`; real
+    // browsers' and Node's do — correction #3).
+    if (signal?.aborted) throw error
     throw new CatalogApiError('NETWORK_ERROR', 'The catalogue API could not be reached.')
   }
 
@@ -124,14 +181,89 @@ async function requestCatalogJson(path: string, signal?: AbortSignal): Promise<u
   return body
 }
 
-// No query parameters are ever sent — the server currently supports none
-// (Slice 6 Checkpoint A). ?category=<slug> filtering happens client-side.
-export async function fetchCatalogProducts(signal?: AbortSignal): Promise<CatalogProductDto[]> {
-  const body = await requestCatalogJson('/api/products', signal)
+// MILESTONE-005 Checkpoint H — query params carry the full §4 filter/sort/
+// page contract (built by buildCatalogSearchParams). An empty/undefined
+// `params` produces a bare `/api/products` request, matching Checkpoint A's
+// original no-params call. The full envelope (page/totalItems/totalPages/
+// fallback) is returned, not just `items` — the data layer needs all of it
+// for §5a canonicalization and §6b fallback presentation.
+export async function fetchCatalogProducts(
+  params?: URLSearchParams,
+  signal?: AbortSignal,
+): Promise<CatalogProductsEnvelope> {
+  const query = params?.toString()
+  const path = query ? `/api/products?${query}` : '/api/products'
+  const body = await requestCatalogJson(path, signal)
   if (!isCatalogProductsEnvelope(body)) {
     throw new CatalogApiError('INVALID_RESPONSE_SHAPE', 'The catalogue API returned a products response with an unexpected shape.')
   }
-  return body.items
+  return body
+}
+
+function isProductDetailDto(value: unknown): value is ProductDetailDto {
+  // 🔴 The shared half is validated by the SAME predicate the list uses, so
+  // a shape change can never be accepted here and rejected there (§7's
+  // "reuse, not a parallel definition", enforced at the validator too).
+  if (!isCatalogProductDto(value)) return false
+  const dto = value as unknown as Record<string, unknown>
+  return (
+    typeof dto.serialNumber === 'string' &&
+    dto.serialNumber.length > 0 &&
+    typeof dto.usageInstructions === 'string' &&
+    Array.isArray(dto.images) &&
+    dto.images.every((image) => typeof image === 'string') &&
+    typeof dto.descriptionHe === 'string' &&
+    typeof dto.descriptionEn === 'string' &&
+    typeof dto.warningsAllergens === 'string' &&
+    Array.isArray(dto.ingredients) &&
+    dto.ingredients.every(
+      (ingredient) =>
+        isPlainObject(ingredient) &&
+        typeof ingredient.name === 'string' &&
+        typeof ingredient.amount === 'string' &&
+        typeof ingredient.unit === 'string',
+    ) &&
+    Array.isArray(dto.healthGoals) &&
+    dto.healthGoals.every(
+      (goal) => isPlainObject(goal) && typeof goal.nameHe === 'string' && typeof goal.nameEn === 'string',
+    ) &&
+    (dto.targetAudience === null || typeof dto.targetAudience === 'string') &&
+    typeof dto.createdAt === 'string'
+  )
+}
+
+/**
+ * MILESTONE-005 Checkpoint J — §7's `GET /api/products/:slug`.
+ *
+ * The slug is percent-encoded before it reaches the path: a slug is a stable
+ * business key (DEC-033), but it arrives here from a URL segment, and this
+ * function must not be the place a malformed one turns into a different
+ * request path.
+ *
+ * A missing product surfaces as a `CatalogApiError` with code
+ * `PRODUCT_NOT_FOUND` and status 404 — exactly what the server sends, and
+ * identical for an absent and an inactive product (§7). Distinguishing
+ * "not found" from "failed" is the CALLER's job, from that code.
+ */
+export async function fetchProductDetail(slug: string, signal?: AbortSignal): Promise<ProductDetailDto> {
+  const body = await requestCatalogJson(`/api/products/${encodeURIComponent(slug)}`, signal)
+  if (!isProductDetailDto(body)) {
+    throw new CatalogApiError('INVALID_RESPONSE_SHAPE', 'The catalogue API returned a product detail with an unexpected shape.')
+  }
+  return body
+}
+
+/**
+ * MILESTONE-005 Checkpoint I — §9d facet options for the filter UI. Accepts
+ * no query parameters (the server 400s on any), so this takes no params.
+ * The response carries no counts by contract; nothing here invents any.
+ */
+export async function fetchCatalogFacets(signal?: AbortSignal): Promise<CatalogFacetsDto> {
+  const body = await requestCatalogJson('/api/catalog/facets', signal)
+  if (!isCatalogFacetsDto(body)) {
+    throw new CatalogApiError('INVALID_RESPONSE_SHAPE', 'The catalogue API returned a facets response with an unexpected shape.')
+  }
+  return body
 }
 
 export async function fetchCatalogCategories(signal?: AbortSignal): Promise<CatalogCategoryDto[]> {

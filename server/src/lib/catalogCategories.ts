@@ -23,9 +23,21 @@ const BY_NAME_HE = new Map<string, CanonicalCategory>(
   CANONICAL_CATEGORIES.map((category) => [category.nameHe, category]),
 )
 
+const BY_SLUG = new Map<string, CanonicalCategory>(
+  CANONICAL_CATEGORIES.map((category) => [category.slug, category]),
+)
+
 // Returns undefined for a category name outside the canonical list — callers
 // must treat that as a data-integrity failure (CATALOG_DATA_INTEGRITY), never
 // a silent fallback.
 export function findCanonicalCategoryByNameHe(nameHe: string): CanonicalCategory | undefined {
   return BY_NAME_HE.get(nameHe)
+}
+
+// MILESTONE-005 Checkpoint D — resolves a validated §4b category slug (already
+// checked against this same canonical list at Checkpoint C) to the category's
+// nameHe, which is what Product.category is actually keyed on for filtering
+// (no Category.slug column exists — see catalogMapper.ts and DEC-043).
+export function findCanonicalCategoryBySlug(slug: string): CanonicalCategory | undefined {
+  return BY_SLUG.get(slug)
 }
