@@ -1,12 +1,18 @@
 import { Router } from 'express'
 import type { PrismaClient } from '@prisma/client'
 import type { EmailService } from '../lib/emailService.js'
+import { emailStrings } from '../lib/emailStrings.js'
 import {
   attemptLogin,
   LOGIN_FAILURE_CODE,
   LOGIN_FAILURE_MESSAGE,
 } from '../lib/loginService.js'
-import { parseRegistration } from '../lib/registrationForm.js'
+import {
+  buildPasswordResetEmail,
+  completePasswordReset,
+  requestPasswordReset,
+} from '../lib/passwordResetService.js'
+import { parseRegistration, resetPasswordSchema } from '../lib/registrationForm.js'
 import {
   buildExistingAccountEmail,
   buildVerificationEmail,
@@ -162,6 +168,89 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     })
 
     res.json({ status: 'authenticated' })
+  })
+
+  // POST /api/auth/password-reset — REQ-F-032, clause A3. Checkpoint F.
+  //
+  // 🔴 A3: THE SAME 200 EITHER WAY. No 404, no branch, no field that differs
+  // between "we sent you a link" and "that address is not registered". The
+  // tempting change — telling the user their address is not registered so they
+  // can correct a typo — is an account-enumeration oracle, and an unauthenticated
+  // one.
+  router.post('/auth/password-reset', async (req, res) => {
+    const email = (req.body as { email?: unknown })?.email
+    if (typeof email !== 'string') {
+      // Even a malformed body gets the same shape. A validation error here
+      // would distinguish "you sent nothing" from "that address is unknown",
+      // which is a smaller leak but the same kind.
+      res.status(200).json({ status: 'password_reset_requested' })
+      return
+    }
+
+    const outcome = await requestPasswordReset(email, deps)
+
+    // Step: respond FIRST, identically.
+    res.status(200).json({ status: 'password_reset_requested' })
+
+    // Then send — after the response, outside any transaction (INV-04, A9).
+    try {
+      if (outcome.userExists && outcome.plaintextToken) {
+        const mail = buildPasswordResetEmail(deps.appBaseUrl, outcome.plaintextToken)
+        await deps.emailService.send({ to: outcome.email, ...mail })
+      }
+      // 🔴 No email at all when the address is unknown. A "you have no account"
+      // email would confirm non-existence to anyone who can read that mailbox,
+      // and mailing unknown addresses on demand is a spam vector.
+    } catch (error) {
+      console.error('[auth] password-reset email failed to send', error)
+    }
+  })
+
+  // POST /api/auth/password-reset/complete — REQ-F-032, A4 + A8.
+  router.post('/auth/password-reset/complete', async (req, res) => {
+    const body = req.body as { token?: unknown; password?: unknown }
+    if (typeof body?.token !== 'string' || typeof body?.password !== 'string') {
+      res.status(400).json({
+        error: { code: 'RESET_INVALID', message: 'This reset link is not valid.' },
+      })
+      return
+    }
+
+    // The new password must satisfy Table 3's rules — a reset is not a way
+    // around the strength requirement registration enforces.
+    const passwordCheck = resetPasswordSchema.safeParse(body.password)
+    if (!passwordCheck.success) {
+      res.status(400).json({
+        error: {
+          code: 'PASSWORD_INVALID',
+          message: 'The new password does not meet the requirements.',
+          codes: [...new Set(passwordCheck.error.issues.map((issue) => issue.message))],
+        },
+      })
+      return
+    }
+
+    const outcome = await completePasswordReset(body.token, passwordCheck.data, deps)
+
+    if (!outcome.ok) {
+      // One message for missing, expired, already-used and disabled — the
+      // same reasoning as A1 and as verify-email's guard.
+      res.status(400).json({
+        error: { code: 'RESET_INVALID', message: 'This reset link is not valid.' },
+      })
+      return
+    }
+
+    // 🔴 Every session was destroyed, including this one (see the frozen
+    // decision in passwordResetService). The client must log in again.
+    res.json({ status: 'password_reset' })
+
+    try {
+      const mail = emailStrings.passwordResetCompleted()
+      await deps.emailService.send({ to: outcome.email, ...mail })
+    } catch (error) {
+      console.error('[auth] password-reset confirmation failed to send', error)
+    }
   })
 
   // GET /api/auth/verify-email?token=… — REQ-F-031.

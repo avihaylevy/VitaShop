@@ -32,6 +32,13 @@ export function normalisePhone(raw: string): string {
   return raw.replace(/-/g, '')
 }
 
+/**
+ * REQ-F-032 — a reset must satisfy the SAME strength rules as registration.
+ * Exported so Checkpoint F reuses this schema rather than restating the rules,
+ * which is how a reset quietly becomes a way around them.
+ */
+export const resetPasswordSchema = passwordSchema
+
 export const registrationSchema = z
   .object({
     firstName: z.string().trim().min(1, 'FIRST_NAME_REQUIRED'),

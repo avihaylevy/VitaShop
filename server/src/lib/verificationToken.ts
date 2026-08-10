@@ -24,6 +24,18 @@ const TOKEN_BYTES = 32
 /** REQ-F-031 / DEC-007: the link is valid for 24 hours. */
 export const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000
 
+/**
+ * REQ-F-032 — the password-reset link is valid for ONE hour, deliberately
+ * shorter than verification's 24.
+ *
+ * A reset link is strictly more dangerous than a verification link: it grants
+ * account takeover to whoever holds it, whereas a verification link only
+ * confirms an address. The window should be the smallest one that still
+ * survives a slow mail relay and a user who reads email on a delay.
+ */
+export const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000
+export const PASSWORD_RESET_TOKEN_TTL_HOURS = 1
+
 export interface IssuedToken {
   /** Goes in the emailed link. 🔴 Never stored, never logged. */
   plaintext: string
@@ -37,13 +49,27 @@ export function hashToken(plaintext: string): string {
   return createHash('sha256').update(plaintext, 'utf8').digest('hex')
 }
 
-export function issueVerificationToken(now: Date = new Date()): IssuedToken {
+function issueToken(ttlMs: number, now: Date): IssuedToken {
   const plaintext = randomBytes(TOKEN_BYTES).toString('base64url')
   return {
     plaintext,
     digest: hashToken(plaintext),
-    expiresAt: new Date(now.getTime() + VERIFICATION_TOKEN_TTL_MS),
+    expiresAt: new Date(now.getTime() + ttlMs),
   }
+}
+
+export function issueVerificationToken(now: Date = new Date()): IssuedToken {
+  return issueToken(VERIFICATION_TOKEN_TTL_MS, now)
+}
+
+/**
+ * REQ-F-032. 🔴 Same generator, same SHA-256 storage, same single-use and
+ * expiry machinery as verification — Checkpoint F reuses this module rather
+ * than growing a second, subtly different token implementation. Only the TTL
+ * differs, and it differs on purpose.
+ */
+export function issuePasswordResetToken(now: Date = new Date()): IssuedToken {
+  return issueToken(PASSWORD_RESET_TOKEN_TTL_MS, now)
 }
 
 /**

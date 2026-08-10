@@ -1,6 +1,7 @@
 import argon2 from 'argon2'
 import type { PrismaClient } from '@prisma/client'
 import type { EmailService } from './emailService.js'
+import { emailStrings, type EmailContent } from './emailStrings.js'
 import { issueVerificationToken } from './verificationToken.js'
 import type { RegistrationInput } from './registrationForm.js'
 
@@ -205,33 +206,18 @@ async function createUserAndToken(
   return { created: true, userId: user.id, verificationToken: token.plaintext }
 }
 
-/** Built by the caller after the commit — never inside the transaction. */
-export function buildVerificationEmail(baseUrl: string, plaintextToken: string) {
+/**
+ * Built by the caller after the commit — never inside the transaction.
+ *
+ * 🔴 The strings live in `emailStrings.ts` per DEC-054, not here. This
+ * function owns the LINK, which is application logic; the wording is data.
+ */
+export function buildVerificationEmail(baseUrl: string, plaintextToken: string): EmailContent {
   const link = `${baseUrl.replace(/\/$/, '')}/verify-email?token=${plaintextToken}`
-  return {
-    subject: 'VitaShop — אימות כתובת המייל',
-    body: [
-      'ברוכים הבאים ל-VitaShop.',
-      '',
-      'כדי להשלים את ההרשמה, יש לאמת את כתובת המייל בקישור הבא:',
-      link,
-      '',
-      'הקישור תקף ל-24 שעות וניתן לשימוש חד-פעמי בלבד.',
-    ].join('\n'),
-  }
+  return emailStrings.verification(link)
 }
 
 /** DEC-053 4b — what the EXISTING owner receives instead. */
-export function buildExistingAccountEmail(email: string) {
-  return {
-    to: email,
-    subject: 'VitaShop — ניסיון הרשמה עם כתובת המייל שלך',
-    body: [
-      'מישהו ניסה להירשם ל-VitaShop עם כתובת המייל הזו, שכבר רשומה במערכת.',
-      '',
-      'לא נוצר חשבון חדש ולא בוצע שינוי בחשבון הקיים.',
-      'אם זה היית את/ה — אפשר פשוט להתחבר.',
-      'אם לא — אין צורך בפעולה כלשהי.',
-    ].join('\n'),
-  }
+export function buildExistingAccountEmail(email: string): EmailContent & { to: string } {
+  return { to: email, ...emailStrings.existingAccountRegistrationAttempt() }
 }
