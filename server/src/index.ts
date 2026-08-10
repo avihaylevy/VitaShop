@@ -2,7 +2,10 @@ import 'dotenv/config'
 import { pathToFileURL } from 'node:url'
 import cors from 'cors'
 import express from 'express'
+import { ConsoleEmailProvider } from './lib/emailService.js'
+import { prisma } from './lib/prisma.js'
 import { createSessionMiddleware } from './lib/session.js'
+import { createAuthRouter } from './routes/auth.js'
 import { catalogRouter } from './routes/catalog.js'
 
 export const app = express()
@@ -29,6 +32,17 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.use('/api', catalogRouter)
+
+// MILESTONE-006 Checkpoint D — registration and email verification only.
+// DEC-007: ConsoleEmailProvider is the transport; all token logic is real.
+app.use(
+  '/api',
+  createAuthRouter({
+    prisma,
+    emailService: new ConsoleEmailProvider(),
+    appBaseUrl: clientOrigin,
+  }),
+)
 
 const port = process.env.PORT ?? 3000
 
