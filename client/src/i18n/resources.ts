@@ -6,6 +6,8 @@ import catalogHe from '../locales/he/catalog.json'
 import catalogEn from '../locales/en/catalog.json'
 import cartHe from '../locales/he/cart.json'
 import cartEn from '../locales/en/cart.json'
+import authHe from '../locales/he/auth.json'
+import authEn from '../locales/en/auth.json'
 
 /**
  * The i18next resource map — pure data, no side effects. Extracted from
@@ -20,8 +22,8 @@ import cartEn from '../locales/en/cart.json'
  * consumer.
  */
 export const resources = {
-  he: { common: commonHe, layout: layoutHe, catalog: catalogHe, cart: cartHe },
-  en: { common: commonEn, layout: layoutEn, catalog: catalogEn, cart: cartEn },
+  he: { common: commonHe, layout: layoutHe, catalog: catalogHe, cart: cartHe, auth: authHe },
+  en: { common: commonEn, layout: layoutEn, catalog: catalogEn, cart: cartEn, auth: authEn },
 } as const
 
 /**

@@ -105,7 +105,7 @@ export function AccountMenu() {
                 role="menuitem"
                 type="button"
                 onClick={() => {
-                  signOut()
+                  void signOut()
                   closeAndReturnFocus()
                 }}
                 className={`${FOCUS_RING} block w-full rounded-compact px-3 py-2 text-start text-sm text-text-ink hover:bg-surface-sunken`}

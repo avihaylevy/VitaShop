@@ -4,6 +4,22 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      MILESTONE-006 Checkpoint H, clause H1 — the Referer half of keeping
+      tokens out of the wild.
+
+      /verify-email?token=… and /reset-password?token=… carry a plaintext
+      credential in the URL on arrival. useUrlToken strips it from the address
+      bar on mount, but a subresource requested BEFORE that effect runs would
+      otherwise send the full URL — token included — in a Referer header.
+
+      `same-origin` sends a referrer to this origin only, and nothing at all
+      cross-origin. Chosen over `no-referrer` so same-origin navigation
+      analytics stay possible, and over `strict-origin-when-cross-origin`
+      (the browser default) because that still sends the ORIGIN cross-origin —
+      harmless here, but `same-origin` costs nothing and leaks strictly less.
+    -->
+    <meta name="referrer" content="same-origin" />
     <title>VitaShop</title>
   </head>
   <body>

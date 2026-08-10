@@ -189,6 +189,22 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     res.json({ status: 'authenticated' })
   })
 
+  // GET /api/auth/session — Checkpoint H's precondition.
+  //
+  // ⚠️ ADDED IN H AND FLAGGED, not slipped in: the REQ-F-034 gate H builds
+  // must know whether a visitor is authenticated, and nothing exposed that.
+  // A client cannot read an HttpOnly cookie, and inferring auth state from a
+  // login response is lost on the next refresh.
+  //
+  // 🔴 It returns a BOOLEAN AND NOTHING ELSE. No email, no id, no status. An
+  // unauthenticated caller learns only about their own request, which they
+  // already knew; there is no account to enumerate here because the answer
+  // does not depend on any address the caller supplies.
+  router.get('/auth/session', (req, res) => {
+    const userId = (req.session as unknown as { userId?: string } | undefined)?.userId
+    res.json({ authenticated: typeof userId === 'string' && userId.length > 0 })
+  })
+
   // POST /api/auth/logout — clause A7. Checkpoint F2.
   //
   // 🔴 DESTROY, not regenerate. A7 exists precisely because regeneration

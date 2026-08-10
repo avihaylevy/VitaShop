@@ -6,6 +6,11 @@ import { HomePage } from './pages/HomePage'
 import { CatalogPage } from './pages/CatalogPage'
 import { ProductDetailsPage } from './pages/ProductDetailsPage'
 import { CartPage } from './components/cart'
+import { LoginPage } from './pages/LoginPage'
+import { RegisterPage } from './pages/RegisterPage'
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
+import { VerifyEmailPage } from './pages/VerifyEmailPage'
 
 function App() {
   return (
@@ -22,6 +27,25 @@ function App() {
         */}
         <Route path="/product/:slug" element={<ProductDetailsPage />} />
         <Route path="/cart" element={<CartPage />} />
+        {/*
+          MILESTONE-006 Checkpoint H — the auth forms.
+
+          🔴 REQ-F-034 / clause A10: NONE of these gate anything above.
+          Browsing, searching, filtering, product details and the cart are
+          open to guests, and nothing in this milestone may put a login wall
+          in front of them. `RequireAuth` exists for favourites and checkout,
+          which are MILESTONE-007 and MILESTONE-008 — no route uses it yet,
+          and a test asserts the guest routes stay reachable.
+
+          🔴 /verify-email and /reset-password receive a plaintext token as a
+          query parameter. Clause H1: both strip it from the address bar on
+          mount — see lib/useUrlToken.ts.
+        */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
         {/*
           Dev-only. Vite substitutes `false` for import.meta.env.DEV in a
           production build, so this branch and the OverlayShowcase import
