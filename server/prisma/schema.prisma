@@ -3,7 +3,9 @@
 //   1. Address fields — minimal, not yet specced
 //   2. TargetAudience — spec's closed list not yet transcribed; left as
 //      nullable String rather than an invented enum
-//   3. Session — none here; connect-pg-simple manages its own table (DEC-018)
+//   3. Session — RESOLVED 2026-08-10, DEC-052 Part 2. connect-pg-simple
+//      still owns the table; a mirror model is now declared purely to
+//      baseline it so `migrate dev` sees no drift. Never client-accessed.
 //   4. Cart guest identification mechanism — session_id is a placeholder
 //   5. Concurrency (DEC-021) — query-time behavior, not a schema construct
 //   6. Hebrew search (ISSUE-010) — deferred
@@ -122,6 +124,36 @@ model PasswordResetToken {
   usedAt    DateTime? @map("used_at") // single-use, §4.4.3
 
   @@map("password_reset_tokens")
+}
+
+// ── Session store — OWNED BY connect-pg-simple, NOT by Prisma ─────────
+//
+// 🔴 This model exists for ONE reason: to keep `prisma migrate dev` from
+// reporting drift. The table is created and maintained by
+// connect-pg-simple's own table.sql; the shape here mirrors that DDL and
+// must not be "improved" to match Prisma conventions.
+//
+// 🔴 NEVER read or write this table through the Prisma client.
+// express-session owns all normal access through the store API. The one
+// direct statement the application issues is DEC-018's session
+// invalidation, and it is RAW SQL on the same `pg` pool:
+//
+//     DELETE FROM session WHERE sess->>'userId' = $1
+//
+// (MILESTONE-006 clause A8. `sess->>'userId'` returns TEXT — the bound
+// parameter must be a string even if the id is numeric, or the delete
+// silently matches nothing.)
+//
+// Baselined, not migrated — DEC-052 Part 2. The table already existed
+// when its migration was generated, so that migration was recorded with
+// `prisma migrate resolve --applied` and never executed.
+model Session {
+  sid    String   @id @db.VarChar
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
 }
 
 // ── Catalogue ─────────────────────────────────────────
