@@ -3,6 +3,7 @@ import express from 'express'
 import type { PrismaClient } from '@prisma/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NullEmailProvider } from '../lib/emailService.js'
+import { SESSION_COOKIE_NAME, sessionCookieOptions } from '../lib/session.js'
 import { createAuthRouter } from './auth.js'
 
 /**
@@ -105,13 +106,43 @@ describe('A7 — logout DESTROYS the session record', () => {
     expect([...store.values()].some((payload) => payload.userId === 'user-1')).toBe(false)
   })
 
-  it('clears the cookie, with the name the middleware actually sets', async () => {
+  it('clears the cookie using the name the middleware actually sets', async () => {
     // A mismatched name leaves the browser sending a cookie whose row is gone.
     const store: FakeStore = new Map([['live-sid', { userId: 'user-1' }]])
     const baseUrl = await startApp(store, 'live-sid')
     const response = await logout(baseUrl)
 
-    expect(response.headers.get('set-cookie')).toContain('vitashop.sid')
+    expect(response.headers.get('set-cookie')).toContain(SESSION_COOKIE_NAME)
+  })
+
+  it('🔴 clears it with the SAME ATTRIBUTES it was set with', async () => {
+    // A browser only removes a cookie when the attributes match. An earlier
+    // version called clearCookie(name) with no options, which sends no
+    // path/sameSite/httpOnly/secure — so in production the dead cookie would
+    // have survived and the browser kept sending a session id resolving to
+    // nothing. Not a security hole (destroy() already removed the row), but
+    // logout that visibly does not clear its own cookie.
+    const store: FakeStore = new Map([['live-sid', { userId: 'user-1' }]])
+    const baseUrl = await startApp(store, 'live-sid')
+    const response = await logout(baseUrl)
+    const setCookie = response.headers.get('set-cookie') ?? ''
+
+    expect(setCookie).toContain('Path=/')
+    expect(setCookie).toContain('HttpOnly')
+    expect(setCookie).toMatch(/SameSite=Lax/i)
+  })
+
+  it('🔴 the cleared attributes come from the SET contract, not a copy', () => {
+    // One definition, two consumers. Two hand-maintained copies of a cookie
+    // shape drift, and the drift is silent.
+    expect(sessionCookieOptions()).toMatchObject({
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+    })
+    // maxAge is set-only and must NOT be in the shared contract: clearCookie
+    // has no business sending a lifetime.
+    expect(sessionCookieOptions()).not.toHaveProperty('maxAge')
   })
 })
 

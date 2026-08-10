@@ -13,6 +13,7 @@ import {
   requestPasswordReset,
 } from '../lib/passwordResetService.js'
 import { parseRegistration, resetPasswordSchema } from '../lib/registrationForm.js'
+import { SESSION_COOKIE_NAME, sessionCookieOptions } from '../lib/session.js'
 import {
   buildExistingAccountEmail,
   buildVerificationEmail,
@@ -180,14 +181,24 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   //
   // THREAT-009 records this as a control. Until F2 it claimed one that no code
   // implemented.
+  //
+  // 🔴 POST, NOT GET, AND THAT IS LOAD-BEARING — do not "simplify" it to a
+  // link. A GET logout is triggerable cross-site by an `<img src>` tag, and
+  // A6-CSRF's decision names "ANY state-changing GET endpoint" as a condition
+  // that VOIDS the SameSite=lax control for the whole application — lax still
+  // sends the cookie on top-level cross-site GET. One convenience link here
+  // would not just add a logout CSRF; it would invalidate the reasoning that
+  // lets this project ship without CSRF tokens at all.
   router.post('/auth/logout', async (req, res) => {
     await new Promise<void>((resolve, reject) => {
       req.session.destroy((err) => (err ? reject(err) : resolve()))
     })
 
-    // The cookie name must match the one `createSessionMiddleware` sets, or
-    // the browser keeps sending a cookie whose row no longer exists.
-    res.clearCookie('vitashop.sid')
+    // 🔴 The SAME options object the cookie was SET with. A browser only
+    // removes a cookie when the attributes match; `clearCookie(name)` alone
+    // sends no path/sameSite/secure, so in production the dead cookie survives
+    // and the browser keeps sending a session id that resolves to nothing.
+    res.clearCookie(SESSION_COOKIE_NAME, sessionCookieOptions())
 
     // 🔴 The SAME response whether or not a session existed. There is nothing
     // to disclose — "you were not logged in" tells an attacker only what they
