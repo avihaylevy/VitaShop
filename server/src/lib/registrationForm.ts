@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeEmail } from './normalizeEmail.js'
 
 /**
  * REQ-F-030 / Table 3 — the seven registration fields, validated SERVER-SIDE.
@@ -35,7 +36,9 @@ export const registrationSchema = z
   .object({
     firstName: z.string().trim().min(1, 'FIRST_NAME_REQUIRED'),
     lastName: z.string().trim().min(1, 'LAST_NAME_REQUIRED'),
-    email: z.string().trim().toLowerCase().email('EMAIL_INVALID'),
+    // 🔴 normalizeEmail, not an inline .trim().toLowerCase() — login and
+    // password reset look up by exactly this form. See normalizeEmail.ts.
+    email: z.string().transform(normalizeEmail).pipe(z.string().email('EMAIL_INVALID')),
     password: passwordSchema,
     confirmPassword: z.string(),
     phone: z.string().trim().regex(PHONE_PATTERN, 'PHONE_INVALID'),

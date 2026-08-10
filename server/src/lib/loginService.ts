@@ -1,5 +1,6 @@
 import argon2 from 'argon2'
 import type { PrismaClient, UserStatus } from '@prisma/client'
+import { normalizeEmail } from './normalizeEmail.js'
 import { ARGON2_OPTIONS } from './registrationService.js'
 
 /**
@@ -44,11 +45,26 @@ export const LOGIN_FAILURE_MESSAGE = 'Email or password is incorrect.'
 let dummyHashPromise: Promise<string> | undefined
 
 export function prewarmDummyHash(): Promise<string> {
-  dummyHashPromise ??= argon2.hash(
-    'a-fixed-application-constant-value-never-a-real-password',
-    ARGON2_OPTIONS,
-  )
+  if (dummyHashPromise === undefined) {
+    dummyHashPromise = argon2
+      .hash('a-fixed-application-constant-value-never-a-real-password', ARGON2_OPTIONS)
+      .catch((error: unknown) => {
+        // 🔴 DO NOT CACHE A REJECTION. `??=` would keep a rejected promise
+        // forever, and only the unknown-email path awaits this — so a single
+        // transient failure would make unknown email 500 while a known email
+        // still 401s. That is account enumeration by STATUS CODE, in the exact
+        // branch A2 exists to equalize. Clearing the slot lets the next call
+        // retry instead.
+        dummyHashPromise = undefined
+        throw error
+      })
+  }
   return dummyHashPromise
+}
+
+/** Exposed for tests that need to force the un-warmed state. */
+export function resetDummyHashForTests(): void {
+  dummyHashPromise = undefined
 }
 
 export interface LoginInput {
@@ -90,7 +106,8 @@ export async function attemptLogin(
   const now = deps.now?.() ?? new Date()
 
   const user = (await deps.prisma.user.findUnique({
-    where: { email: input.email.trim().toLowerCase() },
+    // 🔴 The SAME normalisation registration stored the address with.
+    where: { email: normalizeEmail(input.email) },
     select: {
       id: true,
       passwordHash: true,
@@ -122,8 +139,34 @@ export async function attemptLogin(
   // ── A2: EXACTLY ONE hash verification, on EVERY branch ───────────────────
   // Unknown email verifies against the constant dummy so it costs the same as
   // a real one. The locked branch runs it too — see below.
-  const hashToVerify = user?.passwordHash ?? (await prewarmDummyHash())
-  const passwordMatches = await argon2.verify(hashToVerify, input.password).catch(() => false)
+  // 🔴 Both failure modes below resolve to "no match" rather than throwing.
+  // An exception escaping here would become a 500 on ONE branch, which is the
+  // enumeration oracle A1 and A2 exist to close, reached by status code.
+  let hashToVerify: string | null = user?.passwordHash ?? null
+  if (hashToVerify === null) {
+    try {
+      hashToVerify = await prewarmDummyHash()
+    } catch (error) {
+      // The constant could not be computed. Log it — a server that cannot
+      // hash cannot serve auth and someone needs to know — but still fall
+      // through to the identical A1 failure.
+      console.error('[auth] the A2 constant hash could not be computed', error)
+      hashToVerify = null
+    }
+  }
+
+  const passwordMatches =
+    hashToVerify === null
+      ? false
+      : await argon2.verify(hashToVerify, input.password).catch((error: unknown) => {
+          // 🔴 Returning false is correct — a verify failure must not be
+          // distinguishable from a wrong password. But swallowing it silently
+          // means a CORRUPTED STORED HASH locks that user out permanently with
+          // no signal anywhere. The log is server-side only, so A1 is
+          // unaffected: nothing about this reaches the response.
+          console.error('[auth] argon2.verify failed', error)
+          return false
+        })
 
   // ── Branch 1: unknown email. A1's message, after the verify above. ───────
   if (!user) return { ok: false }

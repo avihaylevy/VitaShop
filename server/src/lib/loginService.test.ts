@@ -7,6 +7,7 @@ import {
   LOCKOUT_MS,
   MAX_FAILED_ATTEMPTS,
   prewarmDummyHash,
+  resetDummyHashForTests,
 } from './loginService.js'
 import { ARGON2_OPTIONS } from './registrationService.js'
 
@@ -128,6 +129,64 @@ describe('TEST-032 — A2: all THREE branches hash before responding', () => {
 
   it('caches the dummy hash, so cost is identical after the first call', async () => {
     expect(await prewarmDummyHash()).toBe(await prewarmDummyHash())
+  })
+
+  it('🔴 a REJECTED dummy hash still yields A1s failure, not a throw', async () => {
+    // THE DEFECT. `??=` cached the promise, including a rejected one, forever.
+    // Only the unknown-email branch awaits it, so a single failure meant
+    // unknown email 500s while a known email 401s — account enumeration by
+    // STATUS CODE, in the exact branch A2 exists to equalize.
+    resetDummyHashForTests()
+    const hashSpy = vi.spyOn(argon2, 'hash').mockRejectedValueOnce(new Error('argon2 exploded'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    const outcome = await attemptLogin(
+      { email: 'nobody@example.com', password: PASSWORD },
+      { prisma: fakePrisma(null).prisma },
+    )
+
+    // Identical to every other failure. No throw, no 500, no distinguishable
+    // shape — and the operator still learns about it, server-side only.
+    expect(outcome).toEqual({ ok: false })
+    expect(errorSpy).toHaveBeenCalled()
+
+    hashSpy.mockRestore()
+    errorSpy.mockRestore()
+    resetDummyHashForTests()
+    await prewarmDummyHash()
+  })
+
+  it('🔴 does NOT cache the rejection — the next call retries', async () => {
+    resetDummyHashForTests()
+    const hashSpy = vi.spyOn(argon2, 'hash').mockRejectedValueOnce(new Error('transient'))
+
+    await expect(prewarmDummyHash()).rejects.toThrow('transient')
+    hashSpy.mockRestore()
+
+    // A retry after a transient failure must succeed rather than replay the
+    // cached rejection forever.
+    await expect(prewarmDummyHash()).resolves.toMatch(/^\$argon2id\$/)
+  })
+})
+
+describe('🔴 1b — a failing verify is logged, not swallowed silently', () => {
+  it('returns no-match AND logs when the stored hash is corrupt', async () => {
+    // Returning false is right — a verify failure must be indistinguishable
+    // from a wrong password. But silence means a corrupted stored hash locks
+    // that user out permanently with no signal anywhere.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { prisma } = fakePrisma({})
+    const verifySpy = vi
+      .spyOn(argon2, 'verify')
+      .mockRejectedValueOnce(new Error('pchstr must contain a $ as first char'))
+
+    const outcome = await attemptLogin({ email: 'a@b.com', password: PASSWORD }, { prisma })
+
+    expect(outcome).toEqual({ ok: false })
+    expect(errorSpy).toHaveBeenCalled()
+
+    verifySpy.mockRestore()
+    errorSpy.mockRestore()
   })
 })
 

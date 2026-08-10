@@ -34,10 +34,18 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api', catalogRouter)
 
-// A2 — pay the constant dummy hash's cost once at startup, so the first
-// unknown-email login is not measurably slower than every later one. Failure
-// is not fatal: the hash is computed lazily on first use anyway.
-void prewarmDummyHash().catch(() => undefined)
+// A2 — compute the constant dummy hash once at startup, so the first
+// unknown-email login is not measurably slower than every later one.
+//
+// 🔴 FAIL FAST if it rejects. A server that cannot hash cannot serve auth, and
+// failing at boot is far louder than failing per-request — a per-request
+// failure would surface as a 500 on the unknown-email branch ONLY, which is
+// account enumeration by status code. The request path is defensive about this
+// too (see loginService), but the boot check is what makes it visible.
+const dummyHashReady = prewarmDummyHash().catch((error: unknown) => {
+  console.error('[auth] FATAL — the A2 constant hash could not be computed at startup', error)
+  throw error
+})
 
 // MILESTONE-006 Checkpoints D and E — registration, verification, login.
 // DEC-007: ConsoleEmailProvider is the transport; all token logic is real.
@@ -55,6 +63,10 @@ const port = process.env.PORT ?? 3000
 // Only bind a port when this file is run directly — importing `app` from a
 // test must not start a real listener on the configured port.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // 🔴 Await the A2 constant before accepting traffic. Serving requests while
+  // it is unavailable is the failure mode this guards: unknown email would
+  // 500 and a known email 401, which distinguishes them by status code.
+  await dummyHashReady
   app.listen(port, () => {
     console.log(`VitaShop API listening on port ${port}`)
   })
