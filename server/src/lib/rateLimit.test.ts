@@ -182,6 +182,37 @@ describe('G — every auth route is limited', () => {
     await expect(blocked.json()).resolves.toEqual(RATE_LIMIT_RESPONSE)
   })
 
+  it('🔴 /password-reset/complete has its OWN budget, not the request side\'s', async () => {
+    // These two shared one rateLimit() instance — and therefore one store —
+    // which is invisible at the mount site: both routes read as limited, and
+    // they were, just not by a budget of their own. The consequence was that a
+    // token-guessing flood on /complete drained the budget needed to REQUEST a
+    // reset, so behind NAT one person's mistakes locked everyone else out.
+    const baseUrl = await startApp(false)
+
+    // Exhaust the completion route well past the REQUEST side's IP ceiling.
+    const overshoot = AUTH_RATE_LIMITS.passwordResetIp.limit + 2
+    for (let i = 0; i < overshoot; i++) {
+      await fetch(`${baseUrl}/api/auth/password-reset/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: 'garbage', password: 'Abcdef12' }),
+      })
+    }
+
+    // The request side must be untouched by that.
+    const stillWorks = await resetRequest(baseUrl, 'someone@b.com')
+    expect(stillWorks.status).not.toBe(429)
+  })
+
+  it('the completion budget is more generous than the request budget', () => {
+    // Legitimate use needs the room: request (1) + submit (1) + one per
+    // rejected new password.
+    expect(AUTH_RATE_LIMITS.passwordResetCompleteIp.limit).toBeGreaterThan(
+      AUTH_RATE_LIMITS.passwordResetIp.limit,
+    )
+  })
+
   it('every configured limit is a positive number with a window', () => {
     for (const [name, config] of Object.entries(AUTH_RATE_LIMITS)) {
       expect(config.limit, name).toBeGreaterThan(0)

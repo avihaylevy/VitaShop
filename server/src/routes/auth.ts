@@ -261,7 +261,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   })
 
   // POST /api/auth/password-reset/complete — REQ-F-032, A4 + A8.
-  router.post('/auth/password-reset/complete', limit.passwordResetIp, async (req, res) => {
+  router.post('/auth/password-reset/complete', limit.passwordResetCompleteIp, async (req, res) => {
     const body = req.body as { token?: unknown; password?: unknown }
     if (typeof body?.token !== 'string' || typeof body?.password !== 'string') {
       res.status(400).json({

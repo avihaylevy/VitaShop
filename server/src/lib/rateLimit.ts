@@ -29,6 +29,15 @@ import { normalizeEmail } from './normalizeEmail.js'
  *   3. No `skip`, no `skipSuccessfulRequests`, no `skipFailedRequests`, no
  *      `requestWasSuccessful`. Each of those makes the count depend on the
  *      OUTCOME, and the outcome is exactly what must not be observable.
+ *   4. 🔴 EVERY ROUTE GETS ITS OWN LIMITER INSTANCE unless sharing a budget is
+ *      a DELIBERATE, STATED decision. Each `rateLimit()` call is one store; two
+ *      routes mounting the same handler share one counter, and **that is
+ *      invisible at the mount site** — the route reads as limited, and it is,
+ *      just not by a budget of its own. `/auth/password-reset` and
+ *      `/auth/password-reset/complete` shared one by accident exactly this
+ *      way: a token-guessing flood on `complete` drained the budget the
+ *      request side needed, so behind NAT one person's mistakes blocked
+ *      everyone else from requesting a reset at all.
  */
 
 /**
@@ -112,6 +121,16 @@ export const AUTH_RATE_LIMITS = {
   registerEmail: { windowMs: HOUR, limit: 3 },
   passwordResetIp: { windowMs: HOUR, limit: 5 },
   passwordResetEmail: { windowMs: HOUR, limit: 3 },
+  // 🔴 ITS OWN BUDGET, not shared with the request side above. It guards a
+  // different threat — token guessing and argon2 cost, not email bombing —
+  // and legitimate use needs more room: request (1) + submit (1) + one per
+  // rejected new password. Sharing 5/hour made a token-guessing flood drain
+  // the budget needed to REQUEST a reset, which behind NAT or CGNAT is one
+  // person locking out everyone else.
+  // IP-keyed with nothing else available: the completion request carries a
+  // token, not an address, so there is no per-target key and no
+  // email-bombing vector to close.
+  passwordResetCompleteIp: { windowMs: HOUR, limit: 20 },
   verifyEmail: { windowMs: HOUR, limit: 20 },
   logout: { windowMs: 15 * MINUTE, limit: 60 },
 } as const
@@ -127,6 +146,7 @@ export interface AuthRateLimiters {
   registerEmail: RequestHandler
   passwordResetIp: RequestHandler
   passwordResetEmail: RequestHandler
+  passwordResetCompleteIp: RequestHandler
   verifyEmail: RequestHandler
   logout: RequestHandler
 }
@@ -156,6 +176,12 @@ export function createAuthRateLimiters(): AuthRateLimiters {
       ...SHARED,
       ...AUTH_RATE_LIMITS.passwordResetEmail,
       keyGenerator: emailKey,
+    }),
+
+    passwordResetCompleteIp: rateLimit({
+      ...SHARED,
+      ...AUTH_RATE_LIMITS.passwordResetCompleteIp,
+      keyGenerator: ipKey,
     }),
 
     // A GET that users double-click, so the ceiling is generous.
