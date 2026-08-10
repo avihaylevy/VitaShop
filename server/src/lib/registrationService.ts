@@ -33,8 +33,11 @@ export const ARGON2_OPTIONS = {
  *
  * 🔴 This looks like pointless wasted work and is exactly the kind of thing an
  * optimisation pass deletes. It is load-bearing.
+ *
+ * Exported so Checkpoint E's login path reuses this one implementation rather
+ * than growing a second, subtly different copy of the same rule.
  */
-async function burnEquivalentHashCost(password: string): Promise<void> {
+export async function burnEquivalentHashCost(password: string): Promise<void> {
   await argon2.hash(password, ARGON2_OPTIONS)
 }
 

@@ -1,6 +1,11 @@
 import { Router } from 'express'
 import type { PrismaClient } from '@prisma/client'
 import type { EmailService } from '../lib/emailService.js'
+import {
+  attemptLogin,
+  LOGIN_FAILURE_CODE,
+  LOGIN_FAILURE_MESSAGE,
+} from '../lib/loginService.js'
 import { parseRegistration } from '../lib/registrationForm.js'
 import {
   buildExistingAccountEmail,
@@ -92,6 +97,71 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     } catch (error) {
       console.error('[auth] verification email failed to send', error)
     }
+  })
+
+  // POST /api/auth/login — REQ-F-032, REQ-F-033. Checkpoint E.
+  //
+  // 🔴 DEC-053 RULE 3: the SAME capture → commit → regenerate ordering as
+  // registration. A6 regenerates here too, and DEC-019's cart MERGE branch
+  // attaches at the same seam.
+  router.post('/auth/login', async (req, res) => {
+    // ── Step 1: capture the guest identity, before regeneration ────────────
+    // Same reason as registration: `Cart.session_id` IS this value, and after
+    // step 5 it is a different one. O8's precondition applies equally here.
+    const guestSessionId = req.sessionID
+
+    const body = req.body as { email?: unknown; password?: unknown }
+    if (typeof body?.email !== 'string' || typeof body?.password !== 'string') {
+      // 🔴 A1 again: a malformed body gets the SAME failure as a wrong
+      // password. A distinct "email is required" would let an attacker probe
+      // the shape of the endpoint, and there is no reason to help.
+      res.status(401).json({
+        error: { code: LOGIN_FAILURE_CODE, message: LOGIN_FAILURE_MESSAGE },
+      })
+      return
+    }
+
+    const outcome = await attemptLogin({ email: body.email, password: body.password }, deps)
+
+    if (!outcome.ok) {
+      // 🔴 A1 — one message, one status, one body, for unknown email, wrong
+      // password, locked account and disabled account alike. `outcome` carries
+      // no reason, so there is nothing here to leak even by accident.
+      res.status(401).json({
+        error: { code: LOGIN_FAILURE_CODE, message: LOGIN_FAILURE_MESSAGE },
+      })
+      return
+    }
+
+    // ══════════ SEAM: MERGE-GUEST-CART ════════════════════════════════════
+    //
+    // 🔴 DELIBERATELY EMPTY IN MILESTONE-006. Do not remove it.
+    //
+    // Owner: REQ-F-020 · DEC-019's LOGIN branch (merge, not promote —
+    // quantities summed per productId, clamped to stock, zero-stock dropped,
+    // transactional and idempotent) · MILESTONE-007.
+    //
+    // It sits HERE — after the credentials are known good, before the
+    // regeneration below — because DEC-053 Rule 3 puts any transactional work
+    // before the commit, and regeneration after it. M-007 will need its own
+    // transaction around the merge; that transaction must close before step 5.
+    //
+    // 🔴 O8's precondition applies: `guestSessionId` is only meaningful if the
+    // guest session was persisted.
+    void guestSessionId
+
+    // ── Step 5: regenerate AFTER the credential check and any commit ───────
+    // A6 — session fixation. Everything transactional above has completed.
+    await new Promise<void>((resolve, reject) => {
+      req.session.regenerate((err) => (err ? reject(err) : resolve()))
+    })
+    // A8 — the invalidation helper matches on this.
+    ;(req.session as unknown as { userId?: string }).userId = outcome.userId
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()))
+    })
+
+    res.json({ status: 'authenticated' })
   })
 
   // GET /api/auth/verify-email?token=… — REQ-F-031.

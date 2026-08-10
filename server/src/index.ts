@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url'
 import cors from 'cors'
 import express from 'express'
 import { ConsoleEmailProvider } from './lib/emailService.js'
+import { prewarmDummyHash } from './lib/loginService.js'
 import { prisma } from './lib/prisma.js'
 import { createSessionMiddleware } from './lib/session.js'
 import { createAuthRouter } from './routes/auth.js'
@@ -33,7 +34,12 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api', catalogRouter)
 
-// MILESTONE-006 Checkpoint D — registration and email verification only.
+// A2 — pay the constant dummy hash's cost once at startup, so the first
+// unknown-email login is not measurably slower than every later one. Failure
+// is not fatal: the hash is computed lazily on first use anyway.
+void prewarmDummyHash().catch(() => undefined)
+
+// MILESTONE-006 Checkpoints D and E — registration, verification, login.
 // DEC-007: ConsoleEmailProvider is the transport; all token logic is real.
 app.use(
   '/api',
