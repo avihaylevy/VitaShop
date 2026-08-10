@@ -41,8 +41,16 @@ import {
  * them to use the password they just chose is not a burden; leaving a session
  * alive because it is convenient is how a revoked credential outlives the
  * event that revoked it — THREAT-009 exactly.
+ *
+ * 🔴 There is deliberately NO CONSTANT OR FLAG for this. An earlier version
+ * had `INVALIDATE_ALL ? {} : { exceptSid: undefined }`, which was a FAKE
+ * TOGGLE: `invalidateUserSessions` tests `options.exceptSid` for truthiness,
+ * so both branches behaved identically and flipping the flag changed nothing
+ * — silently. That is worse than no flag at all, because it reads as a working
+ * switch: whoever wanted the excluded-sid behaviour would flip it, see no
+ * error, and ship a change that did not happen. The call site below passes no
+ * options, and this comment is the durable record of the decision.
  */
-const INVALIDATE_ALL_SESSIONS_INCLUDING_ACTING = true
 
 export interface PasswordResetDeps {
   prisma: PrismaClient
@@ -77,21 +85,35 @@ export async function requestPasswordReset(
     select: { id: true, status: true },
   })
 
-  // 🔴 A2's timing reasoning, applied to A3. The exists path generates a token
-  // and writes a row; the unknown path must not return measurably faster or
-  // the identical body is undone by the clock. A token generation is cheap, so
-  // the cost that actually matters is matched with one argon2 hash — the same
-  // trick DEC-053 4b uses on /register, and the same function.
+  // ── 🔴 A2's SHAPE, applied to A3: EVERY branch performs exactly one hash ──
+  //
+  // Read this before touching it, because the obvious version is backwards.
+  //
+  // Unlike /register (DEC-053 4b), NEITHER branch here does a real password
+  // hash — the exists path only generates a token and writes one row, ~1ms.
+  // So burning a hash on the unknown path alone does NOT compensate for
+  // anything: it makes the unknown path ~50ms and the known path ~1ms, and a
+  // FAST RESPONSE THEN MEANS THE ACCOUNT EXISTS. That is the same oracle A3's
+  // identical body closes, reached through the clock instead of the payload —
+  // the exact failure A2 was written to prevent, pointing the other way.
+  //
+  // 🔴 The burn therefore runs on ALL branches. It equalizes the branches
+  // AGAINST EACH OTHER; it does not match some real hashing cost, because
+  // there isn't one. The ~1ms INSERT is dominated by it and disappears into
+  // the noise.
+  //
+  // 🔴 DO NOT "optimise" this by moving it back to the unknown path only.
+  // That reads like the /register precedent and is the inverse of it.
+  await burnEquivalentHashCost(email)
+
   if (!user) {
-    await burnEquivalentHashCost(email)
     return { userExists: false, plaintextToken: null, email }
   }
 
   // A disabled account gets no reset link — but the caller cannot tell,
-  // because the response is identical. Sending one would let a disabled user
-  // walk their way back to a working credential.
+  // because the response is identical and now the timing is too. Sending one
+  // would let a disabled user walk their way back to a working credential.
   if (user.status === 'disabled') {
-    await burnEquivalentHashCost(email)
     return { userExists: false, plaintextToken: null, email }
   }
 
@@ -174,10 +196,9 @@ export async function completePasswordReset(
   // session table is not Prisma's to roll back, exactly as DEC-053 Rule 2
   // established for regeneration. A failure here must not undo the new
   // password — the user would be left unable to log in with either credential.
-  const sessionsDestroyed = await invalidateUserSessions(
-    record.userId,
-    INVALIDATE_ALL_SESSIONS_INCLUDING_ACTING ? {} : { exceptSid: undefined },
-  )
+  // 🔴 No `exceptSid` — every session dies, including the acting one. See the
+  // frozen decision above the function.
+  const sessionsDestroyed = await invalidateUserSessions(record.userId)
 
   return {
     ok: true,

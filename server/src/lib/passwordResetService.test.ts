@@ -93,20 +93,47 @@ describe('TEST-034 — A3: the request is indistinguishable', () => {
     expect(unknown.plaintextToken).toBeNull()
   })
 
-  it('🔴 the unknown path is not measurably faster — A2 applied to A3', async () => {
-    const rec: Recorded = { updates: [], events: [] }
+  it('🔴 no branch is measurably faster than another — in EITHER direction', async () => {
+    // 🔴 This assertion is two-sided on purpose, and that is the whole point.
+    //
+    // The first version of this code burned a hash on the unknown path ONLY.
+    // Neither path does a real password hash here — the exists path just
+    // generates a token and writes a row — so that did not equalize anything:
+    // it made unknown ~50ms and known ~1ms, and a FAST response then meant the
+    // account EXISTS. A one-sided assertion (`unknown > known * 0.25`) PASSES
+    // under that bug, which is how it shipped.
+    async function timeOf(user: { id: string } | null): Promise<number> {
+      const rec: Recorded = { updates: [], events: [] }
+      const started = performance.now()
+      await requestPasswordReset('a@b.com', deps(fakePrisma(user, rec)))
+      return performance.now() - started
+    }
 
-    const knownStart = performance.now()
-    await requestPasswordReset('a@b.com', deps(fakePrisma({ id: 'user-1' }, rec)))
-    const knownMs = performance.now() - knownStart
+    const knownMs = await timeOf({ id: 'user-1' })
+    const unknownMs = await timeOf(null)
 
-    const unknownStart = performance.now()
-    await requestPasswordReset('nobody@b.com', deps(fakePrisma(null, rec)))
-    const unknownMs = performance.now() - unknownStart
+    const ratio = Math.max(knownMs, unknownMs) / Math.max(1, Math.min(knownMs, unknownMs))
+    // Both branches perform exactly one argon2 hash, which dominates the ~1ms
+    // INSERT. Either branch missing its burn shows up as a large ratio; the
+    // bound is loose enough not to flake on a busy machine.
+    expect(ratio).toBeLessThan(4)
+  })
 
-    // Without the burned hash the unknown path returns almost instantly and
-    // A3's identical body is undone by the clock.
-    expect(unknownMs).toBeGreaterThan(knownMs * 0.25)
+  it('🔴 the DISABLED branch burns a hash too', async () => {
+    // It returns early like the unknown branch, so it is the third place the
+    // burn can be forgotten.
+    async function timeOf(user: { id: string; status?: UserStatus } | null): Promise<number> {
+      const rec: Recorded = { updates: [], events: [] }
+      const started = performance.now()
+      await requestPasswordReset('a@b.com', deps(fakePrisma(user, rec)))
+      return performance.now() - started
+    }
+
+    const disabledMs = await timeOf({ id: 'user-1', status: 'disabled' })
+    const knownMs = await timeOf({ id: 'user-1' })
+
+    const ratio = Math.max(knownMs, disabledMs) / Math.max(1, Math.min(knownMs, disabledMs))
+    expect(ratio).toBeLessThan(4)
   })
 
   it('🔴 a DISABLED account gets no link, and looks identical', async () => {
@@ -224,9 +251,12 @@ describe('TEST-034 — A8: sessions are destroyed on a successful reset', () => 
     // 🔴 The frozen decision: no exceptSid. Sparing "the acting session" only
     // helps whoever is doing the reset, and the threat model for a reset is
     // that someone else already has access.
-    const [userId, options] = spy.mock.calls[0] as [string, Record<string, unknown>]
+    const [userId, options] = spy.mock.calls[0] as [string, Record<string, unknown> | undefined]
     expect(userId).toBe('user-1')
-    expect(options.exceptSid).toBeUndefined()
+    // Called with NO options at all — the earlier `? {} : { exceptSid:
+    // undefined }` ternary was a fake toggle whose branches were identical to
+    // the callee, so flipping it changed nothing silently.
+    expect(options).toBeUndefined()
     expect(outcome).toMatchObject({ ok: true, sessionsDestroyed: 3 })
     spy.mockRestore()
   })
