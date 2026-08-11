@@ -8,6 +8,26 @@ import {
   type RepeatableFilterKey,
 } from '../../features/catalog/catalogQueryControls'
 
+/*
+ * ISSUE-048 — constraint attributes for the price inputs.
+ *
+ * 🔴 These MIRROR the server, they do not define the rule. `catalogQuery.ts`
+ * is the authority: `MAX_PRICE_CENTS = 99_999_99` (₪99,999.99) and
+ * `DECIMAL_PATTERN` allows at most two decimal places, which is what `step`
+ * encodes. §3.4 — the client is not a source of truth, so these only make the
+ * browser's own validation agree with the server's instead of letting a
+ * doomed request leave at all.
+ *
+ * ⚠️ DUPLICATED VALUE, and worth naming as such: this is the same shape as
+ * ISSUE-044's CATEGORY_EN. The server constant is not exported across the
+ * package boundary, and inventing a different limit here would be worse than
+ * restating this one — a client max BELOW the server's would silently block
+ * valid input. If the server bound ever changes, this must change with it.
+ */
+const PRICE_INPUT_MIN = '0'
+const PRICE_INPUT_MAX = '99999.99'
+const PRICE_INPUT_STEP = '0.01'
+
 type CatalogFilterPanelProps = {
   groups: readonly FilterGroupModel[]
   onToggleValue: (key: RepeatableFilterKey, value: string) => void
@@ -129,7 +149,16 @@ export function CatalogFilterPanel({
             </label>
             <input
               id={minId}
-              type="text"
+              /*
+               * 🔴 ISSUE-048. Was `type="text"`, so the field had no stepper
+               * controls, no arrow-key increment and no native range
+               * validation. `inputMode="decimal"` was already correct and is
+               * kept — it drives the TOUCH keyboard, which `type` does not.
+               */
+              type="number"
+              min={PRICE_INPUT_MIN}
+              max={PRICE_INPUT_MAX}
+              step={PRICE_INPUT_STEP}
               inputMode="decimal"
               dir="ltr"
               value={minDraft}
@@ -144,7 +173,10 @@ export function CatalogFilterPanel({
             </label>
             <input
               id={maxId}
-              type="text"
+              type="number"
+              min={PRICE_INPUT_MIN}
+              max={PRICE_INPUT_MAX}
+              step={PRICE_INPUT_STEP}
               inputMode="decimal"
               dir="ltr"
               value={maxDraft}

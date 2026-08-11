@@ -457,11 +457,40 @@ async function seedProduct(db: Db, row: ValidatedProductRow, ingredients: Valida
 
   // ProductIngredient — join table with amount/unit; idempotent via manual
   // lookup, update amount/unit if the sourced value changed on re-verification
+  const linkedIngredientIds: string[] = []
   for (const ing of ingredients) {
+    /*
+     * 🔴 ISSUE-049 — was `ing.ingredientEn`, which put ENGLISH names into a
+     * Hebrew-default UI. All 46 ingredient labels rendered Latin-only inside
+     * the RTL interface, on the filter AND on product detail pages.
+     *
+     * DEC-017 settles which language belongs here, and it needs no schema
+     * change. Its table pairs `_he`/`_en` columns for CORE fields only —
+     * name, description, category, health goal — and puts "everything else"
+     * on a single Hebrew column. `ActiveIngredient.name` is correctly a
+     * single column; the seed was simply filling it from the wrong side of
+     * the CSV. `HealthGoal` carries `nameHe`/`nameEn` because it IS core;
+     * ingredients are not, which is why the shapes differ.
+     *
+     * ⚠️ NOTHING IS TRANSLATED HERE. Both names were sourced from the
+     * manufacturer's own page and both already sit in `ingredients.csv` —
+     * all 48 verified rows have a non-empty `ingredient_he`. Composing a
+     * Hebrew name would be invented data under DEC-032's no-inference rule,
+     * exactly like a dosage. This selects an existing sourced value.
+     *
+     * ⚠️ Search survives: the Hebrew names embed the Latin term where one
+     * exists — "EPA (חומצה איקוספנטאנואית)", "תמצית זרעי חילבה (Fenupure)" —
+     * so the ingredient-relation search tests still match.
+     *
+     * ⚠️ `name` is @unique and is the upsert key, so changing the value
+     * creates NEW rows rather than renaming the old ones. See the pruning
+     * step below — without it the old links survive and the catalogue shows
+     * both languages at once.
+     */
     const activeIngredient = await db.activeIngredient.upsert({
-      where: { name: ing.ingredientEn },
+      where: { name: ing.ingredientHe },
       update: {},
-      create: { name: ing.ingredientEn },
+      create: { name: ing.ingredientHe },
     })
     const existingLink = await db.productIngredient.findFirst({
       where: { productId: product.id, activeIngredientId: activeIngredient.id },
@@ -476,7 +505,28 @@ async function seedProduct(db: Db, row: ValidatedProductRow, ingredients: Valida
         data: { productId: product.id, activeIngredientId: activeIngredient.id, amount: ing.amount, unit: ing.unit },
       })
     }
+    linkedIngredientIds.push(activeIngredient.id)
   }
+
+  /*
+   * 🔴 PRUNE links this product no longer has. Added 2026-08-11 with
+   * ISSUE-049, which exposed the gap rather than creating it.
+   *
+   * The loop above only ADDS and UPDATES. It never removed a link that had
+   * dropped out of the CSV, so the seed converged only for growing data. When
+   * ISSUE-049 changed the ingredient key from the English name to the Hebrew
+   * one, every product kept its old English link AND gained a Hebrew one —
+   * the filter went from 46 options to 92, in both languages at once. Caught
+   * by a post-seed count, not by a test.
+   *
+   * This makes the seed genuinely idempotent for ingredients: after any run,
+   * a product is linked to exactly the ingredients its CSV rows name. The
+   * orphaned ActiveIngredient rows left behind are then unreferenced, and
+   * `catalogFacets.ts` already filters those out of the UI.
+   */
+  await db.productIngredient.deleteMany({
+    where: { productId: product.id, activeIngredientId: { notIn: linkedIngredientIds } },
+  })
 
   return product
 }

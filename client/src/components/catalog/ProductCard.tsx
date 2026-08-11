@@ -91,7 +91,17 @@ export function ProductCard({
 
       {showCategoryEyebrow && <p className="text-xs text-text-muted">{categoryLabel}</p>}
 
-      <Heading className="text-sm font-semibold text-text-ink">
+      {/*
+       * 🔴 ISSUE-047, cause 2 of 2. `line-clamp-2` + `min-h-10` reserves
+       * EXACTLY two lines (line-height 20px x 2 = 40px) whether the name wraps
+       * or not. Without the reservation a two-line name made its card 20px
+       * taller than its neighbours — measured as 406px against 386px.
+       *
+       * ⚠️ The clamp and the min-height are one fix, not two: clamping alone
+       * caps the tall cards, and reserving alone leaves short names short.
+       * Both are needed for every card to land on one height.
+       */}
+      <Heading className="line-clamp-2 min-h-10 text-sm font-semibold text-text-ink">
         <Link to={`/product/${slug}`} className={`${FOCUS_RING} rounded-compact`}>
           {name}
         </Link>
