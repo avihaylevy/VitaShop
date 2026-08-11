@@ -2,7 +2,7 @@ import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { syncProductIngredients } from './syncProductIngredients.js'
+import { syncProductHealthGoals, syncProductImages, syncProductIngredients } from './syncProductRelations.js'
 
 /**
  * 🔴 REGRESSION TEST FOR THE SEED IDEMPOTENCY GAP — added 2026-08-11.
@@ -42,9 +42,12 @@ async function cleanup(): Promise<void> {
   })
   for (const p of products) {
     await prisma.productIngredient.deleteMany({ where: { productId: p.id } })
+    await prisma.productHealthGoal.deleteMany({ where: { productId: p.id } })
+    await prisma.productImage.deleteMany({ where: { productId: p.id } })
     await prisma.product.delete({ where: { id: p.id } })
   }
   await prisma.activeIngredient.deleteMany({ where: { name: { startsWith: FIXTURE_PREFIX } } })
+  await prisma.healthGoal.deleteMany({ where: { nameHe: { startsWith: FIXTURE_PREFIX } } })
   await prisma.category.deleteMany({ where: { nameHe: { startsWith: FIXTURE_PREFIX } } })
   await prisma.brand.deleteMany({ where: { name: { startsWith: FIXTURE_PREFIX } } })
 }
@@ -160,5 +163,82 @@ describe('syncProductIngredients — the seed must CONVERGE, not merely grow', (
 
     await syncProductIngredients(prisma, productId, [])
     expect(await linkedNames()).toEqual([])
+  })
+})
+
+
+/**
+ * 🔴 THE SAME PROPERTY, FOR THE RELATIONS FOUND BY AUDIT RATHER THAN BY
+ * ACCIDENT. Ingredients bit first and was fixed in 86c559a; images and health
+ * goals had the identical add-only shape and were still latent, because no
+ * seeded product had ever changed its image_file or its health_goals.
+ *
+ * The RENAME case is the one that catches it, and SET EQUALITY is the
+ * assertion that matters — "contains the new value" passes while the old one
+ * is still attached.
+ */
+describe('syncProductImages — a changed image_file REPLACES, never accumulates', () => {
+  async function urls(): Promise<string[]> {
+    const rows = await prisma.productImage.findMany({ where: { productId }, select: { url: true } })
+    return rows.map((r) => r.url).sort()
+  }
+
+  it('creates the image on a first run and is idempotent', async () => {
+    await syncProductImages(prisma, productId, [`${FIXTURE_PREFIX}a.webp`])
+    await syncProductImages(prisma, productId, [`${FIXTURE_PREFIX}a.webp`])
+    expect(await urls()).toEqual([`${FIXTURE_PREFIX}a.webp`])
+  })
+
+  it('🔴 changing the filename prunes the old row — exactly one image remains', async () => {
+    await syncProductImages(prisma, productId, [`${FIXTURE_PREFIX}b.png`])
+    const after = await urls()
+    expect(after).toEqual([`${FIXTURE_PREFIX}b.png`])
+    expect(after).not.toContain(`${FIXTURE_PREFIX}a.webp`)
+    // The failure this guards: two rows, and which one renders depends on
+    // ordering. Batch 1 changed four image_file values from .png to .webp and
+    // only escaped because those rows had not been seeded yet.
+    expect(after).toHaveLength(1)
+  })
+})
+
+describe('syncProductHealthGoals — a product must not keep a goal it no longer claims', () => {
+  let goalA: string
+  let goalB: string
+
+  beforeAll(async () => {
+    const a = await prisma.healthGoal.create({
+      data: { nameHe: `${FIXTURE_PREFIX}goal-a`, nameEn: `${FIXTURE_PREFIX}goal-a-en` },
+    })
+    const b = await prisma.healthGoal.create({
+      data: { nameHe: `${FIXTURE_PREFIX}goal-b`, nameEn: `${FIXTURE_PREFIX}goal-b-en` },
+    })
+    goalA = a.id
+    goalB = b.id
+  })
+
+  async function goalNames(): Promise<string[]> {
+    const rows = await prisma.productHealthGoal.findMany({
+      where: { productId },
+      select: { healthGoal: { select: { nameHe: true } } },
+    })
+    return rows.map((r) => r.healthGoal.nameHe).sort()
+  }
+
+  it('links the goals and is idempotent', async () => {
+    await syncProductHealthGoals(prisma, productId, [goalA, goalB])
+    await syncProductHealthGoals(prisma, productId, [goalA, goalB])
+    expect(await goalNames()).toEqual([`${FIXTURE_PREFIX}goal-a`, `${FIXTURE_PREFIX}goal-b`])
+  })
+
+  it('🔴 dropping a goal prunes the link — the product stops appearing under it', async () => {
+    await syncProductHealthGoals(prisma, productId, [goalB])
+    const after = await goalNames()
+    expect(after).toEqual([`${FIXTURE_PREFIX}goal-b`])
+    expect(after).not.toContain(`${FIXTURE_PREFIX}goal-a`)
+  })
+
+  it('clearing health_goals entirely removes every link', async () => {
+    await syncProductHealthGoals(prisma, productId, [])
+    expect(await goalNames()).toEqual([])
   })
 })

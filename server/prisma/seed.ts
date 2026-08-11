@@ -4,7 +4,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient, Prisma, type DosageForm } from '@prisma/client'
-import { syncProductIngredients } from '../src/lib/syncProductIngredients.js'
+import {
+  syncProductHealthGoals,
+  syncProductImages,
+  syncProductIngredients,
+} from '../src/lib/syncProductRelations.js'
 
 type Db = PrismaClient | Prisma.TransactionClient
 
@@ -438,23 +442,20 @@ async function seedProduct(db: Db, row: ValidatedProductRow, ingredients: Valida
     create: { slug: row.slug, ...sharedFields },
   })
 
-  // ProductImage — no unique constraint in schema; idempotent via manual lookup
-  const imageUrl = `assets/products/${row.imageFile}`
-  const existingImage = await db.productImage.findFirst({ where: { productId: product.id, url: imageUrl } })
-  if (!existingImage) {
-    await db.productImage.create({ data: { productId: product.id, url: imageUrl, sortOrder: 0 } })
-  }
+  // ProductImage — one row per product today, but reconciled as a SET so a
+  // changed image_file replaces rather than accumulates. See the audit note in
+  // syncProductRelations.ts: this loop was add-only and the bug was latent.
+  await syncProductImages(db, product.id, [`assets/products/${row.imageFile}`])
 
-  // ProductHealthGoal — join table, idempotent via manual lookup
+  // ProductHealthGoal — likewise reconciled as a set. Add-only until
+  // 2026-08-11; a product whose health_goals changed would have stayed
+  // attached to the goal it no longer claims.
+  const healthGoalIds: string[] = []
   for (const goalHe of row.healthGoals) {
     const goal = await findOrCreateHealthGoal(db, goalHe, row.slug)
-    const existingLink = await db.productHealthGoal.findFirst({
-      where: { productId: product.id, healthGoalId: goal.id },
-    })
-    if (!existingLink) {
-      await db.productHealthGoal.create({ data: { productId: product.id, healthGoalId: goal.id } })
-    }
+    healthGoalIds.push(goal.id)
   }
+  await syncProductHealthGoals(db, product.id, healthGoalIds)
 
   // ProductIngredient — join table with amount/unit; idempotent via manual
   // lookup, update amount/unit if the sourced value changed on re-verification
