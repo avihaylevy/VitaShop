@@ -341,18 +341,29 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
     expect(body.totalItems).toBeLessThanOrEqual(brandOnly.length)
   })
 
-  it('minPrice — only products at or above the threshold', async () => {
+  /*
+   * 🔴 Both walk ALL PAGES. They compared a full database query against
+   * `body.items` — a single page — which was fine while any filtered result
+   * fitted on one. MILESTONE-004 Part 4 batch 5 took the catalogue to 32
+   * products and `minPrice=70` now matches 27, so page 1 held 24 of them and
+   * the set comparison failed. Database checked first: all 27 really are at
+   * or above ₪70, so the ENDPOINT was right and the test was page-blind.
+   *
+   * ⚠️ `maxPrice` was NOT failing — its result is small enough to fit. It is
+   * rewritten anyway, because "passes because the data happens to be small"
+   * is the same latent shape, just not yet reached. Fixing only the red one
+   * would leave the identical bug waiting for the next batch.
+   */
+  it('minPrice — only products at or above the threshold, across all pages', async () => {
     const expected = await readonlyPrisma.product.findMany({ where: { isActive: true, price: { gte: '70' } }, select: { slug: true } })
-    const res = await fetch(`${baseUrl}/api/products?minPrice=70`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
+    const { slugs } = await fetchAllPages('minPrice=70')
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
-  it('maxPrice — only products at or below the threshold', async () => {
+  it('maxPrice — only products at or below the threshold, across all pages', async () => {
     const expected = await readonlyPrisma.product.findMany({ where: { isActive: true, price: { lte: '70' } }, select: { slug: true } })
-    const res = await fetch(`${baseUrl}/api/products?maxPrice=70`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
+    const { slugs } = await fetchAllPages('maxPrice=70')
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   it('minPrice + maxPrice — an inclusive band', async () => {
