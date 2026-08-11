@@ -388,16 +388,51 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
-  it('direct field — Hebrew product name match ("אומגה" -> solgar-omega-3 only)', async () => {
+  /**
+   * 🔴 REWRITTEN 2026-08-11 (MILESTONE-004 Part 2, batch 3). Both asserted a
+   * single slug for an omega term. Batch 3 added a second omega product
+   * (`altman-alsepa-omega-3-210`), so both legitimately went to two.
+   * Database checked first: "אומגה", "omega" and "EPA" each match exactly
+   * those two products, so the search was right and the rosters were stale.
+   *
+   * The claim under test is that a term in THIS FIELD reaches the product —
+   * not which products happen to hold it. The expectation is therefore derived
+   * from the field family each test names.
+   */
+  async function slugsMatchingText(term: string): Promise<Set<string>> {
+    const like = { contains: term, mode: 'insensitive' } as const
+    const rows = await readonlyPrisma.product.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { nameHe: like },
+          { nameEn: like },
+          { descriptionHe: like },
+          { descriptionEn: like },
+          { category: { OR: [{ nameHe: like }, { nameEn: like }] } },
+        ],
+      },
+      select: { slug: true },
+    })
+    return new Set(rows.map((r) => r.slug))
+  }
+
+  it('direct field — Hebrew product name match ("אומגה")', async () => {
+    const expected = await slugsMatchingText('אומגה')
+    expect(expected.has('solgar-omega-3')).toBe(true) // fixture assumption
     const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('אומגה')}`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((i) => i.slug)).toEqual(['solgar-omega-3'])
+    expect(new Set(body.items.map((i) => i.slug))).toEqual(expected)
   })
 
-  it('direct field — English product name match, case-insensitive ("omega" -> solgar-omega-3 only)', async () => {
+  it('direct field — English product name match, case-insensitive ("omega")', async () => {
+    const expected = await slugsMatchingText('omega')
+    expect(expected.has('solgar-omega-3')).toBe(true) // fixture assumption
     const res = await fetch(`${baseUrl}/api/products?q=omega`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((i) => i.slug)).toEqual(['solgar-omega-3'])
+    // Case-insensitivity is the point: the query is lower-case, the stored
+    // names are not.
+    expect(new Set(body.items.map((i) => i.slug))).toEqual(expected)
   })
 
   it('direct field — Hebrew description match, a term absent from every name ("החרדית" -> superherb-magnesium-max-550 only)', async () => {
@@ -435,10 +470,63 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     for (const item of body.items) expect(expectedSlugs).toContain(item.slug)
   })
 
-  it('relation — active ingredient match ("EPA" -> solgar-omega-3 only)', async () => {
-    const res = await fetch(`${baseUrl}/api/products?q=EPA`)
+  /**
+   * 🔴 REWRITTEN 2026-08-11 (batch 3), and the search TERM changed — this is
+   * the important part.
+   *
+   * It used to query "EPA" and assert `['solgar-omega-3']`. Batch 3 added a
+   * second omega product and it went to two. The obvious repair was to derive
+   * the expected set from the ingredient relation and keep querying "EPA".
+   *
+   * 🔴 THAT REPAIR WAS TESTED AND FOUND WORTHLESS. Deleting the ingredient
+   * join from the search left it GREEN. "EPA" never proved the join at all:
+   *
+   *   · `solgar-omega-3` carries "EPA" in its Hebrew description, and
+   *   · `Alsepa` — the second product's own name — CONTAINS the substring
+   *     "epa", so it matches `nameEn` case-insensitively.
+   *
+   * Both products were reachable through plain text the whole time. The
+   * original one-slug assertion had the same hole; it simply never had a
+   * second product to expose it.
+   *
+   * "Fenupure" is used instead: a patented fenugreek extract name that appears
+   * in an ingredient row and in NO product name or description. Confirmed
+   * against the database — text fields match zero products, the ingredient
+   * relation matches one — so the join is the only path to it.
+   *
+   * Mutation-tested: removing the `ingredients` branch from the search OR
+   * turns this red. The "EPA" version did not.
+   */
+  it('relation — active ingredient match, via a term reachable ONLY through the join ("Fenupure")', async () => {
+    const rows = await readonlyPrisma.product.findMany({
+      where: {
+        isActive: true,
+        ingredients: { some: { activeIngredient: { name: { contains: 'Fenupure', mode: 'insensitive' } } } },
+      },
+      select: { slug: true },
+    })
+    const expected = new Set(rows.map((r) => r.slug))
+    expect(expected.size).toBeGreaterThan(0) // fixture assumption
+
+    // The oracle only holds while no product NAMES or DESCRIBES the term —
+    // assert that rather than trusting it, or this silently rots back into
+    // the "EPA" trap.
+    const viaText = await readonlyPrisma.product.count({
+      where: {
+        isActive: true,
+        OR: [
+          { nameHe: { contains: 'Fenupure', mode: 'insensitive' } },
+          { nameEn: { contains: 'Fenupure', mode: 'insensitive' } },
+          { descriptionHe: { contains: 'Fenupure', mode: 'insensitive' } },
+          { descriptionEn: { contains: 'Fenupure', mode: 'insensitive' } },
+        ],
+      },
+    })
+    expect(viaText).toBe(0)
+
+    const res = await fetch(`${baseUrl}/api/products?q=Fenupure`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((i) => i.slug)).toEqual(['solgar-omega-3'])
+    expect(new Set(body.items.map((i) => i.slug))).toEqual(expected)
   })
 
   /**
@@ -769,11 +857,25 @@ describe('GET /api/products — sort=popularity execution (Checkpoint F)', () =>
     expect(body.items.length).toBeGreaterThan(0)
   })
 
-  it('composes with q search', async () => {
+  /**
+   * 🔴 REWRITTEN 2026-08-11 (batch 3) — hardcoded a single omega slug and went
+   * to two when a second omega product was seeded. Database checked first.
+   *
+   * Composition means the q filter still applies under a non-default sort, so
+   * the expectation is the UNSORTED q result: changing `sort` must change the
+   * ORDER, never the MEMBERSHIP. That is a sharper statement than any fixed
+   * roster, and it cannot go stale as the catalogue grows.
+   */
+  it('composes with q search — sort changes order, not membership', async () => {
+    const unsorted = await fetch(`${baseUrl}/api/products?q=omega`)
+    const unsortedBody = (await unsorted.json()) as ProductsEnvelope
+    expect(unsortedBody.items.length).toBeGreaterThan(0) // fixture assumption
+
     const res = await fetch(`${baseUrl}/api/products?sort=popularity&q=omega`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((i) => i.slug)).toEqual(['solgar-omega-3'])
+    expect(body.totalItems).toBe(unsortedBody.totalItems)
+    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(unsortedBody.items.map((i) => i.slug)))
   })
 
   it('pagination — a past-the-end popularity-sorted page is a truthful empty page, not a crash', async () => {

@@ -177,6 +177,7 @@ const CATEGORY_EN: Record<string, string> = {
   'אומגה ושומנים': 'Omega & Fats',
   'פרוביוטיקה': 'Probiotics',
   'צמחי מרפא': 'Medicinal Herbs',
+  'חלבונים ואבקות': 'Proteins & Powders', // batch 3 — the last of the six
 }
 const HEALTH_GOAL_EN: Record<string, string> = {
   'לב וכלי דם': 'Heart & Blood Vessels',
@@ -193,6 +194,11 @@ const HEALTH_GOAL_EN: Record<string, string> = {
   // /probiotics/digest/; Supherb lists Bio 25 under עיכול), never inferred
   // from what the ingredient "is for" — DEC-032's no-invented-claims rule.
   'עיכול': 'Digestion',
+  // MILESTONE-004 batch 3. Same standard as עיכול: assigned only where the
+  // manufacturer places the product itself (Altman's /beauty/skin-care/ and
+  // /beauty/hair-care/ paths), and for the biotin the package states it
+  // outright — "ביוטין תורם לשמירה על עור ושיער תקינים".
+  'עור ושיער': 'Skin & Hair',
 }
 const DOSAGE_FORM_EN: Record<DosageForm, string> = {
   CAPSULE: 'capsules',
