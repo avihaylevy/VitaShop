@@ -226,6 +226,13 @@ const BRAND_EN: Record<string, string> = {
   // branding on altman.co.il ("Altman"), not transliterated by ear —
   // the same standard the two rows above were held to.
   'אלטמן': 'Altman',
+  // MILESTONE-004 Part 4 — two rows CLOSED out of the original fifteen, which
+  // brought their brands into the seed for the first time. Both taken from the
+  // source's own English usage, not transliterated: truforme.com writes
+  // "briamil" in its own URLs and page text, and moraz.co.il titles the
+  // product "SALUS - סירופ מולטי ויטמין".
+  'בריאמיל': 'Briamil',
+  'סלוס': 'Salus',
 }
 
 // schema.prisma DosageForm enum: CAPSULE/TABLET/DROPS/POWDER/SYRUP, each
@@ -509,6 +516,38 @@ async function main() {
     const ownIngredients = validatedIngredients.filter((i) => i.productSlug === productRow.slug)
     await prisma.$transaction((tx) => seedProduct(tx, productRow, ownIngredients))
     console.log(`  seeded: ${productRow.slug} (${ownIngredients.length} ingredient row${ownIngredients.length === 1 ? '' : 's'})`)
+  }
+
+  /*
+   * 🔴 DEACTIVATE products that are no longer verified. Added 2026-08-11.
+   *
+   * THE GAP: the seed only ever added and updated PRODUCTS, exactly as it
+   * only ever added and updated ingredient links before that was fixed. A row
+   * demoted from `verified=yes` back to Partial simply stopped being imported
+   * — and its product stayed `isActive: true` in the database, so it kept
+   * being served.
+   *
+   * This was found while REPAIRING ISSUE-045: five Solgar rows whose prices
+   * have no admissible source were demoted to Partial, the seed re-run, and
+   * the catalogue still reported 39 active products against 34 verified rows.
+   * The demotion had changed nothing a user could see. The repair silently
+   * did not work.
+   *
+   * ⚠️ Third instance of ONE root cause — a convergence property that holds
+   * only while data grows. Ingredient links (86c559a), image and health-goal
+   * links (8edd538), and now the products themselves.
+   *
+   * 🔴 SOFT DELETE ONLY — INV-03. `isActive: false`, never a DELETE. The row,
+   * its order history and its images stay; it leaves the catalogue.
+   * `catalogQuery` already filters on `isActive`, so this is the supported
+   * way to withdraw a product.
+   */
+  const deactivated = await prisma.product.updateMany({
+    where: { isActive: true, slug: { notIn: [...verifiedSlugs] } },
+    data: { isActive: false },
+  })
+  if (deactivated.count > 0) {
+    console.log(`  🔴 deactivated ${deactivated.count} product(s) no longer verified=yes (soft delete, INV-03)`)
   }
 
   console.log(`Done. ${validatedProducts.length} verified products processed.`)

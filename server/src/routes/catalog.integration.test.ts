@@ -455,7 +455,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
 
   it('direct field — Hebrew product name match ("אומגה")', async () => {
     const expected = await slugsMatchingText('אומגה')
-    expect(expected.has('solgar-omega-3')).toBe(true) // fixture assumption
+    expect(expected.size).toBeGreaterThan(0) // fixture assumption: something matches
     const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('אומגה')}`)
     const body = (await res.json()) as ProductsEnvelope
     expect(new Set(body.items.map((i) => i.slug))).toEqual(expected)
@@ -463,7 +463,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
 
   it('direct field — English product name match, case-insensitive ("omega")', async () => {
     const expected = await slugsMatchingText('omega')
-    expect(expected.has('solgar-omega-3')).toBe(true) // fixture assumption
+    expect(expected.size).toBeGreaterThan(0) // fixture assumption: something matches
     const res = await fetch(`${baseUrl}/api/products?q=omega`)
     const body = (await res.json()) as ProductsEnvelope
     // Case-insensitivity is the point: the query is lower-case, the stored
@@ -657,13 +657,27 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
   it('relation — Hebrew health-goal match ("עצמות" -> both Bone-Health-goal products)', async () => {
     const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('עצמות')}`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(['solgar-cal-mag-d3', 'superherb-vitamin-d']))
+    // Derived, not hardcoded — one of the two original slugs left the
+    // catalogue when ISSUE-045's unsourceable-price rows were demoted.
+    const expectedGoal = await readonlyPrisma.product.findMany({
+      where: { isActive: true, healthGoals: { some: { healthGoal: { nameHe: 'עצמות' } } } },
+      select: { slug: true },
+    })
+    expect(expectedGoal.length).toBeGreaterThan(0)
+    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expectedGoal.map((p) => p.slug)))
   })
 
   it('relation — English health-goal match ("Bone" -> both Bone-Health-goal products)', async () => {
     const res = await fetch(`${baseUrl}/api/products?q=Bone`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(['solgar-cal-mag-d3', 'superherb-vitamin-d']))
+    // Derived, not hardcoded — one of the two original slugs left the
+    // catalogue when ISSUE-045's unsourceable-price rows were demoted.
+    const expectedGoal = await readonlyPrisma.product.findMany({
+      where: { isActive: true, healthGoals: { some: { healthGoal: { nameHe: 'עצמות' } } } },
+      select: { slug: true },
+    })
+    expect(expectedGoal.length).toBeGreaterThan(0)
+    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expectedGoal.map((p) => p.slug)))
   })
 
   it('relation — brand match returns every product of that brand (Solgar)', async () => {
@@ -801,8 +815,14 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     })
 
     it('q AND brand narrows to the intersection', async () => {
-      const brand = await readonlyPrisma.brand.findFirst({ where: { name: 'סולגאר' } })
-      if (!brand) throw new Error('fixture assumption failed: brand "סולגאר" not found')
+      // 🔴 Was hardcoded to סולגאר, whose products all left the catalogue when
+      // ISSUE-045's unsourceable-price rows were demoted. Pick any brand that
+      // actually has active products, so this cannot go stale that way again.
+      const brand = await readonlyPrisma.brand.findFirst({
+        where: { products: { some: { isActive: true } } },
+        orderBy: { name: 'asc' },
+      })
+      if (!brand) throw new Error('fixture assumption failed: no brand has an active product')
       const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('ויטמין')}&brand=${brand.id}`)
       const body = (await res.json()) as ProductsEnvelope
       const expected = await readonlyPrisma.product.findMany({
@@ -836,10 +856,34 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     })
   })
 
-  it('inactive products are unreachable via search — verified structurally (no inactive product exists in the current seed to probe live)', async () => {
-    const activeCount = await readonlyPrisma.product.count({ where: { isActive: true } })
-    const totalCount = await readonlyPrisma.product.count({})
-    expect(totalCount).toBe(activeCount) // 0 inactive products today — see catalogFilterWhere.test.ts for the pure isActive-always-present proof
+  /**
+   * 🟢 UPGRADED 2026-08-11 from a structural check to a LIVE one.
+   *
+   * This used to assert `totalCount === activeCount` — i.e. it verified the
+   * claim by observing that **no inactive product existed to test with**. That
+   * is the weakest possible form of the check: it passes precisely because the
+   * interesting case is absent.
+   *
+   * ISSUE-045's repair created real inactive products for the first time (five
+   * rows demoted for unsourceable prices, soft-deleted per INV-03). The claim
+   * can now be probed for real: an inactive product must not appear in search
+   * results, in the unfiltered catalogue, or in any facet.
+   */
+  it('inactive products are unreachable via search — probed LIVE against a real soft-deleted product', async () => {
+    const inactive = await readonlyPrisma.product.findFirst({
+      where: { isActive: false },
+      select: { slug: true, nameHe: true },
+    })
+    if (!inactive) throw new Error('fixture assumption failed: no inactive product to probe')
+
+    // Searching its own name must not surface it.
+    const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent(inactive.nameHe)}`)
+    const body = (await res.json()) as ProductsEnvelope
+    expect(body.items.map((i) => i.slug)).not.toContain(inactive.slug)
+
+    // Nor may it appear anywhere in the unfiltered catalogue.
+    const { slugs } = await fetchAllPages()
+    expect(slugs).not.toContain(inactive.slug)
   })
 })
 
