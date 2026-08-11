@@ -165,10 +165,18 @@ const ingredientsCsvPath = path.join(repoRoot, 'assets/products/ingredients.csv'
 // from DEC-026's accurate tier, which governs per-product data. Extend this
 // map if a future verified row introduces a new value; an unmapped value
 // fails the seed rather than silently guessing English. ──────────────────
+// ⚠️ ISSUE-044 — this DUPLICATES `src/lib/catalogCategories.ts`, which already
+// holds all six canonical nameHe -> nameEn pairs in REQ-F-001 spec order. This
+// copy held only three, so it was already a divergent subset before batch 2
+// touched it. The values below are copied from CANONICAL_CATEGORIES verbatim;
+// the real fix is to import that list instead of restating it, which is filed
+// rather than done here so it is not a silent refactor inside a data batch.
 const CATEGORY_EN: Record<string, string> = {
   'ויטמינים': 'Vitamins',
   'מינרלים': 'Minerals',
   'אומגה ושומנים': 'Omega & Fats',
+  'פרוביוטיקה': 'Probiotics',
+  'צמחי מרפא': 'Medicinal Herbs',
 }
 const HEALTH_GOAL_EN: Record<string, string> = {
   'לב וכלי דם': 'Heart & Blood Vessels',
@@ -178,6 +186,13 @@ const HEALTH_GOAL_EN: Record<string, string> = {
   'ספורט': 'Sports',
   'עצמות': 'Bone Health',
   'אנרגיה': 'Energy',
+  // MILESTONE-004 batch 2 — the first SEEDED product to carry this goal.
+  // The value already existed on unseeded Partial rows, so the map was
+  // missing it without ever throwing. Assigned only where the manufacturer
+  // makes the placement itself (Altman files Jarro-Dophilus under
+  // /probiotics/digest/; Supherb lists Bio 25 under עיכול), never inferred
+  // from what the ingredient "is for" — DEC-032's no-invented-claims rule.
+  'עיכול': 'Digestion',
 }
 const DOSAGE_FORM_EN: Record<DosageForm, string> = {
   CAPSULE: 'capsules',
