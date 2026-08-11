@@ -1,7 +1,14 @@
 # Never commit ─────────────────
+# 🔴 The .env FAMILY, not just .env. The previous rules covered only
+# `.env`, `.env.local` and `.env.*.local`, so `.env.backup`, `.env.old`,
+# `.env.prod` — and the `.env.localhost-backup` that a 2026-08-11 pass
+# actually created — were all stageable while carrying SESSION_SECRET and
+# DATABASE_URL. That near-miss was caught by attention; attention is not a
+# control.
+# `.env.*` covers the family; the negation re-admits the committed template.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 *.pem
 *.key
 
