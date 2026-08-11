@@ -35,6 +35,54 @@ before being reported as done. Pure logic/data changes with no rendering effect
 - **LTR numeric isolation** — prices/numbers inside RTL text render
   `dir="ltr"` (or equivalent isolation) and stay LTR in both languages.
 
+## 🔴 NEVER PIPE A BUILD OR TEST COMMAND BEFORE READING ITS STATUS
+
+> Added 2026-08-11, after `npm run build | tail -3 && echo BUILD_OK` printed
+> **BUILD_OK over a failed compile**.
+
+A pipeline's exit status is the **last** command's. `tsc` failed; `tail`
+succeeded; `&&` saw success. The build error scrolled past inside the piped
+output and the line after it said the build was fine.
+
+```
+✗  npm run build 2>&1 | tail -3 && echo OK      <- reports tail's status
+✓  npm run build > /tmp/b.log 2>&1; echo "exit=$?"; tail -3 /tmp/b.log
+✓  set -o pipefail; npm run build 2>&1 | tail -3
+✓  npm run build 2>&1 | tail -3; [ "${PIPESTATUS[0]}" -eq 0 ]
+```
+
+Run it bare and read `$?`, redirect to a file and read `$?`, or use `pipefail`
+/ `PIPESTATUS`. **Never let a formatting command stand between a compiler and
+its verdict.**
+
+### 🔴 The family this belongs to — recognising the shape is what keeps catching them
+
+Six instances so far, all with one signature: **the check reports success while
+verifying nothing.**
+
+```
+1  a ONE-SIDED timing ratio          passed while the timing was backwards
+2  the "EPA" ingredient-join test    passed with the join DELETED
+3  a session-exclusion ternary       both branches identical — a fake toggle
+4  page=2 as "past the end"          asserted totalPages === 1; a real page 2
+                                     would have kept it green after a bump
+5  the badge-only card-height fix    would have looked done at 386 vs 406
+6  a pipe swallowing an exit code    BUILD_OK over a failed build
+```
+
+**None of these fail loudly. Every one of them passes.** That is what makes the
+family dangerous and what makes the counter-move always the same:
+
+```
+🔴 BREAK IT ON PURPOSE AND CONFIRM IT GOES RED.
+   Mutation-test the assertion, not just the code.
+   A test that has never failed has never been shown to test anything.
+```
+
+Instances 2, 4 and 5 were caught exactly that way, and instance 6 by checking
+an exit code that had been assumed. Assume any new guarantee is in this family
+until it has been seen to fail.
+
 ## Screenshots are supporting evidence, not the test
 
 A screenshot documents what was seen. It does not substitute for the ARIA
