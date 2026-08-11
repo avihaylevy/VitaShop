@@ -418,16 +418,33 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     expect(body.items.map((i) => i.slug)).toEqual(['solgar-omega-3'])
   })
 
-  it('relation — Hebrew category match ("מינרלים" -> both Minerals-category products)', async () => {
+  /**
+   * ⚠️ These two assert MEMBERSHIP of the Minerals category, so they are
+   * coupled to what the seed currently loads. MILESTONE-004 Part 1 promoted
+   * `solgar-gentle-iron-25` to `verified=yes` and re-seeded — iron is a
+   * mineral, so it became a legitimate third match and these two went red.
+   * Verified against the database before changing them: all three rows really
+   * are in `מינרלים` / `Minerals`, so the SEARCH was right and the
+   * EXPECTATION was stale.
+   *
+   * 🔴 They will break again as MILESTONE-004 Part 2 grows the catalogue.
+   * That is the coupling working as intended — a category search silently
+   * missing a new product would be the worse outcome — but see ISSUE-041.
+   */
+  it('relation — Hebrew category match ("מינרלים" -> all three Minerals-category products)', async () => {
     const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('מינרלים')}`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(['solgar-cal-mag-d3', 'superherb-magnesium-max-550']))
+    expect(new Set(body.items.map((i) => i.slug))).toEqual(
+      new Set(['solgar-cal-mag-d3', 'solgar-gentle-iron-25', 'superherb-magnesium-max-550']),
+    )
   })
 
-  it('relation — English category match ("Minerals" -> both Minerals-category products)', async () => {
+  it('relation — English category match ("Minerals" -> all three Minerals-category products)', async () => {
     const res = await fetch(`${baseUrl}/api/products?q=Minerals`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(['solgar-cal-mag-d3', 'superherb-magnesium-max-550']))
+    expect(new Set(body.items.map((i) => i.slug))).toEqual(
+      new Set(['solgar-cal-mag-d3', 'solgar-gentle-iron-25', 'superherb-magnesium-max-550']),
+    )
   })
 
   it('relation — Hebrew health-goal match ("עצמות" -> both Bone-Health-goal products)', async () => {
