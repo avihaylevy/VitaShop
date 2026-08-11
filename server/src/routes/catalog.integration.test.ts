@@ -114,6 +114,37 @@ describe('GET /api/categories', () => {
   })
 })
 
+/**
+ * 🔴 ADDED 2026-08-11 (MILESTONE-004 Part 2, batch 4) — the batch that took
+ * the catalogue past ONE PAGE for the first time (27 active products,
+ * pageSize server-fixed at 24, so 2 pages with 3 items on page 2).
+ *
+ * Ten assertions in this file compared a FULL read-only database query against
+ * `body.items` — a single page. That was correct while everything fitted on
+ * page 1, and one of them said so in its own name ("totalItems <= 24").
+ * Growing the catalogue was the entire point of MILESTONE-004, so those
+ * assertions had a built-in expiry date; this is it.
+ *
+ * Walking every page and concatenating is a STRONGER check than the original
+ * single-page comparison: it proves the ordering is globally correct ACROSS
+ * the page boundary, which is exactly where an offset/tie-break bug hides and
+ * where a one-page catalogue could never have caught one.
+ *
+ * ⚠️ Reads `totalPages` from the first response rather than looping until an
+ * empty page — an off-by-one in the server's own page maths would make an
+ * until-empty loop agree with the bug instead of exposing it.
+ */
+async function fetchAllPages(query = ''): Promise<{ slugs: string[]; first: ProductsEnvelope }> {
+  const sep = query ? '&' : ''
+  const first = (await fetch(`${baseUrl}/api/products?${query}${sep}page=1`).then((r) => r.json())) as ProductsEnvelope
+  const slugs = first.items.map((i) => i.slug)
+  for (let page = 2; page <= first.totalPages; page++) {
+    const body = (await fetch(`${baseUrl}/api/products?${query}${sep}page=${page}`).then((r) => r.json())) as ProductsEnvelope
+    slugs.push(...body.items.map((i) => i.slug))
+  }
+  return { slugs, first }
+}
+
 describe('GET /api/products', () => {
   it('returns 200 with the approved envelope shape', async () => {
     const res = await fetch(`${baseUrl}/api/products`)
@@ -122,7 +153,8 @@ describe('GET /api/products', () => {
     expect(Array.isArray(body.items)).toBe(true)
     expect(body.page).toBe(1)
     expect(body.pageSize).toBe(24)
-    expect(body.totalItems).toBe(body.items.length)
+    // A full page holds pageSize items; a final/only page holds the remainder.
+    expect(body.items.length).toBe(Math.min(body.totalItems, 24))
     expect(body.totalPages).toBe(Math.ceil(body.totalItems / 24))
   })
 
@@ -130,18 +162,19 @@ describe('GET /api/products', () => {
     const activeCount = await readonlyPrisma.product.count({ where: { isActive: true } })
     const res = await fetch(`${baseUrl}/api/products`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.length).toBe(activeCount)
+    // totalItems, not items.length — the catalogue no longer fits on one page.
+    expect(body.totalItems).toBe(activeCount)
   })
 
-  it('defaults to sort=newest — matches a direct read-only query with the same deterministic tie-break', async () => {
+  it('defaults to sort=newest — matches a direct read-only query with the same deterministic tie-break, ACROSS ALL PAGES', async () => {
     const expected = await readonlyPrisma.product.findMany({
       where: { isActive: true },
       orderBy: [{ createdAt: 'desc' }, { slug: 'asc' }],
       select: { slug: true },
     })
-    const res = await fetch(`${baseUrl}/api/products`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((item) => item.slug)).toEqual(expected.map((p) => p.slug))
+    const { slugs, first } = await fetchAllPages()
+    expect(first.totalPages).toBeGreaterThan(1) // fixture assumption: this really is a multi-page catalogue
+    expect(slugs).toEqual(expected.map((p) => p.slug))
   })
 
   it('serializes price as a two-decimal string, never a number', async () => {
@@ -563,9 +596,17 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
    * spurious extra; the per-item check confirms the returned page really is
    * category members rather than an equal-sized set of something else.
    *
-   * If a future product's free-text fields happen to contain the literal word
-   * "מינרלים"/"Minerals" this goes red for a real reason — read it, don't
-   * loosen it.
+   * 🔴 THAT PREDICTION CAME TRUE IN BATCH 4, and this is the amended version.
+   * `altman-multi-vitamin-women-60` sits in ויטמינים but its description reads
+   * "ויטמינים ומינרלים להשלמה תזונתית", so a search for "מינרלים" returns 8
+   * where the category holds 7. Checked against the database: the eighth hit
+   * is a genuine free-text match, so the ENDPOINT is right — a category-name
+   * search is a free-text search that happens to hit a category name, not a
+   * category filter, and suppressing the text match would be the bug.
+   *
+   * The expectation is therefore the category's members PLUS anything whose
+   * own text contains the term. The part that matters is unchanged and still
+   * asserted separately: every category member must be present.
    */
   async function activeSlugsInCategory(nameHe: string): Promise<Set<string>> {
     const rows = await readonlyPrisma.product.findMany({
@@ -576,20 +617,38 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     return new Set(rows.map((r) => r.slug))
   }
 
-  it('relation — Hebrew category match ("מינרלים" -> every Minerals-category product)', async () => {
-    const expected = await activeSlugsInCategory('מינרלים')
-    const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('מינרלים')}`)
+  /** Category members PLUS any product whose own text contains the term. */
+  async function expectedForCategoryTerm(nameHe: string, term: string): Promise<Set<string>> {
+    const members = await activeSlugsInCategory(nameHe)
+    const like = { contains: term, mode: 'insensitive' } as const
+    const byText = await readonlyPrisma.product.findMany({
+      where: {
+        isActive: true,
+        OR: [{ nameHe: like }, { nameEn: like }, { descriptionHe: like }, { descriptionEn: like }],
+      },
+      select: { slug: true },
+    })
+    return new Set([...members, ...byText.map((r) => r.slug)])
+  }
+
+  async function assertCategorySearch(nameHe: string, term: string): Promise<void> {
+    const members = await activeSlugsInCategory(nameHe)
+    const expected = await expectedForCategoryTerm(nameHe, term)
+    const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent(term)}`)
     const body = (await res.json()) as ProductsEnvelope
     expect(body.totalItems).toBe(expected.size)
     for (const item of body.items) expect(expected).toContain(item.slug)
+    // The property that actually matters: no category member is ever missed.
+    const returned = new Set(body.items.map((i) => i.slug))
+    for (const slug of members) expect(returned.has(slug)).toBe(true)
+  }
+
+  it('relation — Hebrew category match ("מינרלים" -> every Minerals-category product, plus text matches)', async () => {
+    await assertCategorySearch('מינרלים', 'מינרלים')
   })
 
-  it('relation — English category match ("Minerals" -> every Minerals-category product)', async () => {
-    const expected = await activeSlugsInCategory('מינרלים')
-    const res = await fetch(`${baseUrl}/api/products?q=Minerals`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(body.totalItems).toBe(expected.size)
-    for (const item of body.items) expect(expected).toContain(item.slug)
+  it('relation — English category match ("Minerals" -> every Minerals-category product, plus text matches)', async () => {
+    await assertCategorySearch('מינרלים', 'Minerals')
   })
 
   it('relation — Hebrew health-goal match ("עצמות" -> both Bone-Health-goal products)', async () => {
@@ -786,9 +845,8 @@ describe('GET /api/products — sorting (Checkpoint D)', () => {
       orderBy: [{ price: 'asc' }, { createdAt: 'desc' }, { slug: 'asc' }],
       select: { slug: true },
     })
-    const res = await fetch(`${baseUrl}/api/products?sort=price_asc`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((i) => i.slug)).toEqual(expected.map((p) => p.slug))
+    const { slugs } = await fetchAllPages('sort=price_asc')
+    expect(slugs).toEqual(expected.map((p) => p.slug))
   })
 
   it('price_desc — matches a direct read-only query with the same tie-break', async () => {
@@ -797,9 +855,8 @@ describe('GET /api/products — sorting (Checkpoint D)', () => {
       orderBy: [{ price: 'desc' }, { createdAt: 'desc' }, { slug: 'asc' }],
       select: { slug: true },
     })
-    const res = await fetch(`${baseUrl}/api/products?sort=price_desc`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((i) => i.slug)).toEqual(expected.map((p) => p.slug))
+    const { slugs } = await fetchAllPages('sort=price_desc')
+    expect(slugs).toEqual(expected.map((p) => p.slug))
   })
 
   it('newest — matches a direct read-only query with the same tie-break', async () => {
@@ -808,15 +865,66 @@ describe('GET /api/products — sorting (Checkpoint D)', () => {
       orderBy: [{ createdAt: 'desc' }, { slug: 'asc' }],
       select: { slug: true },
     })
-    const res = await fetch(`${baseUrl}/api/products?sort=newest`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((i) => i.slug)).toEqual(expected.map((p) => p.slug))
+    const { slugs } = await fetchAllPages('sort=newest')
+    expect(slugs).toEqual(expected.map((p) => p.slug))
   })
 
-  it('price_asc and price_desc are true reversals of each other under the tie-break (no ties silently reordered)', async () => {
-    const asc = await fetch(`${baseUrl}/api/products?sort=price_asc`).then((r) => r.json()) as ProductsEnvelope
-    const desc = await fetch(`${baseUrl}/api/products?sort=price_desc`).then((r) => r.json()) as ProductsEnvelope
-    expect(asc.items.map((i) => i.slug)).toEqual([...desc.items.map((i) => i.slug)].reverse())
+  /**
+   * 🔴 REWRITTEN 2026-08-11 (MILESTONE-004 Part 2, batch 4) — and the
+   * ASSERTION was wrong, not merely stale.
+   *
+   * It compared `asc` against `desc.reverse()` and demanded exact equality.
+   * That held only while every price was unique. Batch 4 produced the first
+   * genuine tie: `altman-licorice-60` and `altman-iron-comfort-30` are both
+   * ₪141.10 — two real products whose real prices coincide, each confirmed on
+   * its own manufacturer page.
+   *
+   * 🔴 With a tie present, a STRICT REVERSAL IS THE WRONG EXPECTATION — it
+   * directly contradicts this test's own name. Both sorts apply the same
+   * trailing tie-break (`createdAt desc, slug asc`), so tied products keep the
+   * SAME relative order in both directions. A strict reversal would require
+   * them to swap, which is exactly the "ties silently reordered" this test
+   * exists to forbid. The endpoint is right; the assertion had a hidden
+   * precondition ("all prices distinct") that nobody stated and the data has
+   * now falsified.
+   *
+   * What is asserted instead is the property actually wanted:
+   *   · the sequence of PRICE GROUPS is reversed, and
+   *   · WITHIN a tied group the order is IDENTICAL in both directions.
+   * Both are checked, and both would break if the tie-break were dropped or
+   * made direction-dependent.
+   */
+  it('price_asc and price_desc reverse the price GROUPS while the tie-break holds order WITHIN a group', async () => {
+    const asc = await fetchAllPages('sort=price_asc')
+    const desc = await fetchAllPages('sort=price_desc')
+    expect(asc.first.totalPages).toBeGreaterThan(1) // fixture assumption: multi-page
+    expect(asc.slugs.length).toBe(desc.slugs.length)
+
+    const priceBySlug = new Map(
+      (await readonlyPrisma.product.findMany({ where: { isActive: true }, select: { slug: true, price: true } }))
+        .map((p) => [p.slug, p.price.toString()] as const),
+    )
+    const groups = (slugs: string[]): Array<{ price: string; slugs: string[] }> => {
+      const out: Array<{ price: string; slugs: string[] }> = []
+      for (const slug of slugs) {
+        const price = priceBySlug.get(slug)
+        if (price === undefined) throw new Error(`returned slug not in the database: ${slug}`)
+        const last = out[out.length - 1]
+        if (last !== undefined && last.price === price) last.slugs.push(slug)
+        else out.push({ price, slugs: [slug] })
+      }
+      return out
+    }
+    const ascGroups = groups(asc.slugs)
+    const descGroups = groups(desc.slugs)
+
+    // The tie this test now depends on — assert it exists, or the interesting
+    // half below is vacuous and nobody would notice.
+    expect(ascGroups.some((g) => g.slugs.length > 1)).toBe(true)
+
+    expect(ascGroups.map((g) => g.price)).toEqual([...descGroups.map((g) => g.price)].reverse())
+    const descByPrice = new Map(descGroups.map((g) => [g.price, g.slugs] as const))
+    for (const g of ascGroups) expect(g.slugs).toEqual(descByPrice.get(g.price))
   })
 })
 
@@ -842,9 +950,9 @@ describe('GET /api/products — sort=popularity execution (Checkpoint F)', () =>
   })
 
   it("today's empty order data means popularity output equals newest's output (the documented all-tie behaviour)", async () => {
-    const popularity = await fetch(`${baseUrl}/api/products?sort=popularity`).then((r) => r.json()) as ProductsEnvelope
-    const newest = await fetch(`${baseUrl}/api/products?sort=newest`).then((r) => r.json()) as ProductsEnvelope
-    expect(popularity.items.map((i) => i.slug)).toEqual(newest.items.map((i) => i.slug))
+    const popularity = await fetchAllPages('sort=popularity')
+    const newest = await fetchAllPages('sort=newest')
+    expect(popularity.slugs).toEqual(newest.slugs)
   })
 
   it('composes with filters — popularity + category', async () => {
@@ -1048,28 +1156,60 @@ describe('GET /api/products — stable-ID existence + active-usage validation (C
 })
 
 describe('GET /api/products — pagination (Checkpoint D)', () => {
-  it('page 1 with pageSize 24 and totalItems <= 24 returns every active product on one page', async () => {
+  /**
+   * 🔴 REWRITTEN 2026-08-11 (MILESTONE-004 Part 2, batch 4). These two encoded
+   * a SINGLE-PAGE catalogue as a fixture assumption — one threw outright above
+   * 24 products, the other used `page=2` as its example of a PAST-THE-END
+   * page. MILESTONE-004 existed to make that false: 27 active products,
+   * pageSize server-fixed at 24, so page 2 is now a real page with 3 items.
+   *
+   * 🔴 The old `page=2` test is the one worth noticing. It did not just go
+   * stale — it had been asserting `totalPages === 1` and an EMPTY page 2,
+   * which is now the exact opposite of correct behaviour. Left "fixed" by
+   * bumping the number it would have kept passing while testing nothing about
+   * a real second page.
+   *
+   * They are replaced by a genuine multi-page pair: page 2 holds the
+   * remainder and does not overlap page 1, and past-the-end is derived from
+   * `totalPages` rather than hardcoded.
+   */
+  it('a multi-page catalogue: page 2 holds the remainder and does not overlap page 1', async () => {
     const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
-    if (totalItems > 24) throw new Error('fixture assumption failed: more than 24 active products — pagination fixture needs revisiting')
-    const res = await fetch(`${baseUrl}/api/products`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(body.page).toBe(1)
-    expect(body.pageSize).toBe(24)
-    expect(body.totalItems).toBe(totalItems)
-    expect(body.totalPages).toBe(totalItems === 0 ? 0 : 1)
-    expect(body.items).toHaveLength(totalItems)
+    expect(totalItems).toBeGreaterThan(24) // the point of MILESTONE-004 — pagination has something to paginate
+
+    const page1 = (await fetch(`${baseUrl}/api/products?page=1`).then((r) => r.json())) as ProductsEnvelope
+    const page2 = (await fetch(`${baseUrl}/api/products?page=2`).then((r) => r.json())) as ProductsEnvelope
+
+    expect(page1.totalItems).toBe(totalItems)
+    expect(page1.totalPages).toBe(Math.ceil(totalItems / 24))
+    expect(page1.items).toHaveLength(24)
+
+    expect(page2.page).toBe(2)
+    expect(page2.totalItems).toBe(totalItems)
+    expect(page2.items).toHaveLength(Math.min(totalItems - 24, 24))
+    expect(page2.items.length).toBeGreaterThan(0)
+
+    // No overlap and no gap — the two pages partition the catalogue.
+    const s1 = new Set(page1.items.map((i) => i.slug))
+    const s2 = new Set(page2.items.map((i) => i.slug))
+    for (const slug of s2) expect(s1.has(slug)).toBe(false)
+    expect(s1.size + s2.size).toBe(Math.min(totalItems, 48))
   })
 
   it('a past-the-end page returns a truthful empty page — items: [], page > totalPages, totalItems > 0 — not canonicalized server-side', async () => {
     const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
     if (totalItems === 0) throw new Error('fixture assumption failed: no active products at all')
-    const res = await fetch(`${baseUrl}/api/products?page=2`)
+    // Derived from totalPages, never hardcoded — that is what made the
+    // previous version silently wrong the moment the catalogue grew.
+    const totalPages = Math.ceil(totalItems / 24)
+    const pastTheEnd = totalPages + 1
+    const res = await fetch(`${baseUrl}/api/products?page=${pastTheEnd}`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as ProductsEnvelope
     expect(body.items).toEqual([])
-    expect(body.page).toBe(2)
+    expect(body.page).toBe(pastTheEnd)
     expect(body.totalItems).toBe(totalItems)
-    expect(body.totalPages).toBe(1)
+    expect(body.totalPages).toBe(totalPages)
     expect(body.page).toBeGreaterThan(body.totalPages)
   })
 
@@ -1113,9 +1253,22 @@ describe('GET /api/products — pagination (Checkpoint D)', () => {
     const res = await fetch(`${baseUrl}/api/products?page=1`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as ProductsEnvelope
-    expect(body.items).toHaveLength(totalItems)
+    // A full page holds pageSize items once the catalogue outgrows one page
+    // (batch 4: 27 active). What this test is about is the guard not blocking
+    // a valid page, so it asserts the page is FULL and the skip/take are right.
+    expect(body.items).toHaveLength(Math.min(totalItems, 24))
     expect(findManySpy).toHaveBeenCalledTimes(1)
     expect(findManySpy).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 24 }))
+  })
+
+  it('the safe-execution guard does not block page 2 either — skip is computed, not zeroed', async () => {
+    const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
+    expect(totalItems).toBeGreaterThan(24) // fixture assumption: a real page 2 exists
+    const findManySpy = vi.spyOn(appPrisma.product, 'findMany')
+    const res = await fetch(`${baseUrl}/api/products?page=2`)
+    expect(res.status).toBe(200)
+    expect(findManySpy).toHaveBeenCalledTimes(1)
+    expect(findManySpy).toHaveBeenCalledWith(expect.objectContaining({ skip: 24, take: 24 }))
   })
 })
 
