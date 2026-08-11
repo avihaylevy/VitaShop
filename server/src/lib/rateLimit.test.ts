@@ -6,6 +6,11 @@ import { NullEmailProvider } from './emailService.js'
 import { AUTH_RATE_LIMITS, createAuthRateLimiters, RATE_LIMIT_RESPONSE } from './rateLimit.js'
 import { createAuthRouter } from '../routes/auth.js'
 
+/** Minimal shape of an Express router layer — enough to walk the stack. */
+interface RouterLayer {
+  route?: { path: string; methods: Record<string, boolean>; stack: unknown[] }
+}
+
 /**
  * Checkpoint G — rate limiting. Closes O1.
  *
@@ -211,6 +216,44 @@ describe('G — every auth route is limited', () => {
     expect(AUTH_RATE_LIMITS.passwordResetCompleteIp.limit).toBeGreaterThan(
       AUTH_RATE_LIMITS.passwordResetIp.limit,
     )
+  })
+
+  it('🔴 EVERY route mounted on the auth router carries a limiter', async () => {
+    // THE COVERAGE ASSERTION, and the reason it exists: Checkpoint H added a
+    // seventh auth route (`GET /auth/session`) and it slipped past Checkpoint
+    // G's stated principle that every auth route is limited — the same shape
+    // of gap as clause A7 falling between checkpoints.
+    //
+    // 🔴 "Every auth route is limited" is a property that can be CHECKED.
+    // "Every auth route except the ones judged cheap" is not — it degrades
+    // into a judgement call per route, made by whoever adds the next one,
+    // usually without noticing there was a rule.
+    //
+    // This walks the router's real stack rather than a hand-kept list, so an
+    // eighth route is covered the moment it is mounted.
+    const { createAuthRouter } = await import('../routes/auth.js')
+    const router = createAuthRouter({
+      prisma: {} as never,
+      emailService: new NullEmailProvider(),
+      appBaseUrl: 'http://localhost:5173',
+    })
+
+    // Express keeps one layer per mounted route; `route.stack` holds that
+    // route's own handler chain — limiters plus the final handler.
+    const layers = (router as unknown as { stack: RouterLayer[] }).stack.filter((l) => l.route)
+
+    expect(layers.length).toBeGreaterThan(0)
+
+    const unlimited = layers
+      .filter((layer) => (layer.route?.stack.length ?? 0) < 2)
+      .map((layer) => `${Object.keys(layer.route?.methods ?? {}).join('/')} ${layer.route?.path}`)
+
+    // A route with a single handler has no limiter in front of it. Anything
+    // that genuinely should not be limited goes on the exemption list below,
+    // BY NAME and with a reason — never by being quietly omitted.
+    const EXEMPT: string[] = []
+
+    expect(unlimited.filter((r) => !EXEMPT.includes(r))).toEqual([])
   })
 
   it('every configured limit is a positive number with a window', () => {

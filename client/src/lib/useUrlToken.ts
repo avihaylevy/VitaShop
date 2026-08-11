@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 /**
  * MILESTONE-006 Checkpoint H, clause H1 — read a token out of the URL, then
@@ -22,20 +22,18 @@ import { useEffect, useRef, useState } from 'react'
  * closes the rest by replacing the entry immediately on mount.
  *
  * 🔴 `history.replaceState`, NOT `pushState` — pushState would leave the
- * token-bearing entry in history, which is the thing being removed. And the
- * token is captured into a ref BEFORE the replace, because after it the query
- * string is gone and there is nothing left to read.
+ * token-bearing entry in history, which is the thing being removed.
  */
 export function useUrlToken(paramName = 'token'): string | null {
-  // Read synchronously during the first render: an effect would run after the
-  // browser has already had the URL, and a StrictMode double-mount would find
-  // the query string already stripped on the second pass.
-  const captured = useRef<string | null>(null)
+  // 🔴 Read synchronously during the FIRST RENDER, in the state initializer —
+  // not in an effect. The effect below strips the query string, so by the time
+  // any effect runs the token may already be gone; a StrictMode double-mount
+  // would then find nothing on its second pass and the form would break on its
+  // own remount. The state holds the value from here on, which is why nothing
+  // needs to re-read the URL.
   const [token] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
-    const value = new URLSearchParams(window.location.search).get(paramName)
-    captured.current = value
-    return value
+    return new URLSearchParams(window.location.search).get(paramName)
   })
 
   useEffect(() => {

@@ -200,7 +200,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   // unauthenticated caller learns only about their own request, which they
   // already knew; there is no account to enumerate here because the answer
   // does not depend on any address the caller supplies.
-  router.get('/auth/session', (req, res) => {
+  router.get('/auth/session', limit.session, (req, res) => {
     const userId = (req.session as unknown as { userId?: string } | undefined)?.userId
     res.json({ authenticated: typeof userId === 'string' && userId.length > 0 })
   })

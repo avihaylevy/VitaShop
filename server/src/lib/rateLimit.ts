@@ -133,6 +133,18 @@ export const AUTH_RATE_LIMITS = {
   passwordResetCompleteIp: { windowMs: HOUR, limit: 20 },
   verifyEmail: { windowMs: HOUR, limit: 20 },
   logout: { windowMs: 15 * MINUTE, limit: 60 },
+  // 🔴 GENEROUS ON PURPOSE — 16/minute. The client calls this on mount of
+  // every gated view, and React StrictMode double-mounts in development, so a
+  // tight ceiling would break the app rather than protect it.
+  //
+  // It is limited at all because "every auth route is limited" is a property
+  // that can be CHECKED (see the coverage test); "every auth route except the
+  // ones judged cheap" is not. This one is cheap — a session-store read
+  // returning a boolean, no argon2, no write — but it is still an
+  // unauthenticated endpoint reaching Postgres, and it was added in Checkpoint
+  // H and slipped past G's principle, which is exactly the gap the coverage
+  // test now closes.
+  session: { windowMs: 15 * MINUTE, limit: 240 },
 } as const
 
 /**
@@ -149,6 +161,7 @@ export interface AuthRateLimiters {
   passwordResetCompleteIp: RequestHandler
   verifyEmail: RequestHandler
   logout: RequestHandler
+  session: RequestHandler
 }
 
 export function createAuthRateLimiters(): AuthRateLimiters {
@@ -190,6 +203,8 @@ export function createAuthRateLimiters(): AuthRateLimiters {
     // Nothing to protect — a limit only so the route is not an unbounded
     // no-auth endpoint.
     logout: rateLimit({ ...SHARED, ...AUTH_RATE_LIMITS.logout, keyGenerator: ipKey }),
+
+    session: rateLimit({ ...SHARED, ...AUTH_RATE_LIMITS.session, keyGenerator: ipKey }),
   }
 }
 
