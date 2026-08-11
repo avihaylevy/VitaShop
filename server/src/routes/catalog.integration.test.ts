@@ -246,11 +246,10 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
     })
     if (expected.length === 0) throw new Error('fixture assumption failed: no active product in category "מינרלים"')
 
-    const res = await fetch(`${baseUrl}/api/products?category=${category.slug}`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
-    expect(body.totalItems).toBe(expected.length)
+    const { slugs, first } = await fetchAllPages(`category=${category.slug}`)
+    expect(first.totalItems).toBeGreaterThan(0)
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
+    expect(first.totalItems).toBe(expected.length)
   })
 
   it('brand — a single id matches only that brand\'s active products', async () => {
@@ -261,9 +260,8 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
       select: { slug: true },
     })
 
-    const res = await fetch(`${baseUrl}/api/products?brand=${brand.id}`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
+    const { slugs } = await fetchAllPages(`brand=${brand.id}`)
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   it('brand — repeated values are OR-within: the union of both brands\' active products', async () => {
@@ -275,9 +273,8 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
       select: { slug: true },
     })
 
-    const res = await fetch(`${baseUrl}/api/products?brand=${a!.id}&brand=${b!.id}`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
+    const { slugs } = await fetchAllPages(`brand=${a!.id}&brand=${b!.id}`)
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   it('ingredient — matches active products carrying that active ingredient (relation "some")', async () => {
@@ -288,10 +285,9 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
       select: { slug: true },
     })
 
-    const res = await fetch(`${baseUrl}/api/products?ingredient=${link.activeIngredientId}`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
-    expect(body.totalItems).toBeGreaterThan(0)
+    const { slugs, first } = await fetchAllPages(`ingredient=${link.activeIngredientId}`)
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
+    expect(first.totalItems).toBeGreaterThan(0)
   })
 
   it('healthGoal — matches active products carrying that health goal (relation "some")', async () => {
@@ -302,10 +298,9 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
       select: { slug: true },
     })
 
-    const res = await fetch(`${baseUrl}/api/products?healthGoal=${link.healthGoalId}`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
-    expect(body.totalItems).toBeGreaterThan(0)
+    const { slugs, first } = await fetchAllPages(`healthGoal=${link.healthGoalId}`)
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
+    expect(first.totalItems).toBeGreaterThan(0)
   })
 
   it('dosageForm — repeated values are OR-within', async () => {
@@ -321,9 +316,8 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
       select: { slug: true },
     })
 
-    const res = await fetch(`${baseUrl}/api/products?dosageForm=${f1}&dosageForm=${f2}`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
+    const { slugs } = await fetchAllPages(`dosageForm=${f1}&dosageForm=${f2}`)
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   it('AND across groups: brand + dosageForm narrows to their intersection, not their union', async () => {
@@ -334,11 +328,10 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
     if (!form) throw new Error('fixture assumption failed: brand has no active products')
     const expected = brandOnly.filter((p) => p.dosageForm === form)
 
-    const res = await fetch(`${baseUrl}/api/products?brand=${brand.id}&dosageForm=${form}`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
+    const { slugs, first } = await fetchAllPages(`brand=${brand.id}&dosageForm=${form}`)
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
     // Intersection must never exceed either single-filter result.
-    expect(body.totalItems).toBeLessThanOrEqual(brandOnly.length)
+    expect(first.totalItems).toBeLessThanOrEqual(brandOnly.length)
   })
 
   /*
@@ -371,9 +364,8 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
       where: { isActive: true, price: { gte: '60', lte: '80' } },
       select: { slug: true },
     })
-    const res = await fetch(`${baseUrl}/api/products?minPrice=60&maxPrice=80`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
+    const { slugs } = await fetchAllPages('minPrice=60&maxPrice=80')
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   it('inStock=true — matches a direct read-only query for stockQuantity > 0', async () => {
@@ -693,6 +685,8 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     // substring matching, not a whole-word/prefix search.
     const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('טמין')}`)
     const body = (await res.json()) as ProductsEnvelope
+    // Single page is sufficient here — the claim is only that a mid-word
+    // fragment matches at all, not which products it returns.
     expect(body.totalItems).toBeGreaterThan(0)
   })
 

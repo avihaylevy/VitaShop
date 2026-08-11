@@ -57,8 +57,8 @@ its verdict.**
 
 ### 🔴 The family this belongs to — recognising the shape is what keeps catching them
 
-Six instances so far, all with one signature: **the check reports success while
-verifying nothing.**
+Seven instances so far. Six share one signature — **the check reports success
+while verifying nothing** — and the seventh is that signature inverted.
 
 ```
 1  a ONE-SIDED timing ratio          passed while the timing was backwards
@@ -68,10 +68,33 @@ verifying nothing.**
                                      would have kept it green after a bump
 5  the badge-only card-height fix    would have looked done at 386 vs 406
 6  a pipe swallowing an exit code    BUILD_OK over a failed build
+7  a page-wide "gummy" screen        flagged ALL EIGHT candidates by
+                                     matching the site's global nav
 ```
 
-**None of these fail loudly. Every one of them passes.** That is what makes the
-family dangerous and what makes the counter-move always the same:
+🔴 **INSTANCE 7 IS THE MIRROR IMAGE, and it belongs in the same family.** The
+first six report SUCCESS while verifying nothing. The gummy screen reported
+**FAILURE** while verifying nothing — it searched the whole page for
+`סוכריות|גאמיס|גומי`, matched the site's global navigation, and rejected every
+candidate including five that were plainly capsules.
+
+⚠️ **A screen that rejects everything reads as diligence**, which is exactly why
+it is dangerous: an over-eager filter looks like caution and quietly costs real
+candidates. Had it been trusted, batch 5 would have found "no viable products"
+and the conclusion would have been recorded as a sourcing constraint. Same root
+as the other six — **the check was never confronted with a case whose answer was
+already known.**
+
+```
+🔴 A SCREEN NEEDS BOTH CONTROLS, not just one:
+   feed it something that MUST pass and something that MUST fail.
+   All-pass and all-reject are equally strong evidence of a broken
+   check, and neither looks like an error.
+```
+
+**None of the first six fail loudly; every one of them passes. The seventh
+never passes.** Both shapes come from one root, and the counter-move is the
+same:
 
 ```
 🔴 BREAK IT ON PURPOSE AND CONFIRM IT GOES RED.
