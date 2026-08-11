@@ -196,6 +196,10 @@ const DOSAGE_FORM_EN: Record<DosageForm, string> = {
 const BRAND_EN: Record<string, string> = {
   'סולגאר': 'Solgar',
   'סופהרב': 'Supherb',
+  // MILESTONE-004 batch 1. Taken from the manufacturer's own English
+  // branding on altman.co.il ("Altman"), not transliterated by ear —
+  // the same standard the two rows above were held to.
+  'אלטמן': 'Altman',
 }
 
 // schema.prisma DosageForm enum: CAPSULE/TABLET/DROPS/POWDER/SYRUP, each

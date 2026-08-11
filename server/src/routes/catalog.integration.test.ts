@@ -419,32 +419,66 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
   })
 
   /**
-   * ⚠️ These two assert MEMBERSHIP of the Minerals category, so they are
-   * coupled to what the seed currently loads. MILESTONE-004 Part 1 promoted
-   * `solgar-gentle-iron-25` to `verified=yes` and re-seeded — iron is a
-   * mineral, so it became a legitimate third match and these two went red.
-   * Verified against the database before changing them: all three rows really
-   * are in `מינרלים` / `Minerals`, so the SEARCH was right and the
-   * EXPECTATION was stale.
+   * These two assert that searching a CATEGORY NAME returns that category's
+   * members — the relation join, not a fixed roster.
    *
-   * 🔴 They will break again as MILESTONE-004 Part 2 grows the catalogue.
-   * That is the coupling working as intended — a category search silently
-   * missing a new product would be the worse outcome — but see ISSUE-041.
+   * 🔴 REWRITTEN 2026-08-11 (MILESTONE-004 Part 2, batch 1) — RESOLVES
+   * ISSUE-041 for this pair. They previously hardcoded three slugs, and had
+   * already been hand-patched once when Part 1 promoted
+   * `solgar-gentle-iron-25`. Batch 1 added three more genuine minerals
+   * (magnesium citrate, magnesium bisglycinate, zinc lozenges) and they went
+   * red a second time.
+   *
+   * 🔴 Both times the ENDPOINT was correct and the EXPECTATION was stale —
+   * checked against the database before either edit, never inferred from the
+   * failure text. A hardcoded roster turns every catalogue addition into a
+   * red suite, and a suite that is expected to go red is a suite whose
+   * failures stop being read. The expected set is now derived from the same
+   * database the API reads, so it tracks the catalogue at any size.
+   *
+   * ⚠️ Deriving the expectation from the DB, NOT from a second call to the
+   * endpoint under test — that would be circular and would pass even if the
+   * category join were dropped entirely.
+   *
+   * 🔴 Asserted on `totalItems`, not on a set comparison of `items` —
+   * `pageSize` is server-fixed at 24 (§4a, `catalogPagination.ts`) and is NOT
+   * client-settable, so comparing the first page against the whole category
+   * would start failing the moment a category passes 24 products. That is the
+   * same size-coupling this rewrite exists to remove, just with a higher
+   * threshold. `totalItems` counts across pages, so it holds at any size.
+   *
+   * Both directions are covered: `totalItems` equal to the category's size
+   * catches a member silently missed (the failure that matters) and a
+   * spurious extra; the per-item check confirms the returned page really is
+   * category members rather than an equal-sized set of something else.
+   *
+   * If a future product's free-text fields happen to contain the literal word
+   * "מינרלים"/"Minerals" this goes red for a real reason — read it, don't
+   * loosen it.
    */
-  it('relation — Hebrew category match ("מינרלים" -> all three Minerals-category products)', async () => {
+  async function activeSlugsInCategory(nameHe: string): Promise<Set<string>> {
+    const rows = await readonlyPrisma.product.findMany({
+      where: { isActive: true, category: { nameHe } },
+      select: { slug: true },
+    })
+    if (rows.length === 0) throw new Error(`fixture assumption failed: no active products in category "${nameHe}"`)
+    return new Set(rows.map((r) => r.slug))
+  }
+
+  it('relation — Hebrew category match ("מינרלים" -> every Minerals-category product)', async () => {
+    const expected = await activeSlugsInCategory('מינרלים')
     const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('מינרלים')}`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(
-      new Set(['solgar-cal-mag-d3', 'solgar-gentle-iron-25', 'superherb-magnesium-max-550']),
-    )
+    expect(body.totalItems).toBe(expected.size)
+    for (const item of body.items) expect(expected).toContain(item.slug)
   })
 
-  it('relation — English category match ("Minerals" -> all three Minerals-category products)', async () => {
+  it('relation — English category match ("Minerals" -> every Minerals-category product)', async () => {
+    const expected = await activeSlugsInCategory('מינרלים')
     const res = await fetch(`${baseUrl}/api/products?q=Minerals`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(
-      new Set(['solgar-cal-mag-d3', 'solgar-gentle-iron-25', 'superherb-magnesium-max-550']),
-    )
+    expect(body.totalItems).toBe(expected.size)
+    for (const item of body.items) expect(expected).toContain(item.slug)
   })
 
   it('relation — Hebrew health-goal match ("עצמות" -> both Bone-Health-goal products)', async () => {
