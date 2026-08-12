@@ -232,7 +232,13 @@ const BRAND_EN: Record<string, string> = {
   // source's own English usage, not transliterated: truforme.com writes
   // "briamil" in its own URLs and page text, and moraz.co.il titles the
   // product "SALUS - סירופ מולטי ויטמין".
+  // 🔴 SUPERSEDED 2026-08-12 by DEC-032 "BRAND = MANUFACTURER, NOT PRODUCT
+  // LINE". בריאמיל is a TruForMe product LINE, not a brand; the row that used
+  // it now says טרו פור מי. The entry is KEPT because a stale CSV or a
+  // re-import would otherwise fail the seed on a value this file once wrote —
+  // it costs nothing and removing it buys nothing.
   'בריאמיל': 'Briamil',
+  'טרו פור מי': 'TruForMe',
   'סלוס': 'Salus',
   // MILESTONE-004 Part 4, cohort B. Already Latin on the manufacturer's own
   // site and in the CSV, so this maps to itself — the entry exists because the
