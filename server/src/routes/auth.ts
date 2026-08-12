@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { peekGuestCartId } from '../lib/guestSession.js'
 import { promoteGuestCart } from '../lib/promoteGuestCart.js'
 import type { PrismaClient } from '@prisma/client'
 import type { EmailService } from '../lib/emailService.js'
@@ -67,7 +68,16 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     // ── Step 1: CAPTURE the guest session identity, before anything else ──
     // 🔴 Must be read here. After step 5 this is a different value, and
     // `Cart.session_id` is keyed to THIS one.
-    const guestSessionId = req.sessionID
+    // 🔴 THE CART IDENTITY, NOT THE SESSION ID. `Cart.sessionId` is written
+    // from `guestCartId` — a separate randomUUID minted by Checkpoint B into
+    // the session — precisely BECAUSE `saveUninitialized: false` means
+    // req.sessionID does not recur. Passing req.sessionID here made
+    // Checkpoints E and F NO-OPS in production: the lookup could never match,
+    // and it reported `promoted: false` with no error. See ISSUE-069.
+    //
+    // 🔴 `peek`, never `ensure`: neither registration nor login may MINT a
+    // cart identity for a visitor who never had a cart.
+    const guestSessionId = peekGuestCartId(req)
 
     // ── Step 2: validate. Server-side, §3.4 / A11. Reject before any write ─
     const parsed = parseRegistration(req.body)
@@ -134,7 +144,16 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     // ── Step 1: capture the guest identity, before regeneration ────────────
     // Same reason as registration: `Cart.session_id` IS this value, and after
     // step 5 it is a different one. O8's precondition applies equally here.
-    const guestSessionId = req.sessionID
+    // 🔴 THE CART IDENTITY, NOT THE SESSION ID. `Cart.sessionId` is written
+    // from `guestCartId` — a separate randomUUID minted by Checkpoint B into
+    // the session — precisely BECAUSE `saveUninitialized: false` means
+    // req.sessionID does not recur. Passing req.sessionID here made
+    // Checkpoints E and F NO-OPS in production: the lookup could never match,
+    // and it reported `promoted: false` with no error. See ISSUE-069.
+    //
+    // 🔴 `peek`, never `ensure`: neither registration nor login may MINT a
+    // cart identity for a visitor who never had a cart.
+    const guestSessionId = peekGuestCartId(req)
 
     const body = req.body as { email?: unknown; password?: unknown }
     if (typeof body?.email !== 'string' || typeof body?.password !== 'string') {

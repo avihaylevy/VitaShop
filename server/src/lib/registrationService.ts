@@ -72,7 +72,9 @@ export interface RegistrationOutcome {
  */
 export async function registerUser(
   input: RegistrationInput & { phone: string },
-  guestSessionId: string,
+  // 🔴 NULL when the visitor never created a guest cart — the common case.
+  // promoteGuestCart treats null as "nothing to promote".
+  guestSessionId: string | null,
   deps: RegistrationDeps,
 ): Promise<RegistrationOutcome> {
   const now = deps.now?.() ?? new Date()
@@ -147,7 +149,7 @@ function isEmailUniqueViolation(error: unknown): boolean {
 
 async function createUserAndToken(
   input: RegistrationInput & { phone: string },
-  guestSessionId: string,
+  guestSessionId: string | null,
   deps: RegistrationDeps,
   built: { passwordHash: string; token: ReturnType<typeof issueVerificationToken>; now: Date },
 ): Promise<RegistrationOutcome> {
