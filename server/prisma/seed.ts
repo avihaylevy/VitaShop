@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient, Prisma, type DosageForm } from '@prisma/client'
 import { validateAllergenFields } from '../src/lib/allergenInfo.js'
+import { parseCsvFile } from '../src/lib/productsCsv.js'
 import {
   syncProductHealthGoals,
   syncProductImages,
@@ -46,118 +47,6 @@ assertLocalDevTarget()
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
-
-// ── Strict RFC4180 CSV parser — no new dependency added (CLAUDE.md: adding
-// a dependency requires a stop-and-ask; this is a small, fully-specified
-// grammar). A quote character is legal ONLY as the delimiter of a quoted
-// field (opening/closing) or doubled inside one ("" -> literal "). A bare
-// quote anywhere else is a malformed file, not something to route around —
-// it throws with the exact line number rather than silently merging or
-// "recovering" rows. The source CSV itself must be valid; see
-// assets/products/ingredients.csv, corrected 2026-08-02 to properly quote
-// every value containing a literal " (מ"ג -> "מ""ג", etc). ────────────────
-function parseCsv(text: string): string[][] {
-  const cleaned = text.replace(/^﻿/, '') // strip UTF-8 BOM — assets/README.md: "UTF-8 with BOM"
-  const rows: string[][] = []
-  let row: string[] = []
-  let field = ''
-  let inQuotes = false
-  let fieldWasQuoted = false
-  let i = 0
-  let line = 1
-  while (i < cleaned.length) {
-    const c = cleaned[i]
-    if (inQuotes) {
-      if (c === '"') {
-        if (cleaned[i + 1] === '"') {
-          field += '"'
-          i += 2
-          continue
-        }
-        inQuotes = false
-        i++
-        const next = cleaned[i]
-        if (next !== undefined && next !== ',' && next !== '\r' && next !== '\n') {
-          throw new Error(
-            `Malformed CSV at line ${line}: character "${next}" immediately follows a closing quote — ` +
-              `only a comma or a line break may follow the closing " of a quoted field.`,
-          )
-        }
-        continue
-      }
-      if (c === '\n') line++
-      field += c
-      i++
-      continue
-    }
-    if (c === '"') {
-      if (field.length > 0 || fieldWasQuoted) {
-        throw new Error(
-          `Malformed CSV at line ${line}: a " appeared outside a quoted field (field so far: "${field}"). ` +
-            `A literal quote must be escaped by wrapping the whole field in quotes and doubling it, e.g. "מ""ג".`,
-        )
-      }
-      inQuotes = true
-      fieldWasQuoted = true
-      i++
-      continue
-    }
-    if (c === ',') {
-      row.push(field)
-      field = ''
-      fieldWasQuoted = false
-      i++
-      continue
-    }
-    if (c === '\r') {
-      i++
-      continue
-    }
-    if (c === '\n') {
-      row.push(field)
-      rows.push(row)
-      row = []
-      field = ''
-      fieldWasQuoted = false
-      line++
-      i++
-      continue
-    }
-    field += c
-    i++
-  }
-  if (inQuotes) {
-    throw new Error(`Malformed CSV: file ends inside an unterminated quoted field (started before line ${line}).`)
-  }
-  if (field.length > 0 || row.length > 0) {
-    row.push(field)
-    rows.push(row)
-  }
-  return rows.filter((r) => !(r.length === 1 && r[0] === ''))
-}
-
-function parseCsvFile(filePath: string): Record<string, string>[] {
-  const text = readFileSync(filePath, 'utf-8')
-  const rows = parseCsv(text)
-  const header = rows[0]
-  if (!header) return []
-  const dataRows = rows.slice(1)
-  dataRows.forEach((r, idx) => {
-    if (r.length !== header.length) {
-      throw new Error(
-        `Malformed CSV in ${filePath}: data row ${idx + 2} has ${r.length} column(s), header has ${header.length}. ` +
-          `Row: ${JSON.stringify(r)}`,
-      )
-    }
-  })
-  return dataRows.map((r) => {
-    const obj: Record<string, string> = {}
-    header.forEach((col, idx) => {
-      obj[col] = r[idx] ?? ''
-    })
-    return obj
-  })
-}
 
 // ── Paths — assets/ lives at the repo root (DEC-016), two levels up from
 // server/prisma/ ─────────────────────────────────────────────────────────

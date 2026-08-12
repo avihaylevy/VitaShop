@@ -8,6 +8,7 @@ import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { readVerifiedProductRows } from '../lib/productsCsv.js'
 import { CANONICAL_CATEGORIES } from '../lib/catalogCategories.js'
 import type { PublicCatalogProduct } from '../lib/catalogMapper.js'
 import { sortByPopularity } from '../lib/catalogPopularity.js'
@@ -64,7 +65,20 @@ assertLocalVitashopDevTarget()
 
 let server: Server
 let baseUrl: string
-let readonlyPrisma: PrismaClient
+/**
+ * 🔴 RENAMED from `readonlyPrisma` on 2026-08-12. The name had become FALSE:
+ * the soft-delete probe writes through this client, and so does the fixture
+ * repair above. The name was the only thing enforcing the read-only
+ * convention — there was never a read-only database ROLE behind it — so a
+ * lying name was worse than no name at all.
+ *
+ * ⚠️ IMPLICIT GUARD, now explicit: the count-based assertions in this file are
+ * safe ONLY because vitest runs the tests within a file SEQUENTIALLY. A
+ * `describe.concurrent` anywhere here would let the soft-delete probe overlap
+ * the 49-product / 3-page assertions and make them flaky in a way that looks
+ * like a catalogue bug. Do not add one.
+ */
+let testPrisma: PrismaClient
 
 beforeAll(async () => {
   // MILESTONE-006 Checkpoint C: the app now mounts express-session, which
@@ -87,14 +101,48 @@ beforeAll(async () => {
   baseUrl = `http://127.0.0.1:${address.port}`
 
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
-  readonlyPrisma = new PrismaClient({ adapter })
+  testPrisma = new PrismaClient({ adapter })
+
+  // 🔴 BEFORE, not only after — the run this repairs is the one that CRASHED.
+  await repairDeactivatedFixtures()
 })
+
+/**
+ * 🔴 CRASH-SAFE FIXTURE REPAIR.
+ *
+ * The soft-delete probe below deactivates a REAL product and restores it in a
+ * `finally`. `finally` does not survive SIGINT, a vitest timeout kill, or a
+ * worker crash — and any of those leaves the dev catalogue at 48 active, after
+ * which the NEXT run fails on the 49-products / 3-pages assertions with no
+ * pointer at all to the cause.
+ *
+ * So the repair is at SUITE level and runs BEFORE the tests, not only after:
+ * anything the CSV marks `verified=yes` is reactivated, which is exactly the
+ * seed's own contract. It is idempotent and a no-op on a healthy database.
+ */
+async function repairDeactivatedFixtures(): Promise<number> {
+  const verifiedSlugs = readVerifiedProductRows()
+    .map((row) => row.slug ?? '')
+    .filter((slug) => slug.length > 0)
+  const { count } = await testPrisma.product.updateMany({
+    where: { slug: { in: verifiedSlugs }, isActive: false },
+    data: { isActive: true },
+  })
+  if (count > 0) {
+    // Loud on purpose: a silent repair would hide a crashed previous run.
+    console.warn(
+      `[catalog.integration] repaired ${count} product(s) left deactivated by an earlier run.`,
+    )
+  }
+  return count
+}
 
 afterAll(async () => {
   await new Promise<void>((resolve, reject) => {
     server.close((err) => (err ? reject(err) : resolve()))
   })
-  await readonlyPrisma.$disconnect()
+  await repairDeactivatedFixtures()
+  await testPrisma.$disconnect()
 })
 
 afterEach(() => {
@@ -159,7 +207,7 @@ describe('GET /api/products', () => {
   })
 
   it('returns only active products (matches a direct read-only count)', async () => {
-    const activeCount = await readonlyPrisma.product.count({ where: { isActive: true } })
+    const activeCount = await testPrisma.product.count({ where: { isActive: true } })
     const res = await fetch(`${baseUrl}/api/products`)
     const body = (await res.json()) as ProductsEnvelope
     // totalItems, not items.length — the catalogue no longer fits on one page.
@@ -167,7 +215,7 @@ describe('GET /api/products', () => {
   })
 
   it('defaults to sort=newest — matches a direct read-only query with the same deterministic tie-break, ACROSS ALL PAGES', async () => {
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true },
       orderBy: [{ createdAt: 'desc' }, { slug: 'asc' }],
       select: { slug: true },
@@ -240,7 +288,7 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
   it('category — matches a direct read-only query by the resolved nameHe', async () => {
     const category = CANONICAL_CATEGORIES.find((c) => c.nameHe === 'מינרלים')
     if (!category) throw new Error('fixture assumption failed: "מינרלים" is not a canonical category')
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true, category: { nameHe: 'מינרלים' } },
       select: { slug: true },
     })
@@ -253,9 +301,9 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
   })
 
   it('brand — a single id matches only that brand\'s active products', async () => {
-    const brand = await readonlyPrisma.brand.findFirst({ where: { products: { some: { isActive: true } } } })
+    const brand = await testPrisma.brand.findFirst({ where: { products: { some: { isActive: true } } } })
     if (!brand) throw new Error('fixture assumption failed: no brand has an active product')
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true, brandId: brand.id },
       select: { slug: true },
     })
@@ -265,10 +313,10 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
   })
 
   it('brand — repeated values are OR-within: the union of both brands\' active products', async () => {
-    const brands = await readonlyPrisma.brand.findMany({ where: { products: { some: { isActive: true } } } })
+    const brands = await testPrisma.brand.findMany({ where: { products: { some: { isActive: true } } } })
     if (brands.length < 2) throw new Error('fixture assumption failed: fewer than 2 brands have active products')
     const [a, b] = brands
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true, brandId: { in: [a!.id, b!.id] } },
       select: { slug: true },
     })
@@ -278,9 +326,9 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
   })
 
   it('ingredient — matches active products carrying that active ingredient (relation "some")', async () => {
-    const link = await readonlyPrisma.productIngredient.findFirst({ where: { product: { isActive: true } } })
+    const link = await testPrisma.productIngredient.findFirst({ where: { product: { isActive: true } } })
     if (!link) throw new Error('fixture assumption failed: no ProductIngredient row on an active product')
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true, ingredients: { some: { activeIngredientId: link.activeIngredientId } } },
       select: { slug: true },
     })
@@ -291,9 +339,9 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
   })
 
   it('healthGoal — matches active products carrying that health goal (relation "some")', async () => {
-    const link = await readonlyPrisma.productHealthGoal.findFirst({ where: { product: { isActive: true } } })
+    const link = await testPrisma.productHealthGoal.findFirst({ where: { product: { isActive: true } } })
     if (!link) throw new Error('fixture assumption failed: no ProductHealthGoal row on an active product')
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true, healthGoals: { some: { healthGoalId: link.healthGoalId } } },
       select: { slug: true },
     })
@@ -304,14 +352,14 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
   })
 
   it('dosageForm — repeated values are OR-within', async () => {
-    const forms = await readonlyPrisma.product.findMany({
+    const forms = await testPrisma.product.findMany({
       where: { isActive: true },
       select: { dosageForm: true },
       distinct: ['dosageForm'],
     })
     if (forms.length < 2) throw new Error('fixture assumption failed: fewer than 2 distinct dosage forms among active products')
     const [f1, f2] = forms.map((f) => f.dosageForm)
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true, dosageForm: { in: [f1!, f2!] } },
       select: { slug: true },
     })
@@ -321,9 +369,9 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
   })
 
   it('AND across groups: brand + dosageForm narrows to their intersection, not their union', async () => {
-    const brand = await readonlyPrisma.brand.findFirst({ where: { products: { some: { isActive: true } } } })
+    const brand = await testPrisma.brand.findFirst({ where: { products: { some: { isActive: true } } } })
     if (!brand) throw new Error('fixture assumption failed: no brand has an active product')
-    const brandOnly = await readonlyPrisma.product.findMany({ where: { isActive: true, brandId: brand.id }, select: { dosageForm: true, slug: true } })
+    const brandOnly = await testPrisma.product.findMany({ where: { isActive: true, brandId: brand.id }, select: { dosageForm: true, slug: true } })
     const form = brandOnly[0]?.dosageForm
     if (!form) throw new Error('fixture assumption failed: brand has no active products')
     const expected = brandOnly.filter((p) => p.dosageForm === form)
@@ -348,19 +396,19 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
    * would leave the identical bug waiting for the next batch.
    */
   it('minPrice — only products at or above the threshold, across all pages', async () => {
-    const expected = await readonlyPrisma.product.findMany({ where: { isActive: true, price: { gte: '70' } }, select: { slug: true } })
+    const expected = await testPrisma.product.findMany({ where: { isActive: true, price: { gte: '70' } }, select: { slug: true } })
     const { slugs } = await fetchAllPages('minPrice=70')
     expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   it('maxPrice — only products at or below the threshold, across all pages', async () => {
-    const expected = await readonlyPrisma.product.findMany({ where: { isActive: true, price: { lte: '70' } }, select: { slug: true } })
+    const expected = await testPrisma.product.findMany({ where: { isActive: true, price: { lte: '70' } }, select: { slug: true } })
     const { slugs } = await fetchAllPages('maxPrice=70')
     expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   it('minPrice + maxPrice — an inclusive band', async () => {
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true, price: { gte: '60', lte: '80' } },
       select: { slug: true },
     })
@@ -369,7 +417,7 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
   })
 
   it('inStock=true — matches a direct read-only query for stockQuantity > 0', async () => {
-    const expected = await readonlyPrisma.product.count({ where: { isActive: true, stockQuantity: { gt: 0 } } })
+    const expected = await testPrisma.product.count({ where: { isActive: true, stockQuantity: { gt: 0 } } })
     const res = await fetch(`${baseUrl}/api/products?inStock=true`)
     const body = (await res.json()) as ProductsEnvelope
     expect(body.totalItems).toBe(expected)
@@ -391,14 +439,14 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
 // proof the frozen §3a form actually behaves as specified against the real
 // PostgreSQL provider. Search terms below are chosen from direct inspection
 // of the current seed's 6 active products (verified read-only via
-// readonlyPrisma at test-authoring time — not fabricated), each picked to
+// testPrisma at test-authoring time — not fabricated), each picked to
 // land on exactly one searched field wherever the fixture allows it. If the
 // seed ever changes, a fixture-assumption guard throws a clear message
 // rather than passing vacuously or failing cryptically.
 describe('GET /api/products — free-text search (Checkpoint E)', () => {
   it('matches a direct read-only query built with the identical OR-across-fields shape, for an arbitrary term', async () => {
     const term = 'ויטמין'
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: {
         isActive: true,
         OR: [
@@ -437,7 +485,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
    */
   async function slugsMatchingText(term: string): Promise<Set<string>> {
     const like = { contains: term, mode: 'insensitive' } as const
-    const rows = await readonlyPrisma.product.findMany({
+    const rows = await testPrisma.product.findMany({
       where: {
         isActive: true,
         OR: [
@@ -494,7 +542,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
    * expectation is derived from the same field the endpoint searches.
    */
   it('direct field — English description match, a term absent from every name ("60 capsules")', async () => {
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true, descriptionEn: { contains: '60 capsules', mode: 'insensitive' } },
       select: { slug: true },
     })
@@ -534,7 +582,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
    * turns this red. The "EPA" version did not.
    */
   it('relation — active ingredient match, via a term reachable ONLY through the join ("Fenupure")', async () => {
-    const rows = await readonlyPrisma.product.findMany({
+    const rows = await testPrisma.product.findMany({
       where: {
         isActive: true,
         ingredients: { some: { activeIngredient: { name: { contains: 'Fenupure', mode: 'insensitive' } } } },
@@ -547,7 +595,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     // The oracle only holds while no product NAMES or DESCRIBES the term —
     // assert that rather than trusting it, or this silently rots back into
     // the "EPA" trap.
-    const viaText = await readonlyPrisma.product.count({
+    const viaText = await testPrisma.product.count({
       where: {
         isActive: true,
         OR: [
@@ -612,7 +660,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
    * asserted separately: every category member must be present.
    */
   async function activeSlugsInCategory(nameHe: string): Promise<Set<string>> {
-    const rows = await readonlyPrisma.product.findMany({
+    const rows = await testPrisma.product.findMany({
       where: { isActive: true, category: { nameHe } },
       select: { slug: true },
     })
@@ -624,7 +672,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
   async function expectedForCategoryTerm(nameHe: string, term: string): Promise<Set<string>> {
     const members = await activeSlugsInCategory(nameHe)
     const like = { contains: term, mode: 'insensitive' } as const
-    const byText = await readonlyPrisma.product.findMany({
+    const byText = await testPrisma.product.findMany({
       where: {
         isActive: true,
         OR: [{ nameHe: like }, { nameEn: like }, { descriptionHe: like }, { descriptionEn: like }],
@@ -659,7 +707,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     const body = (await res.json()) as ProductsEnvelope
     // Derived, not hardcoded — one of the two original slugs left the
     // catalogue when ISSUE-045's unsourceable-price rows were demoted.
-    const expectedGoal = await readonlyPrisma.product.findMany({
+    const expectedGoal = await testPrisma.product.findMany({
       where: { isActive: true, healthGoals: { some: { healthGoal: { nameHe: 'עצמות' } } } },
       select: { slug: true },
     })
@@ -672,7 +720,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     const body = (await res.json()) as ProductsEnvelope
     // Derived, not hardcoded — one of the two original slugs left the
     // catalogue when ISSUE-045's unsourceable-price rows were demoted.
-    const expectedGoal = await readonlyPrisma.product.findMany({
+    const expectedGoal = await testPrisma.product.findMany({
       where: { isActive: true, healthGoals: { some: { healthGoal: { nameHe: 'עצמות' } } } },
       select: { slug: true },
     })
@@ -681,9 +729,9 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
   })
 
   it('relation — brand match returns every product of that brand (Solgar)', async () => {
-    const brand = await readonlyPrisma.brand.findFirst({ where: { name: 'סולגאר' } })
+    const brand = await testPrisma.brand.findFirst({ where: { name: 'סולגאר' } })
     if (!brand) throw new Error('fixture assumption failed: brand "סולגאר" not found')
-    const expected = await readonlyPrisma.product.count({ where: { isActive: true, brandId: brand.id } })
+    const expected = await testPrisma.product.count({ where: { isActive: true, brandId: brand.id } })
     const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('סולגאר')}`)
     const body = (await res.json()) as ProductsEnvelope
     expect(body.totalItems).toBeGreaterThanOrEqual(expected)
@@ -760,7 +808,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
      * wildcard regression, and it holds at any catalogue size.
      */
     it('q="%" does not become match-all — matches only literal "%", not every product', async () => {
-      const rows = await readonlyPrisma.$queryRaw<Array<{ count: bigint }>>`
+      const rows = await testPrisma.$queryRaw<Array<{ count: bigint }>>`
         SELECT count(*) FROM products
         WHERE is_active = true
           AND (strpos(name_he, '%') > 0 OR strpos(name_en, '%') > 0
@@ -772,7 +820,7 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
       const first = rows[0]
       if (first === undefined) throw new Error('count(*) returned no row')
       const literalMatches = Number(first.count)
-      const totalActive = await readonlyPrisma.product.count({ where: { isActive: true } })
+      const totalActive = await testPrisma.product.count({ where: { isActive: true } })
       expect(literalMatches).toBeLessThan(totalActive) // else the assertion below proves nothing
 
       const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('%')}`)
@@ -818,14 +866,14 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
       // 🔴 Was hardcoded to סולגאר, whose products all left the catalogue when
       // ISSUE-045's unsourceable-price rows were demoted. Pick any brand that
       // actually has active products, so this cannot go stale that way again.
-      const brand = await readonlyPrisma.brand.findFirst({
+      const brand = await testPrisma.brand.findFirst({
         where: { products: { some: { isActive: true } } },
         orderBy: { name: 'asc' },
       })
       if (!brand) throw new Error('fixture assumption failed: no brand has an active product')
       const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('ויטמין')}&brand=${brand.id}`)
       const body = (await res.json()) as ProductsEnvelope
-      const expected = await readonlyPrisma.product.findMany({
+      const expected = await testPrisma.product.findMany({
         where: {
           isActive: true,
           brandId: brand.id,
@@ -878,13 +926,13 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     // easy fix been taken (skip when none exists). The soft-delete guarantee
     // is INV-03's, so it must be provable whether or not the seed happens to
     // leave a casualty behind.
-    const victim = await readonlyPrisma.product.findFirst({
+    const victim = await testPrisma.product.findFirst({
       where: { isActive: true },
       select: { id: true, slug: true, nameHe: true },
     })
     if (!victim) throw new Error('fixture assumption failed: no active product to soft-delete')
 
-    await readonlyPrisma.product.update({ where: { id: victim.id }, data: { isActive: false } })
+    await testPrisma.product.update({ where: { id: victim.id }, data: { isActive: false } })
     try {
       // Searching its own name must not surface it.
       const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent(victim.nameHe)}`)
@@ -898,14 +946,14 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
       // 🔴 Restored even when an assertion throws — otherwise a red test
       // leaves the dev catalogue one product short and the NEXT run fails
       // somewhere unrelated.
-      await readonlyPrisma.product.update({ where: { id: victim.id }, data: { isActive: true } })
+      await testPrisma.product.update({ where: { id: victim.id }, data: { isActive: true } })
     }
   })
 })
 
 describe('GET /api/products — sorting (Checkpoint D)', () => {
   it('price_asc — matches a direct read-only query with the same tie-break', async () => {
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true },
       orderBy: [{ price: 'asc' }, { createdAt: 'desc' }, { slug: 'asc' }],
       select: { slug: true },
@@ -915,7 +963,7 @@ describe('GET /api/products — sorting (Checkpoint D)', () => {
   })
 
   it('price_desc — matches a direct read-only query with the same tie-break', async () => {
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true },
       orderBy: [{ price: 'desc' }, { createdAt: 'desc' }, { slug: 'asc' }],
       select: { slug: true },
@@ -925,7 +973,7 @@ describe('GET /api/products — sorting (Checkpoint D)', () => {
   })
 
   it('newest — matches a direct read-only query with the same tie-break', async () => {
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true },
       orderBy: [{ createdAt: 'desc' }, { slug: 'asc' }],
       select: { slug: true },
@@ -966,7 +1014,7 @@ describe('GET /api/products — sorting (Checkpoint D)', () => {
     expect(asc.slugs.length).toBe(desc.slugs.length)
 
     const priceBySlug = new Map(
-      (await readonlyPrisma.product.findMany({ where: { isActive: true }, select: { slug: true, price: true } }))
+      (await testPrisma.product.findMany({ where: { isActive: true }, select: { slug: true, price: true } }))
         .map((p) => [p.slug, p.price.toString()] as const),
     )
     const groups = (slugs: string[]): Array<{ price: string; slugs: string[] }> => {
@@ -1052,7 +1100,7 @@ describe('GET /api/products — sort=popularity execution (Checkpoint F)', () =>
   })
 
   it('pagination — a past-the-end popularity-sorted page is a truthful empty page, not a crash', async () => {
-    const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
+    const totalItems = await testPrisma.product.count({ where: { isActive: true } })
     if (totalItems === 0) throw new Error('fixture assumption failed: no active products at all')
     const res = await fetch(`${baseUrl}/api/products?sort=popularity&page=999`)
     expect(res.status).toBe(200)
@@ -1081,7 +1129,7 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
   })
 
   it('is null on a past-the-end page (totalItems > 0), even though items is empty — canonicalization, not fallback', async () => {
-    const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
+    const totalItems = await testPrisma.product.count({ where: { isActive: true } })
     if (totalItems === 0) throw new Error('fixture assumption failed: no active products at all')
     const res = await fetch(`${baseUrl}/api/products?page=999`)
     const body = (await res.json()) as ProductsEnvelope & { fallback: unknown }
@@ -1095,7 +1143,7 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
     // joined it, and again when a tablets product did. Any category with at
     // least one product and at least one UNUSED dosage form satisfies this
     // scenario, so the test finds one instead of asserting which it is.
-    const activeByCategory = await readonlyPrisma.product.findMany({
+    const activeByCategory = await testPrisma.product.findMany({
       where: { isActive: true },
       select: { dosageForm: true, category: { select: { nameHe: true } } },
     })
@@ -1128,7 +1176,7 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
     // constructed and silently passing would prove nothing.
     const formsInCategory = new Set(
       (
-        await readonlyPrisma.product.findMany({
+        await testPrisma.product.findMany({
           where: { isActive: true, category: { nameHe: category.nameHe } },
           select: { dosageForm: true },
         })
@@ -1158,7 +1206,7 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
   })
 
   it('kind="popular" — a zero-result query with no category suggests popular products across the whole active catalogue', async () => {
-    const activeProducts = await readonlyPrisma.product.findMany({ where: { isActive: true } })
+    const activeProducts = await testPrisma.product.findMany({ where: { isActive: true } })
     const res = await fetch(`${baseUrl}/api/products?minPrice=99999&maxPrice=99999.99`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as ProductsEnvelope & { fallback: { kind: string; items: PublicCatalogProduct[]; limit: number } | null }
@@ -1201,7 +1249,7 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
     // structural proof: every fallback item slug corresponds to a real
     // active product (a direct DB check per slug)
     for (const item of body.fallback?.items ?? []) {
-      const product = await readonlyPrisma.product.findUnique({ where: { slug: item.slug } })
+      const product = await testPrisma.product.findUnique({ where: { slug: item.slug } })
       expect(product?.isActive).toBe(true)
     }
   })
@@ -1245,7 +1293,7 @@ describe('GET /api/products — stable-ID existence + active-usage validation (C
   })
 
   it('a nonexistent id alongside a real, active-used one for the same field still rejects the whole field', async () => {
-    const brand = await readonlyPrisma.brand.findFirst({ where: { products: { some: { isActive: true } } } })
+    const brand = await testPrisma.brand.findFirst({ where: { products: { some: { isActive: true } } } })
     if (!brand) throw new Error('fixture assumption failed: no brand has an active product')
     const res = await fetch(`${baseUrl}/api/products?brand=${brand.id}&brand=${nonexistentUuid}`)
     expect(res.status).toBe(400)
@@ -1261,7 +1309,7 @@ describe('GET /api/products — stable-ID existence + active-usage validation (C
   })
 
   it('a real, existing id is accepted (regression: existence validation does not reject valid ids)', async () => {
-    const brand = await readonlyPrisma.brand.findFirst({ where: { products: { some: { isActive: true } } } })
+    const brand = await testPrisma.brand.findFirst({ where: { products: { some: { isActive: true } } } })
     if (!brand) throw new Error('fixture assumption failed: no brand has an active product')
     const res = await fetch(`${baseUrl}/api/products?brand=${brand.id}`)
     expect(res.status).toBe(200)
@@ -1287,7 +1335,7 @@ describe('GET /api/products — pagination (Checkpoint D)', () => {
    * `totalPages` rather than hardcoded.
    */
   it('a multi-page catalogue: page 2 holds the remainder and does not overlap page 1', async () => {
-    const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
+    const totalItems = await testPrisma.product.count({ where: { isActive: true } })
     expect(totalItems).toBeGreaterThan(24) // the point of MILESTONE-004 — pagination has something to paginate
 
     const page1 = (await fetch(`${baseUrl}/api/products?page=1`).then((r) => r.json())) as ProductsEnvelope
@@ -1310,7 +1358,7 @@ describe('GET /api/products — pagination (Checkpoint D)', () => {
   })
 
   it('a past-the-end page returns a truthful empty page — items: [], page > totalPages, totalItems > 0 — not canonicalized server-side', async () => {
-    const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
+    const totalItems = await testPrisma.product.count({ where: { isActive: true } })
     if (totalItems === 0) throw new Error('fixture assumption failed: no active products at all')
     // Derived from totalPages, never hardcoded — that is what made the
     // previous version silently wrong the moment the catalogue grew.
@@ -1331,7 +1379,7 @@ describe('GET /api/products — pagination (Checkpoint D)', () => {
   // Prisma's findMany at all (no skip, safe or otherwise, is ever computed
   // or sent for it). Spies on the real app's Prisma singleton.
   it('a past-the-end page never calls findMany', async () => {
-    const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
+    const totalItems = await testPrisma.product.count({ where: { isActive: true } })
     if (totalItems === 0) throw new Error('fixture assumption failed: no active products at all')
     const findManySpy = vi.spyOn(appPrisma.product, 'findMany')
     const res = await fetch(`${baseUrl}/api/products?page=999999`)
@@ -1360,7 +1408,7 @@ describe('GET /api/products — pagination (Checkpoint D)', () => {
   })
 
   it('a within-range page still queries normally — the safe-execution guard does not break the happy path', async () => {
-    const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
+    const totalItems = await testPrisma.product.count({ where: { isActive: true } })
     if (totalItems === 0) throw new Error('fixture assumption failed: no active products at all')
     const findManySpy = vi.spyOn(appPrisma.product, 'findMany')
     const res = await fetch(`${baseUrl}/api/products?page=1`)
@@ -1375,7 +1423,7 @@ describe('GET /api/products — pagination (Checkpoint D)', () => {
   })
 
   it('the safe-execution guard does not block page 2 either — skip is computed, not zeroed', async () => {
-    const totalItems = await readonlyPrisma.product.count({ where: { isActive: true } })
+    const totalItems = await testPrisma.product.count({ where: { isActive: true } })
     expect(totalItems).toBeGreaterThan(24) // fixture assumption: a real page 2 exists
     const findManySpy = vi.spyOn(appPrisma.product, 'findMany')
     const res = await fetch(`${baseUrl}/api/products?page=2`)
@@ -1409,7 +1457,7 @@ describe('GET /api/catalog/facets', () => {
   })
 
   it('brands — exactly the brands used by active products, with real ids and labels', async () => {
-    const expected = await readonlyPrisma.brand.findMany({
+    const expected = await testPrisma.brand.findMany({
       where: { products: { some: { isActive: true } } },
       select: { id: true, name: true },
     })
@@ -1422,7 +1470,7 @@ describe('GET /api/catalog/facets', () => {
   })
 
   it('ingredients — exactly the active ingredients used by active products', async () => {
-    const expected = await readonlyPrisma.activeIngredient.findMany({
+    const expected = await testPrisma.activeIngredient.findMany({
       where: { products: { some: { product: { isActive: true } } } },
       select: { id: true },
     })
@@ -1432,7 +1480,7 @@ describe('GET /api/catalog/facets', () => {
   })
 
   it('healthGoals — exactly the health goals used by active products, bilingual labels', async () => {
-    const expected = await readonlyPrisma.healthGoal.findMany({
+    const expected = await testPrisma.healthGoal.findMany({
       where: { products: { some: { product: { isActive: true } } } },
       select: { id: true, nameHe: true, nameEn: true },
     })
@@ -1445,7 +1493,7 @@ describe('GET /api/catalog/facets', () => {
   })
 
   it('dosageForms — exactly the enum values used by active products, bilingual labels', async () => {
-    const expected = await readonlyPrisma.product.findMany({
+    const expected = await testPrisma.product.findMany({
       where: { isActive: true },
       select: { dosageForm: true },
       distinct: ['dosageForm'],
@@ -1469,7 +1517,7 @@ describe('GET /api/catalog/facets', () => {
     const res = await fetch(`${baseUrl}/api/catalog/facets`)
     const body = (await res.json()) as FacetsEnvelope
     for (const brand of body.brands) {
-      const activeCount = await readonlyPrisma.product.count({ where: { isActive: true, brandId: brand.id } })
+      const activeCount = await testPrisma.product.count({ where: { isActive: true, brandId: brand.id } })
       expect(activeCount).toBeGreaterThan(0)
     }
   })
@@ -1496,7 +1544,7 @@ describe('GET /api/catalog/facets', () => {
  */
 describe('GET /api/products/:slug — Product Details (Checkpoint J)', () => {
   async function firstActiveSlug(): Promise<string> {
-    const product = await readonlyPrisma.product.findFirst({
+    const product = await testPrisma.product.findFirst({
       where: { isActive: true },
       orderBy: { slug: 'asc' },
       select: { slug: true },
@@ -1515,7 +1563,7 @@ describe('GET /api/products/:slug — Product Details (Checkpoint J)', () => {
    * non-empty precondition is asserted rather than assumed.
    */
   async function firstActiveSlugWithIngredients(): Promise<string> {
-    const product = await readonlyPrisma.product.findFirst({
+    const product = await testPrisma.product.findFirst({
       where: { isActive: true, ingredients: { some: {} } },
       orderBy: { slug: 'asc' },
       select: { slug: true },
@@ -1595,7 +1643,7 @@ describe('GET /api/products/:slug — Product Details (Checkpoint J)', () => {
     const res = await fetch(`${baseUrl}/api/products/${slug}`)
     const dto = (await res.json()) as Record<string, unknown>
 
-    const row = await readonlyPrisma.product.findUniqueOrThrow({
+    const row = await testPrisma.product.findUniqueOrThrow({
       where: { slug },
       include: { brand: true, category: true, images: true },
     })
@@ -1634,7 +1682,7 @@ describe('GET /api/products/:slug — Product Details (Checkpoint J)', () => {
   })
 
   it('returns an IDENTICAL 404 for an inactive product — existence cannot be probed', async () => {
-    const inactive = await readonlyPrisma.product.findFirst({
+    const inactive = await testPrisma.product.findFirst({
       where: { isActive: false },
       select: { slug: true },
     })
@@ -1656,7 +1704,7 @@ describe('GET /api/products/:slug — Product Details (Checkpoint J)', () => {
       // mapper only runs AFTER a product is found, so it structurally cannot
       // test the lookup, and reading the route is not a test. The proof now
       // named above genuinely exists.
-      const inactiveCount = await readonlyPrisma.product.count({ where: { isActive: false } })
+      const inactiveCount = await testPrisma.product.count({ where: { isActive: false } })
       expect(inactiveCount).toBe(0)
       expect(absentRes.status).toBe(404)
       expect(absentBody.error.code).toBe('PRODUCT_NOT_FOUND')
