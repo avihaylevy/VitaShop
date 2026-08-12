@@ -239,6 +239,10 @@ const BRAND_EN: Record<string, string> = {
   // it costs nothing and removing it buys nothing.
   'בריאמיל': 'Briamil',
   'טרו פור מי': 'TruForMe',
+  // MILESTONE-004 Step 2 — the first genuinely NEW manufacturer since the
+  // expansion began. naturalis.co.il writes "NATURALIS" in its own English
+  // branding; not transliterated by ear.
+  'נטורליס': 'Naturalis',
   'סלוס': 'Salus',
   // MILESTONE-004 Part 4, cohort B. Already Latin on the manufacturer's own
   // site and in the CSV, so this maps to itself — the entry exists because the
