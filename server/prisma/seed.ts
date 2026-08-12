@@ -240,6 +240,10 @@ const BRAND_EN: Record<string, string> = {
   // source string, which is what caught this row rather than shipping a
   // guessed English name.
   'ECOSUPP': 'ECOSUPP',
+  // MILESTONE-004 Part 4 — the last of the original fifteen to be seeded,
+  // unblocked by DEC-032's new bar. meditec.co.il writes the brand "Britamin"
+  // in its own English usage; not transliterated by ear.
+  'בריטמין': 'Britamin',
 }
 
 // schema.prisma DosageForm enum: CAPSULE/TABLET/DROPS/POWDER/SYRUP, each
@@ -373,7 +377,11 @@ function validateProductRow(row: Record<string, string>): ValidatedProductRow {
       .filter((s) => s.length > 0),
     dosageForm: mapDosageForm(row.dosage_form ?? '', slug),
     packageQuantity: requirePositiveInt(row.package_quantity ?? '', 'package_quantity', slug),
-    usageInstructions: requireNonEmpty(row.usage_instructions ?? '', 'usage_instructions', slug),
+    // 🔴 OPTIONAL since DEC-032's NEW BAR (2026-08-12). Usage instructions are
+    // medical data: they come from a label or they stay EMPTY. Requiring them
+    // is what creates pressure to paraphrase a page — and a paraphrase is how
+    // superherb-biokid-drops came to state an infant dose from the wrong age.
+    usageInstructions: (row.usage_instructions ?? '').trim(),
     ...validateAllergenFields(row, slug),
   }
 }

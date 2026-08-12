@@ -40,28 +40,31 @@ export function parseAllergenInfoIncomplete(value: string | undefined, slug: str
 }
 
 /**
- * Field 12 and the flag, validated TOGETHER because their legality is joint:
+ * Field 12 and the flag.
  *
- *   false + ""    ✗ REJECTED — the pre-existing confirm-or-omit rule. A blank
- *                   allergen section on a verified row reads as "no allergens".
+ * 🔴 AMENDED 2026-08-12 by DEC-032's NEW BAR. `warnings_allergens` is now
+ * OPTIONAL: medical fields come from a label or are left EMPTY, and blank is
+ * both fine and expected. The previous rule REJECTED (false + "") on the
+ * reasoning that a blank allergen section reads as "no allergens"; the new bar
+ * accepts that trade deliberately, for a project graded on architecture.
+ *
+ *   false + ""    ✓ not checked — now the COMMON case
  *   false + text  ✓ a declaration
  *   true  + ""    ✓ the manufacturer publishes nothing, and that was CHECKED
  *   true  + text  ✓ partial, and that is all there is  (salus-multi-syrup)
  *
- * 🔴 The flag is the ONLY thing that makes an empty field legal, and it is a
- * positive claim that the source was checked — not an escape hatch for a row
- * nobody sourced.
+ * 🔴 The flag therefore no longer gates anything — it CARRIES INFORMATION, and
+ * that is still worth having: it distinguishes "we checked and the source
+ * publishes none" from "nobody checked". Only the first is a fact about the
+ * product; the second is a fact about us.
+ *
+ * 🔴 What did NOT change: nothing may be INVENTED into this field. Empty is
+ * always available, so there is no longer any pressure to fill it — which is
+ * the pressure that produced ISSUE-061's inferred "contains milk".
  */
 export function validateAllergenFields(row: Record<string, string>, slug: string): AllergenFields {
   const allergenInfoIncomplete = parseAllergenInfoIncomplete(row.allergen_info_incomplete, slug)
   const warningsAllergens = (row.warnings_allergens ?? '').trim()
-
-  if (!allergenInfoIncomplete && warningsAllergens.length === 0) {
-    throw new Error(
-      `Malformed verified row "${slug}": required field "warnings_allergens" is empty. ` +
-        `Set "allergen_info_incomplete" to "yes" only if the manufacturer's page was CHECKED and publishes none.`,
-    )
-  }
 
   return { warningsAllergens, allergenInfoIncomplete }
 }

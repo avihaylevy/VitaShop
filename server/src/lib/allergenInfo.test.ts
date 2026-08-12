@@ -42,9 +42,19 @@ describe('validateAllergenFields — the four (flag, text) states', () => {
     })
   })
 
-  it('🔴 false + empty: REJECTED — this is the pre-existing confirm-or-omit rule, unchanged', () => {
-    expect(() => validateAllergenFields({ warnings_allergens: '' }, 'x')).toThrow(/warnings_allergens" is empty/)
-    expect(() => validateAllergenFields({ warnings_allergens: '   ' }, 'x')).toThrow(/warnings_allergens" is empty/)
+  // 🔴 AMENDED 2026-08-12 by DEC-032's NEW BAR. This case used to THROW.
+  // Medical fields are now optional, so "not checked" is a legal — and
+  // common — state. The test is kept, inverted, so the change is visible in
+  // the suite rather than only in a decision file.
+  it('false + empty: ACCEPTED — "not checked", the common case under the new bar', () => {
+    expect(validateAllergenFields({ warnings_allergens: '' }, 'x')).toEqual({
+      warningsAllergens: '',
+      allergenInfoIncomplete: false,
+    })
+    expect(validateAllergenFields({ warnings_allergens: '   ' }, 'x')).toEqual({
+      warningsAllergens: '',
+      allergenInfoIncomplete: false,
+    })
   })
 
   it('true + empty: accepted — the manufacturer publishes nothing, and that was CHECKED', () => {
@@ -68,14 +78,13 @@ describe('validateAllergenFields — the four (flag, text) states', () => {
     })
   })
 
-  it('🔴 the flag is the ONLY thing that makes an empty field legal', () => {
+  // The flag no longer GATES anything. It still CARRIES information, and this
+  // asserts the distinction survives the amendment: both rows below have an
+  // empty field, and only one of them claims the source was checked.
+  it('🔴 the flag still separates "checked, none published" from "not checked"', () => {
     const empty = { warnings_allergens: '' }
-    expect(() => validateAllergenFields(empty, 'x')).toThrow()
-    expect(() => validateAllergenFields({ ...empty, allergen_info_incomplete: 'no' }, 'x')).toThrow()
+    expect(validateAllergenFields(empty, 'x').allergenInfoIncomplete).toBe(false)
+    expect(validateAllergenFields({ ...empty, allergen_info_incomplete: 'no' }, 'x').allergenInfoIncomplete).toBe(false)
     expect(validateAllergenFields({ ...empty, allergen_info_incomplete: 'yes' }, 'x').allergenInfoIncomplete).toBe(true)
-  })
-
-  it('the empty-field error tells the reader what the flag actually means', () => {
-    expect(() => validateAllergenFields({ warnings_allergens: '' }, 'x')).toThrow(/CHECKED and publishes none/)
   })
 })
