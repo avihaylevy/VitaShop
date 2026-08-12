@@ -27,6 +27,8 @@ import { clampAddition, clampCartQuantity } from './cartQuantity.js'
  * Nothing here writes `Product.stock`, and no price is stored on a line.
  */
 
+export type DropReason = 'INACTIVE' | 'UNAVAILABLE'
+
 export type PromotionOutcome = {
   /** No guest cart existed; nothing was created. */
   promoted: boolean
@@ -34,6 +36,17 @@ export type PromotionOutcome = {
   merged: boolean
   /** Lines whose merged quantity had to be clamped, for the caller to report. */
   clampedSlugs: string[]
+  /**
+   * 🔴 LINES REMOVED ENTIRELY, and WHY. Removal is a LARGER change than a
+   * clamp, and it used to be completely silent: a guest carts a product, it
+   * sells out, they register, and the line disappears with no message
+   * anywhere. That is this module's own rule at its limit — name what
+   * changed — and the silent-loss class DEC-055 and DEC-056 exist to stop.
+   *
+   * The two reasons are separated because they read differently to a shopper:
+   * INACTIVE means we no longer sell it; UNAVAILABLE means it is out of stock.
+   */
+  dropped: { slug: string; reason: DropReason }[]
 }
 
 export async function promoteGuestCart(
@@ -41,42 +54,50 @@ export async function promoteGuestCart(
   guestSessionId: string | null | undefined,
   userId: string,
 ): Promise<PromotionOutcome> {
-  const none: PromotionOutcome = { promoted: false, merged: false, clampedSlugs: [] }
+  const none: PromotionOutcome = { promoted: false, merged: false, clampedSlugs: [], dropped: [] }
   if (!guestSessionId) return none
 
   const guestCart = await tx.cart.findFirst({
     where: { sessionId: guestSessionId, userId: null },
     select: { id: true, items: { select: { id: true, productId: true, quantity: true } } },
   })
-  // 🔴 A guest with NO cart creates NOTHING. An empty cart per registration
-  // would be a row nobody asked for and a lie about what the shopper did.
+  // 🔴 A guest with NO cart creates NOTHING. An empty cart per registration or
+  // login would be a row nobody asked for and a lie about what the shopper did.
   if (!guestCart) return none
 
-  const accountCart = await tx.cart.findFirst({ where: { userId }, select: { id: true } })
+  const existingAccountCart = await tx.cart.findFirst({ where: { userId }, select: { id: true } })
+  const merged = existingAccountCart !== null
 
-  if (!accountCart) {
-    // No collision: the guest cart simply becomes the account's. Clearing
-    // sessionId keeps DEC-055's unique constraint satisfiable for a future
-    // guest reusing that session id.
-    await tx.cart.update({
-      where: { id: guestCart.id },
-      data: { userId, sessionId: null },
-    })
-    return { promoted: true, merged: false, clampedSlugs: [] }
-  }
+  // 🔴 ONE RULE, ONE PLACE. This used to branch: with no account cart the guest
+  // cart was reassigned WHOLESALE — no isActive check, no stock check, no
+  // clamp — while the merge path filtered and clamped. So the SAME inactive
+  // product was KEPT when the account had no cart and DROPPED when it did, and
+  // which branch ran depended on something that has nothing to do with the
+  // product. Same shape as the GET/POST precedence asymmetry corrected at
+  // Checkpoint C: two paths encoding one rule, only one of them correctly.
+  //
+  // Now a target cart is created when absent, and EVERY line goes through the
+  // same filter and the same clamp on both paths.
+  const accountCart =
+    existingAccountCart ?? (await tx.cart.create({ data: { userId }, select: { id: true } }))
 
-  // ── DEC-056's MERGE ────────────────────────────────────────────────────
   const clampedSlugs: string[] = []
+  const dropped: { slug: string; reason: DropReason }[] = []
 
   for (const line of guestCart.items) {
     const product = await tx.product.findUnique({
       where: { id: line.productId },
       select: { slug: true, stockQuantity: true, isActive: true },
     })
-    // A product that went INACTIVE mid-flight is not carried over. It cannot
-    // be added through any other path either (the M-005 precedent), so
-    // promoting it would make registration the one way to acquire it.
-    if (!product || !product.isActive) continue
+    if (!product) continue
+
+    // A product that went INACTIVE mid-flight is not carried over. It cannot be
+    // added through any other path either (the M-005 precedent), so carrying it
+    // would make registration or login the one way to acquire it.
+    if (!product.isActive) {
+      dropped.push({ slug: product.slug, reason: 'INACTIVE' })
+      continue
+    }
 
     const existing = await tx.cartItem.findUnique({
       where: { cartId_productId: { cartId: accountCart.id, productId: line.productId } },
@@ -87,7 +108,11 @@ export async function promoteGuestCart(
     const clamped = existing
       ? clampAddition(existing.quantity, line.quantity, product.stockQuantity)
       : clampCartQuantity(line.quantity, product.stockQuantity)
-    if (!clamped.ok) continue
+
+    if (!clamped.ok) {
+      dropped.push({ slug: product.slug, reason: 'UNAVAILABLE' })
+      continue
+    }
 
     const intended = (existing?.quantity ?? 0) + line.quantity
     if (clamped.quantity < intended) clampedSlugs.push(product.slug)
@@ -102,10 +127,10 @@ export async function promoteGuestCart(
   }
 
   // 🔴 The losing cart is removed DELIBERATELY, items first. Leaving it would
-  // orphan rows and leave two carts reachable for one shopper — the silent
-  // loss DEC-055 exists to prevent.
+  // orphan rows and leave two carts reachable for one shopper — the silent loss
+  // DEC-055 exists to prevent.
   await tx.cartItem.deleteMany({ where: { cartId: guestCart.id } })
   await tx.cart.delete({ where: { id: guestCart.id } })
 
-  return { promoted: true, merged: true, clampedSlugs }
+  return { promoted: true, merged, clampedSlugs, dropped }
 }

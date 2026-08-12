@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { promoteGuestCart } from '../lib/promoteGuestCart.js'
 import type { PrismaClient } from '@prisma/client'
 import type { EmailService } from '../lib/emailService.js'
 import { emailStrings } from '../lib/emailStrings.js'
@@ -173,7 +174,21 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     //
     // 🔴 O8's precondition applies: `guestSessionId` is only meaningful if the
     // guest session was persisted.
-    void guestSessionId
+    //
+    // ✅ FILLED by MILESTONE-007 Checkpoint F. 🔴 It runs HERE — after the
+    // credential check has PASSED and BEFORE regeneration — because
+    // regeneration destroys the guest session id, and that id is the only way
+    // to find the cart. Capturing it first is DEC-053 Rule 3's entire reason.
+    //
+    // 🔴 It REUSES `promoteGuestCart` rather than forking it. Login's merge is
+    // DEC-019's merge branch and DEC-056's rule is identical, so a second
+    // near-identical implementation is exactly how the P2002 matcher diverged.
+    // The only difference is the trigger, not the behaviour.
+    //
+    // INV-04: no external call inside the transaction.
+    const mergeOutcome = await deps.prisma.$transaction((tx) =>
+      promoteGuestCart(tx, guestSessionId, outcome.userId),
+    )
 
     // ── Step 5: regenerate AFTER the credential check and any commit ───────
     // A6 — session fixation. Everything transactional above has completed.
@@ -186,7 +201,17 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
       req.session.save((err) => (err ? reject(err) : resolve()))
     })
 
-    res.json({ status: 'authenticated' })
+    // The clamped and dropped lines are surfaced so the UI can say what
+    // changed. Silently altering a cart during login is the loss DEC-055 and
+    // DEC-056 exist to stop.
+    res.json({
+      status: 'authenticated',
+      cart: {
+        merged: mergeOutcome.merged,
+        clampedSlugs: mergeOutcome.clampedSlugs,
+        dropped: mergeOutcome.dropped,
+      },
+    })
   })
 
   // GET /api/auth/session — Checkpoint H's precondition.

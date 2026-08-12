@@ -83,7 +83,7 @@ describe('promoteGuestCart — the paths that matter', () => {
 
     const result = await prisma.$transaction((tx) => promoteGuestCart(tx, GUEST, userId))
 
-    expect(result).toEqual({ promoted: false, merged: false, clampedSlugs: [] })
+    expect(result).toEqual({ promoted: false, merged: false, clampedSlugs: [], dropped: [] })
     // 🔴 No empty cart per registration: that is a row nobody asked for.
     expect(await prisma.cart.count({ where: { userId } })).toBe(before)
   })
@@ -95,6 +95,7 @@ describe('promoteGuestCart — the paths that matter', () => {
         promoted: false,
         merged: false,
         clampedSlugs: [],
+        dropped: [],
       })
     }
   })
@@ -169,44 +170,62 @@ describe('promoteGuestCart — the paths that matter', () => {
     expect(result.clampedSlugs).toContain(wellStocked.slug)
   })
 
-  it('🔴 a product that went INACTIVE mid-flight is NOT carried over', async () => {
-    // 🔴 ITS OWN FIXTURE PRODUCT, under the prefix seedConvergence ignores.
-    // The first version deactivated a REAL seeded product, and vitest runs
-    // files in parallel workers — a sibling cart suite adding that same
-    // product inside the window got PRODUCT_NOT_FOUND and went red. Third
-    // instance of ISSUE-065's family; the established fix is to stop sharing
-    // the row rather than to serialise the files.
+  // 🔴 THE PAIR THAT STOPS THE TWO PATHS RE-DIVERGING. The same inactive
+  // product used to be KEPT when the account had no cart (wholesale reassign)
+  // and DROPPED when it did (the merge loop) — one rule, two paths, only one
+  // correct. Both branches are now asserted.
+  for (const withAccountCart of [false, true]) {
+    it(`🔴 an INACTIVE product is dropped AND NAMED — account cart present: ${withAccountCart}`, async () => {
+      const userId = await makeUser()
+      const shape = await prisma.product.findFirst({
+        where: { isActive: true },
+        select: { categoryId: true, brandId: true },
+      })
+      if (!shape) throw new Error('fixture assumption failed: no product to copy shape from')
+
+      const victim = await prisma.product.create({
+        data: {
+          slug: `${TEST_FIXTURE_SLUG_PREFIX}promote-inactive-${withAccountCart}`,
+          nameHe: 'בדיקה', nameEn: 'fixture', categoryId: shape.categoryId, brandId: shape.brandId,
+          dosageForm: 'CAPSULE', packageQuantity: 1, usageInstructions: '', price: '1.00',
+          stockQuantity: 5, descriptionHe: 'בדיקה', descriptionEn: 'fixture',
+          warningsAllergens: '', isActive: false,
+        },
+        select: { id: true, slug: true },
+      })
+
+      try {
+        if (withAccountCart) {
+          await prisma.cart.create({ data: { userId, items: { create: [] } } })
+        }
+        await makeGuestCart([{ productId: victim.id, quantity: 1 }])
+
+        const result = await prisma.$transaction((tx) => promoteGuestCart(tx, GUEST, userId))
+
+        expect(await prisma.cartItem.count({ where: { cart: { userId } } })).toBe(0)
+        // 🔴 NAMED, not silent. Removal is a larger change than a clamp, and it
+        // used to be reported nowhere at all.
+        expect(result.dropped).toEqual([{ slug: victim.slug, reason: 'INACTIVE' }])
+      } finally {
+        await prisma.cartItem.deleteMany({ where: { productId: victim.id } })
+        await prisma.product.delete({ where: { id: victim.id } })
+      }
+    })
+  }
+
+  it('🔴 an OUT-OF-STOCK line is dropped and named UNAVAILABLE, not INACTIVE', async () => {
+    // The two reasons read differently to a shopper: "we no longer sell it" is
+    // not "it is out of stock".
     const userId = await makeUser()
-    const shape = await prisma.product.findFirst({
-      where: { isActive: true },
-      select: { categoryId: true, brandId: true },
-    })
-    if (!shape) throw new Error('fixture assumption failed: no product to copy shape from')
+    const pid = await productId('altman-fenugreek-chromium-90') // seeded at stock 0
+    await makeGuestCart([{ productId: pid, quantity: 1 }])
 
-    const victim = await prisma.product.create({
-      data: {
-        slug: `${TEST_FIXTURE_SLUG_PREFIX}promote-inactive`,
-        nameHe: 'בדיקה', nameEn: 'fixture', categoryId: shape.categoryId, brandId: shape.brandId,
-        dosageForm: 'CAPSULE', packageQuantity: 1, usageInstructions: '', price: '1.00',
-        stockQuantity: 5, descriptionHe: 'בדיקה', descriptionEn: 'fixture',
-        warningsAllergens: '', isActive: false,
-      },
-      select: { id: true },
-    })
+    const result = await prisma.$transaction((tx) => promoteGuestCart(tx, GUEST, userId))
 
-    try {
-      await prisma.cart.create({ data: { userId, items: { create: [] } } })
-      await makeGuestCart([{ productId: victim.id, quantity: 1 }])
-
-      await prisma.$transaction((tx) => promoteGuestCart(tx, GUEST, userId))
-
-      // It cannot be ADDED through any other path either, so promoting it
-      // would make registration the one way to acquire an inactive product.
-      expect(await prisma.cartItem.count({ where: { cart: { userId } } })).toBe(0)
-    } finally {
-      await prisma.cartItem.deleteMany({ where: { productId: victim.id } })
-      await prisma.product.delete({ where: { id: victim.id } })
-    }
+    expect(result.dropped).toEqual([
+      { slug: 'altman-fenugreek-chromium-90', reason: 'UNAVAILABLE' },
+    ])
+    expect(await prisma.cartItem.count({ where: { cart: { userId } } })).toBe(0)
   })
 
   it('🔴 ROLLBACK leaves the guest cart UNTOUCHED and still reachable', async () => {

@@ -45,6 +45,11 @@ async function cleanup(): Promise<void> {
     await prisma.productIngredient.deleteMany({ where: { productId: p.id } })
     await prisma.productHealthGoal.deleteMany({ where: { productId: p.id } })
     await prisma.productImage.deleteMany({ where: { productId: p.id } })
+    // 🔴 CART LINES TOO. Sibling suites now create fixture products under this
+    // same shared prefix and put them in carts, so a product delete here can
+    // fail on the CartItem foreign key — a suite-level error, not an
+    // assertion failure, which is why it reads as the whole file collapsing.
+    await prisma.cartItem.deleteMany({ where: { productId: p.id } })
     await prisma.product.delete({ where: { id: p.id } })
   }
   await prisma.activeIngredient.deleteMany({ where: { name: { startsWith: FIXTURE_PREFIX } } })

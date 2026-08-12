@@ -34,6 +34,7 @@ afterEach(async () => {
 interface Trace {
   events: string[]
   sessionIdAtCredentialCheck?: string
+  sessionIdAtMerge?: string
   initialSessionId?: string
   finalSessionId?: string
 }
@@ -84,6 +85,17 @@ async function startApp(
         return {}
       }),
     },
+    // Checkpoint F filled the MERGE-GUEST-CART seam, which runs a transaction
+    // AFTER the credential check and BEFORE regeneration. Recording the event
+    // is what lets the ordering assertions below see it in the right place;
+    // returning "no guest cart" keeps these tests about ORDERING.
+    // 🔴 The merge's own behaviour is covered against the REAL database in
+    // promoteGuestCart.integration.test.ts — a fake would only prove the fake.
+    $transaction: vi.fn(async (fn: (client: unknown) => Promise<unknown>) => {
+      trace.events.push('cart.merge')
+      trace.sessionIdAtMerge = sessionId
+      return fn({ cart: { findFirst: vi.fn(async () => null) } })
+    }),
   } as unknown as PrismaClient
 
   app.use(
@@ -205,5 +217,26 @@ describe('TEST-032 at the HTTP layer — A1: one response for every failure', ()
     expect(response.status).toBe(401)
     // Nothing was looked up — a malformed body must not even probe the DB.
     expect(trace.events).toEqual([])
+  })
+
+  it('🔴 DEC-053 Rule 3: the MERGE runs BEFORE regeneration, on the PRE-regeneration id', async () => {
+    // Rule 3's entire justification, and until now nothing asserted it:
+    // regeneration DESTROYS the guest session id, and that id is the only way
+    // to find the guest cart. A merge after regeneration finds nothing and
+    // loses the cart silently.
+    //
+    // 🔴 Written after a mutation moving the merge AFTER regeneration went
+    // GREEN against the existing ordering tests. An untested ordering rule is
+    // a comment.
+    const trace: Trace = { events: [] }
+    const baseUrl = await startApp(trace, {})
+    await login(baseUrl)
+
+    const mergeAt = trace.events.indexOf('cart.merge')
+    const regenerateAt = trace.events.indexOf('session.regenerate')
+    expect(mergeAt).toBeGreaterThanOrEqual(0)
+    expect(regenerateAt).toBeGreaterThanOrEqual(0)
+    expect(mergeAt).toBeLessThan(regenerateAt)
+    expect(trace.sessionIdAtMerge).toBe('guest-session-id')
   })
 })
