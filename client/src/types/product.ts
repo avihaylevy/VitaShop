@@ -47,6 +47,8 @@ export type ProductDetailModel = ProductCardModel & {
   images: string[]
   description: string
   warningsAllergens: string
+  /** DEC-032 DECISION B — provenance, not absence. See `ProductDetailDto`. */
+  allergenInfoIncomplete: boolean
   ingredients: { name: string; amount: string; unit: string }[]
   /** Language-resolved health-goal labels; may legitimately be empty. */
   healthGoals: string[]

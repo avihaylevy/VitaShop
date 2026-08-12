@@ -88,6 +88,17 @@ export interface PublicProductDetail extends PublicCatalogProduct {
   descriptionEn: string
   /** Field 12 — Hebrew-only manufacturer text (schema: not paired). */
   warningsAllergens: string
+  /**
+   * DEC-032 DECISION B — 🔴 PROVENANCE, NOT ABSENCE. True means the
+   * manufacturer's page was checked and `warningsAllergens` already holds
+   * everything it publishes, which may be partial or empty. It COMPOSES with
+   * `warningsAllergens`; it does not replace it.
+   *
+   * 🔴 A client MUST NOT render an empty allergen section for a product with
+   * this true — that misreading (blank looking like "no allergens") is the
+   * entire reason the flag exists.
+   */
+  allergenInfoIncomplete: boolean
   /** Field 13. */
   ingredients: PublicProductIngredient[]
   /** Field 14 — zero or more. */
@@ -165,6 +176,7 @@ export function mapProductToPublicDetail(product: ProductWithDetailRelations): P
     descriptionHe: product.descriptionHe,
     descriptionEn: product.descriptionEn,
     warningsAllergens: product.warningsAllergens,
+    allergenInfoIncomplete: product.allergenInfoIncomplete,
     ingredients: [...product.ingredients]
       .sort((a, b) => a.activeIngredient.name.localeCompare(b.activeIngredient.name))
       .map((row) => ({

@@ -217,7 +217,29 @@ function ProductDetailView({ product, onBack }: ProductDetailViewProps) {
         <h2 id="product-warnings" className="text-lg font-semibold text-text-ink">
           {t('productDetails.warningsAllergens')}
         </h2>
-        <p className="mt-2 text-sm text-text-ink">{product.warningsAllergens}</p>
+        {product.warningsAllergens.length > 0 && (
+          <p className="mt-2 text-sm text-text-ink">{product.warningsAllergens}</p>
+        )}
+        {/*
+          🔴 DEC-032 DECISION B, condition 2. The flag says the manufacturer's
+          page was CHECKED and the text above is everything it publishes —
+          which may be partial, or nothing at all.
+
+          It is rendered as a STATEMENT, not as an omission, and this branch is
+          why the flag exists: a blank allergen section reads to a shopper as
+          "no allergens", which is the misreading the whole decision was taken
+          to prevent. `role="note"` so it is announced as an aside rather than
+          as part of the manufacturer's own warning text.
+        */}
+        {product.allergenInfoIncomplete && (
+          <p
+            role="note"
+            data-testid="allergen-info-incomplete"
+            className="mt-2 border-s-4 border-state-lowstock bg-surface-sunken px-3 py-2 text-sm text-text-ink"
+          >
+            {t('productDetails.allergenInfoIncomplete')}
+          </p>
+        )}
       </section>
 
       {product.ingredients.length > 0 && (

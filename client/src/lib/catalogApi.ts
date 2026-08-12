@@ -215,6 +215,10 @@ function isProductDetailDto(value: unknown): value is ProductDetailDto {
     typeof dto.descriptionHe === 'string' &&
     typeof dto.descriptionEn === 'string' &&
     typeof dto.warningsAllergens === 'string' &&
+    // DEC-032 DECISION B. Validated strictly: a missing flag REJECTS the
+    // response rather than defaulting to false, because false is exactly the
+    // value that renders allergen text as though it were complete.
+    typeof dto.allergenInfoIncomplete === 'boolean' &&
     Array.isArray(dto.ingredients) &&
     dto.ingredients.every(
       (ingredient) =>

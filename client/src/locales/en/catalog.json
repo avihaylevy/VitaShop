@@ -49,6 +49,7 @@
     "description": "Product description",
     "usageInstructions": "How to use",
     "warningsAllergens": "Warnings and allergens",
+    "allergenInfoIncomplete": "The manufacturer does not publish complete allergen information for this product. Check the label on the packaging.",
     "ingredients": "Active ingredients",
     "ingredientName": "Ingredient",
     "ingredientAmount": "Amount",

@@ -121,6 +121,7 @@ describe('catalog namespace — the shipped locale pair', () => {
     'productDetails.description',
     'productDetails.usageInstructions',
     'productDetails.warningsAllergens',
+    'productDetails.allergenInfoIncomplete',
     'productDetails.ingredients',
     'productDetails.ingredientName',
     'productDetails.ingredientAmount',

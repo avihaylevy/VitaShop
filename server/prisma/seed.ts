@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient, Prisma, type DosageForm } from '@prisma/client'
+import { validateAllergenFields } from '../src/lib/allergenInfo.js'
 import {
   syncProductHealthGoals,
   syncProductImages,
@@ -262,7 +263,9 @@ interface ValidatedProductRow {
   packageQuantity: number
   usageInstructions: string
   warningsAllergens: string
+  allergenInfoIncomplete: boolean
 }
+
 
 function requireNonEmpty(value: string, field: string, slug: string): string {
   const trimmed = value.trim()
@@ -365,9 +368,10 @@ function validateProductRow(row: Record<string, string>): ValidatedProductRow {
     dosageForm: mapDosageForm(row.dosage_form ?? '', slug),
     packageQuantity: requirePositiveInt(row.package_quantity ?? '', 'package_quantity', slug),
     usageInstructions: requireNonEmpty(row.usage_instructions ?? '', 'usage_instructions', slug),
-    warningsAllergens: requireNonEmpty(row.warnings_allergens ?? '', 'warnings_allergens', slug),
+    ...validateAllergenFields(row, slug),
   }
 }
+
 
 interface ValidatedIngredientRow {
   productSlug: string
@@ -440,6 +444,7 @@ async function seedProduct(db: Db, row: ValidatedProductRow, ingredients: Valida
     descriptionHe: row.descriptionHe,
     descriptionEn,
     warningsAllergens: row.warningsAllergens,
+    allergenInfoIncomplete: row.allergenInfoIncomplete,
     targetAudience: row.targetAudience,
   }
 

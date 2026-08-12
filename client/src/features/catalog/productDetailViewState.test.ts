@@ -27,6 +27,7 @@ function product(overrides: Partial<ProductDetailModel> = {}): ProductDetailMode
     images: ['omega.jpg'],
     description: 'תיאור',
     warningsAllergens: 'אין',
+    allergenInfoIncomplete: false,
     ingredients: [{ name: 'EPA', amount: '180.00', unit: 'mg' }],
     healthGoals: ['לב וכלי דם'],
     targetAudience: null,

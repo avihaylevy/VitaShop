@@ -26,6 +26,7 @@ export function mapProductDetail(dto: ProductDetailDto, language: SupportedLangu
     images: dto.images,
     description: language === 'he' ? dto.descriptionHe : dto.descriptionEn,
     warningsAllergens: dto.warningsAllergens,
+    allergenInfoIncomplete: dto.allergenInfoIncomplete,
     ingredients: dto.ingredients.map((ingredient) => ({
       name: ingredient.name,
       amount: ingredient.amount,

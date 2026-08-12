@@ -51,6 +51,7 @@
     "description": "תיאור המוצר",
     "usageInstructions": "אופן השימוש",
     "warningsAllergens": "אזהרות ואלרגנים",
+    "allergenInfoIncomplete": "היצרן אינו מפרסם מידע מלא על אלרגנים עבור מוצר זה. יש לבדוק את הסימון על גבי האריזה.",
     "ingredients": "רכיבים פעילים",
     "ingredientName": "רכיב",
     "ingredientAmount": "כמות",

@@ -26,6 +26,7 @@ function buildProduct(overrides: Partial<ProductWithCatalogRelations> = {}): Pro
     descriptionHe: 'תיאור',
     descriptionEn: 'Description',
     warningsAllergens: 'אין',
+    allergenInfoIncomplete: false,
     targetAudience: null,
     createdAt: new Date('2026-01-01'),
     isActive: true,
@@ -103,6 +104,10 @@ describe('mapProductToPublicCatalog', () => {
     expect(result).not.toHaveProperty('descriptionHe')
     expect(result).not.toHaveProperty('descriptionEn')
     expect(result).not.toHaveProperty('warningsAllergens')
+    // DEC-032 DECISION B — the flag is DETAIL-ONLY, like the field it
+    // qualifies. Leaking it into the list DTO without the accompanying text
+    // would be a provenance claim with nothing to attach to.
+    expect(result).not.toHaveProperty('allergenInfoIncomplete')
     expect(result).not.toHaveProperty('targetAudience')
     expect(result).not.toHaveProperty('usageInstructions')
   })
@@ -253,5 +258,23 @@ describe('mapProductToPublicDetail — §7a', () => {
         } as Partial<ProductWithDetailRelations>),
       ),
     ).toThrow(CatalogIntegrityError)
+  })
+})
+
+// DEC-032 DECISION B — provenance, not absence.
+describe('mapProductToPublicDetail — the allergen provenance flag', () => {
+  it('carries the flag through unchanged, in BOTH directions', () => {
+    expect(mapProductToPublicDetail(buildDetailProduct()).allergenInfoIncomplete).toBe(false)
+    expect(
+      mapProductToPublicDetail(buildDetailProduct({ allergenInfoIncomplete: true })).allergenInfoIncomplete,
+    ).toBe(true)
+  })
+
+  it('does not derive the flag from the text — an empty declaration does NOT imply it', () => {
+    const result = mapProductToPublicDetail(
+      buildDetailProduct({ warningsAllergens: '', allergenInfoIncomplete: false }),
+    )
+    expect(result.warningsAllergens).toBe('')
+    expect(result.allergenInfoIncomplete).toBe(false)
   })
 })

@@ -76,6 +76,14 @@ export interface ProductDetailDto extends CatalogProductDto {
   descriptionHe: string
   descriptionEn: string
   warningsAllergens: string
+  /**
+   * DEC-032 DECISION B — 🔴 PROVENANCE, NOT ABSENCE. True means the
+   * manufacturer's page was checked and `warningsAllergens` already holds
+   * everything it publishes, which may be partial or empty. It composes with
+   * that field rather than replacing it, and a true value must NEVER render
+   * as an empty allergen section.
+   */
+  allergenInfoIncomplete: boolean
   ingredients: ProductIngredientDto[]
   healthGoals: ProductHealthGoalDto[]
   /** Field 15 — null is a real value, not an omission. */

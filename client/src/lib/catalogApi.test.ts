@@ -185,6 +185,7 @@ describe('fetchProductDetail', () => {
       descriptionHe: 'תיאור',
       descriptionEn: 'Description',
       warningsAllergens: 'מכיל דגים',
+      allergenInfoIncomplete: false,
       ingredients: [{ name: 'EPA', amount: '180.00', unit: 'mg' }],
       healthGoals: [{ nameHe: 'לב', nameEn: 'Heart' }],
       targetAudience: null,
@@ -252,6 +253,22 @@ describe('fetchProductDetail', () => {
 
     const { targetAudience: _dropped, ...withoutTarget } = detail()
     fetchMock.mockResolvedValue(mockResponse(200, withoutTarget))
+    await expect(fetchProductDetail('x')).rejects.toMatchObject({ code: 'INVALID_RESPONSE_SHAPE' })
+  })
+
+  // DEC-032 DECISION B. 🔴 A MISSING flag must REJECT, never default to false:
+  // false is the value that renders the allergen text as though it were the
+  // manufacturer's complete declaration, so a silent default would turn a
+  // server that forgot the field into a page that quietly overstates it.
+  it('requires allergenInfoIncomplete — a missing or non-boolean flag is INVALID_RESPONSE_SHAPE', async () => {
+    fetchMock.mockResolvedValue(mockResponse(200, detail({ allergenInfoIncomplete: true })))
+    await expect(fetchProductDetail('x')).resolves.toMatchObject({ allergenInfoIncomplete: true })
+
+    const { allergenInfoIncomplete: _dropped, ...withoutFlag } = detail()
+    fetchMock.mockResolvedValue(mockResponse(200, withoutFlag))
+    await expect(fetchProductDetail('x')).rejects.toMatchObject({ code: 'INVALID_RESPONSE_SHAPE' })
+
+    fetchMock.mockResolvedValue(mockResponse(200, detail({ allergenInfoIncomplete: 'yes' })))
     await expect(fetchProductDetail('x')).rejects.toMatchObject({ code: 'INVALID_RESPONSE_SHAPE' })
   })
 

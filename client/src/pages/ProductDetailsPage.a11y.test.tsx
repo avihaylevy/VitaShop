@@ -59,6 +59,7 @@ function product(overrides: Partial<ProductDetailModel> = {}): ProductDetailMode
     images: ['אומגה 3 של חברת סולגאר.jpg', 'סולגר טבליות ויטמין B12.jpg'],
     description: 'תיאור המוצר בעברית',
     warningsAllergens: 'מכיל דגים',
+    allergenInfoIncomplete: false,
     ingredients: [
       { name: 'EPA', amount: '180.00', unit: 'mg' },
       { name: 'DHA', amount: '120.00', unit: 'mg' },
@@ -307,5 +308,63 @@ describe('ProductDetailsPage — §7c i18n', () => {
     for (const hardcoded of ['Brand', 'Category', 'Serial number', 'Back to the catalogue', 'How to use']) {
       expect(html).not.toContain(hardcoded)
     }
+  })
+})
+
+/**
+ * DEC-032 DECISION B condition 2 — the rendering is part of the accepted
+ * decision, not follow-up work. The state exists because a BLANK allergen
+ * section reads to a shopper as "no allergens"; these tests are what stop the
+ * flag from shipping as exactly that.
+ *
+ * 🔴 Both controls, per `.claude/rules/browser-verification.md`: a case that
+ * MUST render the note and a case that MUST NOT. A test that only ever sees
+ * the true branch would pass against a component that renders the note
+ * unconditionally.
+ */
+describe('ProductDetailsPage — DEC-032 decision B, the allergen-provenance note', () => {
+  it('flag true + text: renders the manufacturer text AND the explicit note', async () => {
+    setDetail({
+      product: product({
+        warningsAllergens: 'המוצר ללא גלוטן וללא אלכוהול.',
+        allergenInfoIncomplete: true,
+      }),
+    })
+    const html = await renderPage()
+
+    expect(html).toContain('המוצר ללא גלוטן וללא אלכוהול.')
+    expect(html).toContain(catalogHe.productDetails.allergenInfoIncomplete)
+    expect(count(html, 'data-testid="allergen-info-incomplete"')).toBe(1)
+    expect(count(html, 'role="note"')).toBe(1)
+  })
+
+  it('🔴 flag true + EMPTY text: the section is NEVER blank — the note stands in its place', async () => {
+    setDetail({ product: product({ warningsAllergens: '', allergenInfoIncomplete: true }) })
+    const html = await renderPage()
+
+    // The heading still renders, so the reader is not silently shown nothing.
+    expect(html).toContain(catalogHe.productDetails.warningsAllergens)
+    expect(html).toContain(catalogHe.productDetails.allergenInfoIncomplete)
+    // The whole point: no empty paragraph where a declaration would sit.
+    expect(html).not.toContain('<p class="mt-2 text-sm text-text-ink"></p>')
+  })
+
+  it('flag false: NO note, and the manufacturer text renders alone', async () => {
+    setDetail({ product: product({ warningsAllergens: 'מכיל דגים', allergenInfoIncomplete: false }) })
+    const html = await renderPage()
+
+    expect(html).toContain('מכיל דגים')
+    expect(html).not.toContain('data-testid="allergen-info-incomplete"')
+    expect(html).not.toContain(catalogHe.productDetails.allergenInfoIncomplete)
+  })
+
+  it('the note uses logical properties only — border-s, never border-l/border-r', async () => {
+    setDetail({ product: product({ allergenInfoIncomplete: true }) })
+    const html = await renderPage()
+
+    const noteClasses = /data-testid="allergen-info-incomplete"[^>]*class="([^"]*)"|class="([^"]*)"[^>]*data-testid="allergen-info-incomplete"/.exec(html)
+    const classes = (noteClasses?.[1] ?? noteClasses?.[2] ?? '').split(/\s+/)
+    expect(classes).toContain('border-s-4')
+    expect(classes.some((cls) => /^border-[lr]/.test(cls))).toBe(false)
   })
 })

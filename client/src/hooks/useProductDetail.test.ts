@@ -37,6 +37,7 @@ const DETAIL = {
   descriptionHe: 'תיאור בעברית',
   descriptionEn: 'English description',
   warningsAllergens: 'מכיל דגים',
+  allergenInfoIncomplete: false,
   ingredients: [{ name: 'EPA', amount: '180.00', unit: 'mg' }],
   healthGoals: [{ nameHe: 'לב וכלי דם', nameEn: 'Heart' }],
   targetAudience: null,
