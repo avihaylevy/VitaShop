@@ -61,6 +61,33 @@ DEFAULT_MEMORY_DIR = Path(
 )
 MEMORY_DIR = Path(os.environ.get("VITASHOP_MEMORY_DIR", DEFAULT_MEMORY_DIR))
 
+# 🔴 THE SERVER OWNS THE PAGE SIZE. This script used to declare its own
+# `PAGE_SIZE = 24`, which is the exact defect it was built to prevent: a fact
+# living in two places. Worse than ordinary duplication — change the server's
+# value and the checker would compute pages at the stale 24 and report
+# AGREEMENT, going green while certifying a wrong number.
+PAGINATION_TS = REPO_ROOT / "server" / "src" / "lib" / "catalogPagination.ts"
+
+
+def server_page_size() -> int:
+    """Read PAGE_SIZE out of the TypeScript module that defines it.
+
+    ⚠️ A regex over source is not elegant, but the alternative is a second
+    copy, and a second copy is the bug. If the export is ever renamed or
+    reshaped this RAISES rather than falling back to a guess — a checker that
+    guesses its own input is the failure shape this project keeps producing.
+    """
+    if not PAGINATION_TS.exists():
+        raise SystemExit(f"check-catalogue-facts: cannot find {PAGINATION_TS} — refusing to "
+                         "assume a page size.")
+    match = re.search(r"^export const PAGE_SIZE\s*=\s*(\d+)\s*$",
+                      PAGINATION_TS.read_text(encoding="utf-8"), re.MULTILINE)
+    if not match:
+        raise SystemExit("check-catalogue-facts: could not read `export const PAGE_SIZE` from "
+                         f"{PAGINATION_TS.name}. It was renamed or reshaped — fix this script "
+                         "rather than letting it fall back to a hardcoded number.")
+    return int(match.group(1))
+
 SCANNED_FILES = [
     "operations/ROADMAP.md",
     "operations/STATUS.md",
@@ -71,18 +98,31 @@ SCANNED_FILES = [
 START = "<!-- CATALOGUE-FACTS:START -->"
 END = "<!-- CATALOGUE-FACTS:END -->"
 
-PAGE_SIZE = 24  # server pagination default; a third page appears at 49
-
-
-def computed_facts() -> dict[str, int]:
+def computed_facts() -> tuple[dict[str, int], str]:
     with PRODUCTS_CSV.open(encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
 
+    page_size = server_page_size()
+
+    # ⚠️ "yes" and "blocked" ARE restated here, and that is stated rather than
+    # hidden: they are CSV cell values, validated inside `prisma/seed.ts`
+    # (TypeScript), and Python cannot import them. The mismatch is not silent
+    # though — an unknown `verified` value is counted as Partial, so a renamed
+    # vocabulary shows up immediately as a Partial count that stops being 0.
     seeded = [r for r in rows if (r.get("verified") or "").strip() == "yes"]
     partial = [r for r in rows if (r.get("verified") or "").strip() not in ("yes", "blocked")]
     blocked = [r for r in rows if (r.get("verified") or "").strip() == "blocked"]
     brands = {(r.get("brand") or "").strip() for r in seeded}
-    altman = [r for r in seeded if (r.get("brand") or "").strip() == "אלטמן"]
+
+    # 🔴 NO HARDCODED BRAND. This read `== "אלטמן"`, which would have kept
+    # reporting a share for a brand that had left the catalogue. The metric is
+    # CONCENTRATION — the largest single brand — and the script prints which
+    # brand that currently is, so the number cannot quietly change meaning.
+    counts: dict[str, int] = {}
+    for row in seeded:
+        name = (row.get("brand") or "").strip()
+        counts[name] = counts.get(name, 0) + 1
+    largest_brand, largest_count = max(counts.items(), key=lambda kv: (kv[1], kv[0]))
 
     if not seeded:
         raise SystemExit("check-catalogue-facts: products.csv has NO verified rows — refusing to "
@@ -93,9 +133,9 @@ def computed_facts() -> dict[str, int]:
         "partial": len(partial),
         "blocked": len(blocked),
         "brands": len(brands),
-        "pages (pageSize %d)" % PAGE_SIZE: -(-len(seeded) // PAGE_SIZE),
-        "altman share": round(100 * len(altman) / len(seeded)),
-    }
+        "pages (pageSize %d)" % page_size: -(-len(seeded) // page_size),
+        "largest brand share": round(100 * largest_count / len(seeded)),
+    }, largest_brand
 
 
 def marked_blocks(text: str) -> list[tuple[int, str]]:
@@ -123,10 +163,19 @@ FACT_LINE = re.compile(r"^\s*(?P<key>[A-Za-z][A-Za-z ()=%\d]*?)\s{2,}(?P<value>\
 
 
 def main() -> int:
-    expected = computed_facts()
+    expected, largest_brand = computed_facts()
     problems: list[str] = []
     checked = 0
     blocks_found = 0
+
+    # 🔴 SKIP LOUDLY, exit 0, when the memory system is not on this machine.
+    # The operations files live OUTSIDE this repository, so a fresh checkout
+    # elsewhere has nothing to check — and failing there would be a checker
+    # that cries wolf, which is how a check gets ignored and dies.
+    if not MEMORY_DIR.exists():
+        print(f"check-catalogue-facts: SKIPPED — memory root not found at {MEMORY_DIR}")
+        print("  set VITASHOP_MEMORY_DIR to the VitaShop-Project directory to enable this check")
+        return 0
 
     for rel in SCANNED_FILES:
         path = MEMORY_DIR / rel
@@ -177,6 +226,7 @@ def main() -> int:
         return 1
 
     print(f"catalogue facts OK — {checked} value(s) across {blocks_found} block(s) match {PRODUCTS_CSV.name}")
+    print(f"  (largest brand is {largest_brand!r}; page size read from {PAGINATION_TS.name})")
     for key, value in expected.items():
         print(f"  {key:24} {value}")
     return 0

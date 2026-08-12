@@ -51,6 +51,21 @@ afterAll(async () => {
   await prisma.$disconnect()
 })
 
+/**
+ * 🔴 `syncProductRelations.integration.test.ts` creates and deletes products
+ * under this prefix. They are ANOTHER TEST'S FIXTURES, not catalogue drift,
+ * and whether they are visible here is a matter of run ordering — so ignoring
+ * them is correctness, not a weakened assertion. Verified against the database
+ * before this filter was added: the only unexpected row was
+ * `zz-synctest-product`, created by that suite.
+ *
+ * ⚠️ It is a NARROW, NAMED prefix on purpose. A broad "ignore anything
+ * unexpected" filter would delete the whole point of a set-equality test.
+ */
+const TEST_FIXTURE_PREFIX = 'zz-synctest-'
+
+const isFixture = (slug: string) => slug.startsWith(TEST_FIXTURE_PREFIX)
+
 /** Symmetric difference, reported both ways so a failure says WHICH side drifted. */
 function diff(actual: Set<string>, expected: Set<string>) {
   return {
@@ -98,7 +113,9 @@ describe('seed convergence — the database equals the CSV, in both directions',
             activeIngredient: { select: { name: true } },
           },
         })
-      ).map((row) => `${row.product.slug}::${row.activeIngredient.name}`),
+      )
+        .filter((row) => !isFixture(row.product.slug))
+        .map((row) => `${row.product.slug}::${row.activeIngredient.name}`),
     )
 
     expect(diff(actual, expected)).toEqual(NO_DRIFT)
@@ -114,7 +131,7 @@ describe('seed convergence — the database equals the CSV, in both directions',
           select: { url: true, product: { select: { slug: true, isActive: true } } },
         })
       )
-        .filter((row) => row.product.isActive)
+        .filter((row) => row.product.isActive && !isFixture(row.product.slug))
         .map((row) => `${row.product.slug}::${row.url}`),
     )
 
@@ -140,7 +157,7 @@ describe('seed convergence — the database equals the CSV, in both directions',
           },
         })
       )
-        .filter((row) => row.product.isActive)
+        .filter((row) => row.product.isActive && !isFixture(row.product.slug))
         .map((row) => `${row.product.slug}::${row.healthGoal.nameHe}`),
     )
 
@@ -152,7 +169,9 @@ describe('seed convergence — the database equals the CSV, in both directions',
       where: { isActive: true },
       select: { slug: true, _count: { select: { images: true } } },
     })
-    const wrong = counts.filter((p) => p._count.images !== 1).map((p) => `${p.slug}=${p._count.images}`)
+    const wrong = counts
+      .filter((p) => !isFixture(p.slug) && p._count.images !== 1)
+      .map((p) => `${p.slug}=${p._count.images}`)
     expect(wrong).toEqual([])
   })
 
@@ -162,6 +181,7 @@ describe('seed convergence — the database equals the CSV, in both directions',
     // the vacuous checks in .claude/rules/browser-verification.md.
     const verified = readVerifiedProductRows()
     expect(verified.length).toBeGreaterThan(24) // at least a second page's worth
-    expect(await prisma.product.count({ where: { isActive: true } })).toBe(verified.length)
+    const active = await prisma.product.findMany({ where: { isActive: true }, select: { slug: true } })
+    expect(active.filter((p) => !isFixture(p.slug))).toHaveLength(verified.length)
   })
 })
