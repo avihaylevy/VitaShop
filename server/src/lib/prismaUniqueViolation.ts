@@ -50,40 +50,49 @@ export function isUniqueViolationOn(error: unknown, accepted: readonly string[])
         : []
   const message = String(cause?.originalMessage ?? '')
 
-  // 🔴 NORMALISED ON BOTH SIDES. `fields` arrives as snake_case (`session_id`)
-  // while callers naturally write camelCase (`sessionId`), so a caller that
-  // passed only one spelling silently never matched. Depending on every caller
-  // to list every spelling is how the first divergence started.
-  const normalise = (value: string) => value.toLowerCase().replace(/_/g, '')
+  // 🔴 TWO NORMALISERS, because one was doing two incompatible jobs.
+  //
+  // STRUCTURED field names want underscores GONE, so a caller writing
+  // `sessionId` matches a driver reporting `session_id`.
+  // CONSTRAINT NAMES want them KEPT, because there they are the boundary.
+  // A single normaliser that stripped both made the fallback's boundary regex
+  // unmatchable: `normalise('users_email_key')` became `usersemailkey`, in
+  // which `[^a-z0-9]` can never appear, so only the `^` alternative survived
+  // and the branch could not fire for any real caller.
+  const normaliseField = (value: string) => value.toLowerCase().replace(/_/g, '')
+  const normaliseConstraint = (value: string) => value.toLowerCase()
 
-  const structured = [...fields, ...target].map(normalise)
+  const structured = [...fields, ...target].map(normaliseField)
   if (structured.length > 0) {
     // 🔴 A STRUCTURED SOURCE THAT ANSWERED IS NOT SECOND-GUESSED BY TEXT.
-    // This used to OR the message test in unconditionally, so a PRECISE
-    // NEGATIVE was overridden by a LOOSE POSITIVE: a P2002 on a
-    // `users_pending_email_key` constraint has fields ['pending_email'],
-    // which correctly does NOT match 'email' — but the raw message contains
-    // "email", so the matcher said yes and registration would answer
-    // ALREADY-REGISTERED for a collision that has nothing to do with the
-    // address. That is this module's own header violated: a broad catch
-    // turning a real error into a fake success and losing the registration.
-    return accepted.some((value) => structured.includes(normalise(value)))
+    // Precise negative beats loose positive: a P2002 on
+    // `users_pending_email_key` reports fields ['pending_email'], which
+    // correctly does not match 'email'.
+    return accepted.some((value) => structured.includes(normaliseField(value)))
   }
 
-  // Only when NEITHER structured source yielded anything. Matched on the
-  // QUOTED CONSTRAINT NAME with a boundary, never a bare substring — Postgres
-  // renders it as: duplicate key value violates unique constraint "name_key"
+  // ── The fallback: ONLY when neither structured source yielded anything ──
+  //
+  // 🔴 IT MATCHES THE FULL CONSTRAINT NAME, EXACTLY. It deliberately does NOT
+  // try to recover a COLUMN name from a constraint name, and that restriction
+  // is a finding rather than laziness:
+  //
+  //   users_email_key          -> candidate columns: users_email, email
+  //   users_pending_email_key  -> candidate columns: users_pending_email,
+  //                               pending_email, EMAIL
+  //
+  // The table prefix is unknown, so `email` is a legitimate reading of BOTH.
+  // Any rule permissive enough to accept 'email' for `users_email_key` also
+  // accepts it for `users_pending_email_key` — which is precisely the
+  // false-positive that made registration answer ALREADY-REGISTERED for an
+  // unrelated collision. Name-only parsing cannot separate them.
+  //
+  // 🔴 THEREFORE: a caller that wants fallback coverage MUST list the
+  // constraint name alongside its field names. Both call sites do
+  // (`['email', 'users_email_key']`, `['carts_session_id_key', 'sessionId',
+  // 'session_id']`). Field names alone are served by the structured path only.
   const quoted = /unique constraint "([^"]+)"/i.exec(message)?.[1]
   if (!quoted) return false
-  const quotedNormalised = normalise(quoted)
-  return accepted.some((value) => {
-    const needle = normalise(value)
-    // Exact, or the constraint name is the accepted name plus Postgres'
-    // conventional decoration (`users_email_key` for `email`). Not a substring
-    // sweep: `pending_email` must not match `email`.
-    return (
-      quotedNormalised === needle ||
-      new RegExp(`(^|[^a-z0-9])${needle}(key|idx|unique)?$`).test(quotedNormalised)
-    )
-  })
+  const quotedName = normaliseConstraint(quoted)
+  return accepted.some((value) => normaliseConstraint(value) === quotedName)
 }

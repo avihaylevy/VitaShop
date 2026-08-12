@@ -64,12 +64,29 @@ describe('the message fallback — only when nothing structured answered', () =>
     },
   })
 
-  it('matches the quoted constraint name, with Postgres decoration', () => {
-    expect(isUniqueViolationOn(messageOnly('users_email_key'), ['users_email_key'])).toBe(true)
-    expect(isUniqueViolationOn(messageOnly('carts_session_id_key'), ['carts_session_id_key'])).toBe(true)
+  it('🔴 matches when the caller lists the CONSTRAINT NAME — as both real call sites do', () => {
+    // The previous version had a "decoration" branch meant to derive a column
+    // from a constraint name. It was DEAD: the shared normaliser stripped
+    // underscores, so `users_email_key` became `usersemailkey` and the
+    // boundary regex could never fire. Its only positive test passed the whole
+    // constraint name, which hit the equality branch and never reached it.
+    expect(isUniqueViolationOn(messageOnly('users_email_key'), ['email', 'users_email_key'])).toBe(true)
+    expect(
+      isUniqueViolationOn(messageOnly('carts_session_id_key'), ['carts_session_id_key', 'sessionId']),
+    ).toBe(true)
   })
 
-  it('🔴 is NOT a substring sweep — pending_email still does not match email', () => {
+  it('🔴 a FIELD NAME ALONE does not match — and that is a deliberate limit', () => {
+    // users_email_key and users_pending_email_key BOTH yield 'email' as a
+    // legitimate column reading, because the table prefix is unknown. Any rule
+    // permissive enough to accept the first also accepts the second, which is
+    // the false positive that would answer ALREADY-REGISTERED for an unrelated
+    // collision. Field names are served by the STRUCTURED path.
+    expect(isUniqueViolationOn(messageOnly('users_email_key'), ['email'])).toBe(false)
+  })
+
+  it('🔴 pending_email never matches the email constraint on this path either', () => {
+    expect(isUniqueViolationOn(messageOnly('users_pending_email_key'), ['users_email_key'])).toBe(false)
     expect(isUniqueViolationOn(messageOnly('users_pending_email_key'), ['email'])).toBe(false)
   })
 
@@ -77,13 +94,37 @@ describe('the message fallback — only when nothing structured answered', () =>
     expect(
       isUniqueViolationOn(
         { code: 'P2002', meta: { driverAdapterError: { cause: { originalMessage: 'something odd' } } } },
-        ['email'],
+        ['users_email_key'],
       ),
     ).toBe(false)
   })
 
   it('never matches a non-P2002 error', () => {
-    expect(isUniqueViolationOn({ code: 'P2025', meta: {} }, ['email'])).toBe(false)
+    expect(isUniqueViolationOn({ code: 'P2025', meta: {} }, ['users_email_key'])).toBe(false)
     expect(isUniqueViolationOn(null, ['email'])).toBe(false)
+  })
+})
+
+describe('🔴 the real call sites list their constraint name, so the fallback can fire', () => {
+  it('registrationService accepts email AND users_email_key', () => {
+    // Pinned: if someone trims the constraint name from that call, the
+    // fallback silently stops covering it and the module's stated reason for
+    // keeping two lookups stops being true.
+    const accepted = ['email', 'users_email_key']
+    expect(
+      isUniqueViolationOn(
+        {
+          code: 'P2002',
+          meta: {
+            driverAdapterError: {
+              cause: {
+                originalMessage: 'duplicate key value violates unique constraint "users_email_key"',
+              },
+            },
+          },
+        },
+        accepted,
+      ),
+    ).toBe(true)
   })
 })
