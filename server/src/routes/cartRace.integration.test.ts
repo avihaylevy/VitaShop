@@ -19,8 +19,11 @@ import { addItem, getCart } from '../lib/cartService.js'
  * oracle. Same class, different table — and this one fails SILENTLY, which is
  * worse: nothing throws, the item simply disappears or the cap stops binding.
  *
- * 🔴 THESE TESTS ARE EXPECTED TO FAIL ON TODAY'S CODE. They are the evidence
- * for the schema decision, not a regression suite — see DECISIONS.md.
+ * ✅ CONVERTED TO A REGRESSION SUITE 2026-08-12, once DEC-055 landed. These
+ * tests were committed FAILING as evidence for that decision; they now guard
+ * the fix. 🔴 The concurrency levels are UNCHANGED — 2, 3 and 5, exactly what
+ * measured the defect. Lowering them to make the suite pass would have been
+ * the vacuous shape this project keeps recording.
  */
 
 let prisma: PrismaClient
@@ -51,66 +54,49 @@ afterAll(async () => {
   await prisma.$disconnect()
 })
 
-describe('🔴 the check-then-create race — reproduction, not regression', () => {
-  it('concurrent adds must not create TWO CARTS for one session', async () => {
-    await wipe()
+describe('DEC-055 — the check-then-create race stays fixed', () => {
+  for (const concurrency of [2, 3, 5]) {
+    it(`${concurrency} concurrent adds: ONE cart, ONE line, total within min(cap, stock)`, async () => {
+      await wipe()
+      const product = await prisma.product.findFirst({
+        where: { slug: LOW_STOCK_3 },
+        select: { stockQuantity: true },
+      })
+      if (!product) throw new Error('fixture assumption failed: the low-stock product is missing')
 
-    await Promise.all([
-      addItem(prisma, { guestCartId: RACE_SESSION }, LOW_STOCK_3, 1),
-      addItem(prisma, { guestCartId: RACE_SESSION }, LOW_STOCK_3, 1),
-      addItem(prisma, { guestCartId: RACE_SESSION }, LOW_STOCK_3, 1),
-    ])
+      await Promise.all(
+        Array.from({ length: concurrency }, () =>
+          addItem(prisma, { guestCartId: RACE_SESSION }, LOW_STOCK_3, 3),
+        ),
+      )
 
-    const carts = await prisma.cart.count({ where: { sessionId: RACE_SESSION } })
-    // getCart uses findFirst, so a second cart is invisible and everything in
-    // it silently vanishes from the shopper's view.
-    expect(carts).toBe(1)
-  })
+      const carts = await prisma.cart.count({ where: { sessionId: RACE_SESSION } })
+      const lines = await prisma.cartItem.count({ where: { cart: { sessionId: RACE_SESSION } } })
+      const visible = await getCart(prisma, { guestCartId: RACE_SESSION })
+      const total = visible.items.reduce((sum, line) => sum + line.quantity, 0)
 
-  it('concurrent adds of ONE product must not create TWO LINES', async () => {
-    await wipe()
-
-    await Promise.all([
-      addItem(prisma, { guestCartId: RACE_SESSION }, LOW_STOCK_3, 1),
-      addItem(prisma, { guestCartId: RACE_SESSION }, LOW_STOCK_3, 1),
-      addItem(prisma, { guestCartId: RACE_SESSION }, LOW_STOCK_3, 1),
-    ])
-
-    const lines = await prisma.cartItem.count({
-      where: { cart: { sessionId: RACE_SESSION } },
+      // Measured BEFORE the fix: 3 concurrent -> 2 carts, 5 -> 3 carts, with
+      // every row in the losing carts invisible and unrecoverable.
+      expect(carts, 'more than one cart per session means items are being lost').toBe(1)
+      expect(lines).toBe(1)
+      expect(total).toBeLessThanOrEqual(product.stockQuantity)
+      expect(total).toBeGreaterThan(0)
     })
-    expect(lines).toBe(1)
-  })
+  }
 
-  it('🔴 the losing racer item is SILENTLY LOST - the consequence that actually occurs', async () => {
+  it('🔴 the P2002 handler is actually EXERCISED — not dead code behind a lucky upsert', async () => {
+    // ⚠️ Prisma's upsert compiles to INSERT ... ON CONFLICT only for simple
+    // shapes and otherwise falls back to find-then-write, so the upsert is not
+    // the guarantee. This asserts the losing racer is RECOVERED rather than
+    // throwing: no rejection escapes, and the end state is still one cart.
     await wipe()
-
-    await Promise.all(
+    const results = await Promise.allSettled(
       Array.from({ length: 5 }, () =>
-        addItem(prisma, { guestCartId: RACE_SESSION }, LOW_STOCK_3, 3),
+        addItem(prisma, { guestCartId: RACE_SESSION }, LOW_STOCK_3, 1),
       ),
     )
 
-    const carts = await prisma.cart.count({ where: { sessionId: RACE_SESSION } })
-    const lines = await prisma.cartItem.count({ where: { cart: { sessionId: RACE_SESSION } } })
-    const visible = await getCart(prisma, { guestCartId: RACE_SESSION })
-    const visibleTotal = visible.items.reduce((sum, line) => sum + line.quantity, 0)
-
-    // 🔴 MEASURED, 2026-08-12, and it CORRECTS the original finding:
-    //   2 concurrent -> 1 cart,  1 line,  visible total 3
-    //   3 concurrent -> 2 carts, 2 lines, visible total 3
-    //   5 concurrent -> 3 carts, 3 lines, visible total 3
-    //
-    // The duplicate LINES live in DIFFERENT CARTS, not two lines in one cart.
-    // So the predicted "cap becomes per-line, total 6 against stock 3" does
-    // NOT occur: getCart's findFirst sees ONE cart, the total stays within
-    // min(10, stock), and C2's cap is not visibly breached.
-    //
-    // What DOES occur is worse in a different way: every row in the losing
-    // cart is INVISIBLE and unrecoverable. The shopper's item does not
-    // over-count — it disappears, with no error.
-    expect(lines).toBe(carts) // one line per cart, never two lines in one
-    expect(visibleTotal).toBeLessThanOrEqual(3)
-    expect(carts, 'more than one cart per session means items are being lost').toBe(1)
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true)
+    expect(await prisma.cart.count({ where: { sessionId: RACE_SESSION } })).toBe(1)
   })
 })

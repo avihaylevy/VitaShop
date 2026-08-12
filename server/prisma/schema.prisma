@@ -286,8 +286,20 @@ model Cart {
 
   items CartItem[]
 
-  @@index([userId])
-  @@index([sessionId])
+  // DEC-055 (Accepted 2026-08-12). 🔴 ONE cart per identity. These were
+  // INDEXES, not constraints, so concurrent POSTs both missed the lookup and
+  // both created a cart; getCart's findFirst then saw one and every row in the
+  // loser was invisible and unrecoverable — measured at 5 concurrent -> 3
+  // carts.
+  //
+  // ⚠️ NOT a partial index, deliberately. Both columns are nullable and exactly
+  // one is set; PostgreSQL treats NULLs as DISTINCT in a unique index, so each
+  // constraint permits unlimited NULLs (every cart of the other kind) while
+  // allowing one row per real identity. Prisma cannot express a filtered unique
+  // index at all, which would force raw SQL that `migrate diff` cannot see —
+  // losing the drift check is the larger cost.
+  @@unique([userId])
+  @@unique([sessionId])
   @@map("carts")
 }
 
@@ -299,6 +311,9 @@ model CartItem {
   product   Product @relation(fields: [productId], references: [id])
   quantity  Int
 
+  // DEC-055. One product, one line, per cart — and it is what makes the
+  // upsert in cartService expressible.
+  @@unique([cartId, productId])
   @@index([cartId])
   @@map("cart_items")
 }

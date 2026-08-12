@@ -114,6 +114,112 @@ const LINE_SELECT = {
   },
 }
 
+
+/**
+ * 🔴 DEC-055's AMENDED P2002 HANDLING — two constraints, each matched NARROWLY.
+ *
+ * The measured damage came from the CART, not the line: five concurrent
+ * requests produced three carts. So a handler that matched only
+ * `cart_items_cart_id_product_id_key` would turn the losing racer on cart
+ * CREATION into an unhandled 500 on the exact path that caused the harm.
+ *
+ * 🔴 IT MATCHES THE CONSTRAINT, NOT THE ERROR CLASS. A P2002 on any other
+ * target, and every other error code, RETHROWS. The MILESTONE-006 precedent is
+ * explicit: a broad catch there re-hid clause 4b's enumeration oracle.
+ */
+function isUniqueViolationOn(error: unknown, accepted: readonly string[]): boolean {
+  const candidate = error as
+    | {
+        code?: unknown
+        meta?: {
+          target?: unknown
+          driverAdapterError?: { cause?: { originalMessage?: unknown; constraint?: { fields?: unknown } } }
+        }
+      }
+    | null
+  if (!candidate || candidate.code !== 'P2002') return false
+
+  // ⚠️ THE CONSTRAINT IS NOT WHERE THE DOCS SUGGEST. Under the pg DRIVER
+  // ADAPTER this project uses, `meta.target` is ABSENT entirely; the identity
+  // of the violated constraint lives at
+  // `meta.driverAdapterError.cause.constraint.fields` (column names) and in
+  // that error's `originalMessage` (the index name). Verified by probing a
+  // real duplicate insert on 2026-08-12 rather than assumed from the shape the
+  // documentation describes.
+  //
+  // 🔴 Matching only `meta.target` would have made this handler DEAD CODE that
+  // still looked correct — every P2002 would rethrow as a 500, on exactly the
+  // path DEC-055 exists to protect.
+  const meta = candidate.meta ?? {}
+  const cause = meta.driverAdapterError?.cause
+  const fields = Array.isArray(cause?.constraint?.fields) ? cause.constraint.fields.map(String) : []
+  const target = Array.isArray(meta.target) ? meta.target.map(String) : [String(meta.target ?? '')]
+  const message = String(cause?.originalMessage ?? '')
+
+  const haystack = [...fields, ...target].map((value) => value.toLowerCase())
+  return accepted.some(
+    (value) =>
+      haystack.includes(value.toLowerCase()) || message.toLowerCase().includes(value.toLowerCase()),
+  )
+}
+
+/** Runs `attempt`; on ITS constraint only, runs `recover` once instead. */
+async function withUniqueRetry(
+  constraint: readonly string[],
+  attempt: () => Promise<unknown>,
+  recover: () => Promise<void>,
+): Promise<void> {
+  try {
+    await attempt()
+  } catch (error) {
+    if (!isUniqueViolationOn(error, constraint)) throw error
+    await recover()
+  }
+}
+
+/**
+ * Create-or-get the identity's single cart. DEC-055 made `userId` and
+ * `sessionId` unique, so the loser of a concurrent create gets P2002 on the
+ * CART constraint and simply reads the winner's row.
+ */
+async function getOrCreateCart(
+  prisma: PrismaClient,
+  identity: CartIdentity,
+): Promise<{ id: string }> {
+  const existing = await prisma.cart.findFirst({
+    where: whereForIdentity(identity),
+    select: { id: true },
+  })
+  if (existing) return existing
+
+  const constraint = identity.userId
+    ? ['carts_user_id_key', 'userId', 'user_id']
+    : ['carts_session_id_key', 'sessionId', 'session_id']
+  let created: { id: string } | null = null
+
+  await withUniqueRetry(
+    constraint,
+    async () => {
+      created = await prisma.cart.create({
+        data: identity.userId
+          ? { userId: identity.userId }
+          : { sessionId: identity.guestCartId as string },
+        select: { id: true },
+      })
+    },
+    async () => {
+      // Lost the race: the winner's cart is the cart.
+      created = await prisma.cart.findFirst({
+        where: whereForIdentity(identity),
+        select: { id: true },
+      })
+    },
+  )
+
+  if (!created) throw new Error('cart could not be created or found after a unique-constraint retry')
+  return created
+}
+
 export async function getCart(prisma: PrismaClient, identity: CartIdentity): Promise<CartDto> {
   if (!hasIdentity(identity)) return EMPTY_CART
 
@@ -142,17 +248,10 @@ export async function addItem(
   })
   if (!product) return { ok: false, reason: 'PRODUCT_NOT_FOUND' }
 
-  const cart =
-    (await prisma.cart.findFirst({ where: whereForIdentity(identity), select: { id: true } })) ??
-    (await prisma.cart.create({
-      data: identity.userId
-        ? { userId: identity.userId }
-        : { sessionId: identity.guestCartId as string },
-      select: { id: true },
-    }))
+  const cart = await getOrCreateCart(prisma, identity)
 
-  const existing = await prisma.cartItem.findFirst({
-    where: { cartId: cart.id, productId: product.id },
+  const existing = await prisma.cartItem.findUnique({
+    where: { cartId_productId: { cartId: cart.id, productId: product.id } },
     select: { id: true, quantity: true },
   })
 
@@ -161,15 +260,37 @@ export async function addItem(
     ? clampAddition(existing.quantity, requested, product.stockQuantity)
     : clampCartQuantity(requested, product.stockQuantity)
 
-  if (!clamped.ok) return { ok: false, reason: clamped.reason === 'OUT_OF_STOCK' ? 'OUT_OF_STOCK' : 'INVALID_STOCK' }
-
-  if (existing) {
-    await prisma.cartItem.update({ where: { id: existing.id }, data: { quantity: clamped.quantity } })
-  } else {
-    await prisma.cartItem.create({
-      data: { cartId: cart.id, productId: product.id, quantity: clamped.quantity },
-    })
+  if (!clamped.ok) {
+    return { ok: false, reason: clamped.reason === 'OUT_OF_STOCK' ? 'OUT_OF_STOCK' : 'INVALID_STOCK' }
   }
+
+  // DEC-055: an upsert on the compound key, so there is no read-then-write
+  // window for a concurrent request to land in.
+  // ⚠️ Prisma's upsert compiles to INSERT ... ON CONFLICT only for simple
+  // shapes and otherwise falls back to find-then-write, so the upsert is NOT
+  // the guarantee — the P2002 handler below is. Both are kept.
+  await withUniqueRetry(
+    ['cart_items_cart_id_product_id_key', 'cartId_productId', 'cart_id_product_id'],
+    () =>
+      prisma.cartItem.upsert({
+        where: { cartId_productId: { cartId: cart.id, productId: product.id } },
+        create: { cartId: cart.id, productId: product.id, quantity: clamped.quantity },
+        update: { quantity: clamped.quantity },
+      }),
+    async () => {
+      // The loser re-reads and re-clamps against what the winner wrote, so the
+      // cap and the stock bound still bind on the combined quantity.
+      const winner = await prisma.cartItem.findUnique({
+        where: { cartId_productId: { cartId: cart.id, productId: product.id } },
+        select: { id: true, quantity: true },
+      })
+      if (!winner) return
+      const merged = clampCartQuantity(winner.quantity, product.stockQuantity)
+      if (merged.ok) {
+        await prisma.cartItem.update({ where: { id: winner.id }, data: { quantity: merged.quantity } })
+      }
+    },
+  )
 
   return {
     ok: true,

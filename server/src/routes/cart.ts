@@ -37,15 +37,25 @@ cartRouter.post('/items', async (req, res) => {
 
   // A write, so the identity is CREATED here if absent — and creating it is
   // what makes the session persist under `saveUninitialized: false`.
+  // 🔴 ONE FACT, ONE PLACE. This used to restate the precedence rule
+  // (`userId ? null : ensure...`) that `whereForIdentity` already owns.
+  // Harmless while both agreed — and a silent divergence the moment the
+  // service's rule changed, with GET and POST then disagreeing about whose
+  // cart it is. The route passes what it HAS; the service decides.
   const identity: CartIdentity = {
     userId: req.session?.userId ?? null,
-    guestCartId: req.session?.userId ? null : ensureGuestCartId(req),
+    guestCartId: ensureGuestCartId(req),
   }
 
   const result = await addItem(prisma, identity, body.slug, body.quantity)
 
   if (!result.ok) {
-    const status = result.reason === 'PRODUCT_NOT_FOUND' ? 404 : 400
+    // 🔴 INVALID_STOCK is a SERVER data problem — a product row whose stock is
+    // not a whole number. A 400 would blame the client for something it cannot
+    // see or fix, and would hide a corrupt row behind a validation-shaped
+    // response. 500 is the honest code.
+    const status =
+      result.reason === 'PRODUCT_NOT_FOUND' ? 404 : result.reason === 'INVALID_STOCK' ? 500 : 400
     res.status(status).json({ error: { code: result.reason, message: 'The item could not be added.' } })
     return
   }

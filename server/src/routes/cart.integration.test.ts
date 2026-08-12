@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { addItem, getCart } from '../lib/cartService.js'
 import { CART_LINE_MAX } from '../lib/cartQuantity.js'
+import { TEST_FIXTURE_SLUG_PREFIX } from '../lib/testFixturePrefix.js'
 
 /**
  * MILESTONE-007 Checkpoint C — the cart service against the REAL database.
@@ -87,22 +88,42 @@ describe('addItem — the failure paths', () => {
     // assumption was impossible, not stale. Skipping instead would have
     // dropped INV-03 coverage at the moment the seed stopped leaving
     // casualties behind — the same trap the soft-delete search probe hit.
-    const victim = await prisma.product.findFirst({
+    // 🔴 ISSUE-065 FIX. This used to soft-delete a REAL seeded product, and
+    // vitest runs files in parallel workers — `seedConvergence` could read
+    // `isActive` inside that window and fail with 48 active against 49 CSV
+    // rows. The database was verified clean (49 active, 0 inactive) before
+    // either test was blamed: the `finally` worked, the read simply landed
+    // mid-window.
+    //
+    // The victim is now a product this test CREATES under
+    // TEST_FIXTURE_SLUG_PREFIX, which `seedConvergence` already filters out by
+    // design — so the shared row is gone rather than the two files being
+    // serialised, which would slow every future run to paper over one window.
+    const anyProduct = await prisma.product.findFirst({
       where: { isActive: true },
+      select: { categoryId: true, brandId: true },
+    })
+    if (!anyProduct) throw new Error('fixture assumption failed: no product to copy shape from')
+
+    const victim = await prisma.product.create({
+      data: {
+        slug: `${TEST_FIXTURE_SLUG_PREFIX}cart-inactive`,
+        nameHe: 'בדיקה', nameEn: 'fixture', categoryId: anyProduct.categoryId,
+        brandId: anyProduct.brandId, dosageForm: 'CAPSULE', packageQuantity: 1,
+        usageInstructions: '', price: '1.00', stockQuantity: 5,
+        descriptionHe: 'בדיקה', descriptionEn: 'fixture', warningsAllergens: '',
+        isActive: false,
+      },
       select: { id: true, slug: true },
     })
-    if (!victim) throw new Error('fixture assumption failed: no active product to soft-delete')
 
-    await prisma.product.update({ where: { id: victim.id }, data: { isActive: false } })
     try {
       expect(await addItem(prisma, { guestCartId: GUEST_A }, victim.slug, 1)).toEqual({
         ok: false,
         reason: 'PRODUCT_NOT_FOUND',
       })
     } finally {
-      // Restored even when the assertion throws, or the next run fails on the
-      // 49-product convergence assertions with no pointer to the cause.
-      await prisma.product.update({ where: { id: victim.id }, data: { isActive: true } })
+      await prisma.product.delete({ where: { id: victim.id } })
     }
   })
 
