@@ -91,6 +91,22 @@ async function wipe() {
     createdCartSessionIds.clear()
   }
 
+  // 🔴 Any GUEST cart holding this file's products, not only the ids it managed
+  // to record. A failed run used to leak carts, and the next run's
+  // `findFirst(orderBy: id desc)` then picked a leftover — that is what turned
+  // one flake into two. Safe to scope this broadly only because DEC-057 runs
+  // integration files ONE AT A TIME; under the old parallel pool this would
+  // have deleted a sibling suite's carts, which is ISSUE-071 incident 5.
+  const strays = await prisma.cart.findMany({
+    where: { userId: null, items: { some: { product: { slug: { in: [SLUG, SLUG_B] } } } } },
+    select: { id: true },
+  })
+  if (strays.length > 0) {
+    const strayIds = strays.map((c) => c.id)
+    await prisma.cartItem.deleteMany({ where: { cartId: { in: strayIds } } })
+    await prisma.cart.deleteMany({ where: { id: { in: strayIds } } })
+  }
+
   const emails = [REGISTER_EMAIL, LOGIN_EMAIL]
   const owned = await prisma.cart.findMany({
     where: { user: { email: { in: emails } } },
@@ -163,6 +179,33 @@ function jar() {
 }
 
 /**
+ * 🔴 Reads the cart back until it holds `expected` lines, or gives up loudly.
+ *
+ * ⚠️ THE SESSION-STORE WRITE TRAILS THE RESPONSE. `connect-pg-simple` persists
+ * `req.session` asynchronously, so a second request issued immediately after
+ * the first can arrive before `guestCartId` is durable — `ensureGuestCartId`
+ * then mints a NEW one and the second line lands in a DIFFERENT cart. The
+ * journey afterwards promotes only one of them and the assertion fails naming
+ * the wrong product, which is exactly how this surfaced (1 red in 12).
+ *
+ * This is the same trailing-write already recorded as ISSUE-071 incident 6 and
+ * handled the same way in `cartIdentityWiring`. 🔴 Serialising files does NOT
+ * fix it: it is a write-timing race INSIDE one request sequence, not between
+ * workers. Waiting for the observable precondition is the honest fix — the
+ * claim under test is the journey, never how fast the session store flushes.
+ */
+async function cartHoldsLines(cookie: string, expected: number) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const body = (await fetch(`${baseUrl}/api/cart`, { headers: { cookie } }).then((r) =>
+      r.json(),
+    )) as { items: unknown[] }
+    if (body.items.length === expected) return
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  throw new Error(`the guest cart never reached ${expected} line(s) — the session did not persist`)
+}
+
+/**
  * Step 1 of every journey: a guest adds an item through the REAL cart route.
  * Returns the jar, already carrying the guest session cookie.
  */
@@ -176,6 +219,10 @@ async function guestAddsAnItem() {
   cookies.capture(added)
   expect(added.status, 'the guest add must succeed before the journey means anything').toBe(200)
 
+  // 🔴 The cookie must be durable before the SECOND add, or the two lines can
+  // land in two different carts. See cartHoldsLines.
+  await cartHoldsLines(cookies.header, 1)
+
   // TEST-020 step 1 is TWO products. Added over the SAME jar, so both lines
   // belong to one guest cart.
   const addedB = await fetch(`${baseUrl}/api/cart/items`, {
@@ -185,6 +232,11 @@ async function guestAddsAnItem() {
   })
   cookies.capture(addedB)
   expect(addedB.status).toBe(200)
+
+  // 🔴 BOTH lines in ONE cart — asserted, never assumed. If the session split,
+  // this fails HERE, naming the real cause, instead of surfacing later as a
+  // promotion that appears to have dropped a product.
+  await cartHoldsLines(cookies.header, 2)
 
   // Recorded ONLY so `wipe` can clean up. Nothing downstream is told this id —
   // the whole point is that the routes carry it themselves.
