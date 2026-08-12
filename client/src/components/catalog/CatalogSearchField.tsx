@@ -59,7 +59,7 @@ export function CatalogSearchField({ value, onSubmit, className = '' }: CatalogS
           onChange={(event) => setDraft(event.target.value)}
           placeholder={t('search.placeholder')}
           aria-label={t('search.label')}
-          className="h-full min-w-0 flex-1 bg-transparent text-sm text-text-ink outline-none placeholder:text-text-muted"
+          className="h-full min-w-0 flex-1 bg-transparent text-base text-text-ink outline-none placeholder:text-text-muted"
         />
         <IconButton type="submit" icon={<SearchIcon />} aria-label={t('search.submit')} variant="ghost" className="shrink-0" />
       </label>

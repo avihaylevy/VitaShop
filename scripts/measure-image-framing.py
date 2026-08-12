@@ -29,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import csv
 import sys
 from pathlib import Path
 
@@ -47,17 +48,35 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = REPO_ROOT / "assets" / "products"
 OUTPUT_PATH = REPO_ROOT / "client" / "src" / "data" / "imageFraming.json"
 
-# Only the six DEC-032 verified products are in scope for this slice.
-# Adding a filename here requires the corresponding product to be
-# verified=yes in assets/products/products.csv.
-VERIFIED_IMAGE_FILES = [
-    "אומגה 3 של חברת סולגאר.jpg",
-    "ויטמין C בטעם פטל חמוציות של חברת סולגאר.jpg",
-    "טבליות ויטמין D של חברת סופרהרב.jpg",
-    "מגנזיות מקס 550 של חברת סופרהרב.jpg",
-    "סולגר טבליות ויטמין B12.jpg",
-    "סולגר טבליות סידן ומגנזיום בתוספת ויטמין D3.jpg",
-]
+# 🔴 DERIVED FROM THE CSV, NOT HARDCODED — ISSUE-063, fixed 2026-08-12.
+#
+# This list used to be six filenames typed out by hand, frozen at the
+# six-product catalogue of MILESTONE-002. The catalogue grew to 49 and the
+# list did not, so 43 products rendered on the 86%-contain fallback and the
+# only signal was a dev-only console warning nobody reads.
+#
+# ⚠️ The script was ITSELF the defect ISSUE-063 describes: a manually
+# maintained artefact keyed off data that only grows — the same family as
+# productImages.ts before ISSUE-040. Re-running it would have "succeeded"
+# and changed nothing, which is exactly what that failure shape looks like.
+#
+# Reading products.csv makes the set converge by construction: every
+# verified=yes row is measured, and a new batch needs no edit here.
+def _verified_image_files() -> list[str]:
+    csv_path = REPO_ROOT / "assets" / "products" / "products.csv"
+    with csv_path.open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    seen: dict[str, None] = {}
+    for row in rows:
+        if (row.get("verified") or "").strip() != "yes":
+            continue
+        name = (row.get("image_file") or "").strip()
+        if name:
+            seen.setdefault(name, None)
+    return list(seen)
+
+
+VERIFIED_IMAGE_FILES = _verified_image_files()
 
 # Trim tolerance: a pixel is "background" if every RGB channel is within
 # this distance of pure white. All 15 supplied product assets are pure

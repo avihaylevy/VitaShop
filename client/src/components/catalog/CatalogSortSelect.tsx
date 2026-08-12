@@ -35,7 +35,7 @@ export function CatalogSortSelect({ value, onChange, className = '' }: CatalogSo
         id={selectId}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={`${FOCUS_RING} h-11 rounded-compact border border-border-control bg-well px-3 text-sm text-text-ink`}
+        className={`${FOCUS_RING} h-11 rounded-compact border border-border-control bg-well px-3 text-base text-text-ink`}
       >
         {CATALOG_SORT_VALUES.map((sortValue) => (
           <option key={sortValue} value={sortValue}>

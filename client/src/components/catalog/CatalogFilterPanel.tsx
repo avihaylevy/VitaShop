@@ -164,7 +164,7 @@ export function CatalogFilterPanel({
               value={minDraft}
               onChange={(event) => setMinDraft(event.target.value)}
               onBlur={() => commitPrice()}
-              className={`${FOCUS_RING} h-11 w-24 rounded-compact border border-border-control bg-well px-3 text-sm text-text-ink`}
+              className={`${FOCUS_RING} h-11 w-24 rounded-compact border border-border-control bg-well px-3 text-base text-text-ink`}
             />
           </div>
           <div className="flex min-w-0 flex-col gap-1">
@@ -182,7 +182,7 @@ export function CatalogFilterPanel({
               value={maxDraft}
               onChange={(event) => setMaxDraft(event.target.value)}
               onBlur={() => commitPrice()}
-              className={`${FOCUS_RING} h-11 w-24 rounded-compact border border-border-control bg-well px-3 text-sm text-text-ink`}
+              className={`${FOCUS_RING} h-11 w-24 rounded-compact border border-border-control bg-well px-3 text-base text-text-ink`}
             />
           </div>
         </form>
