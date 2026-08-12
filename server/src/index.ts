@@ -8,6 +8,7 @@ import { prisma } from './lib/prisma.js'
 import { createSessionMiddleware } from './lib/session.js'
 import { createAuthRouter } from './routes/auth.js'
 import { catalogRouter } from './routes/catalog.js'
+import { cartRouter } from './routes/cart.js'
 
 export const app = express()
 
@@ -56,6 +57,9 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.use('/api', catalogRouter)
+// MILESTONE-007 Checkpoint C — GET /api/cart and POST /api/cart/items.
+// Mounted AFTER the session middleware: the cart's identity comes from it.
+app.use('/api/cart', cartRouter)
 
 // A2 — compute the constant dummy hash once at startup, so the first
 // unknown-email login is not measurably slower than every later one.

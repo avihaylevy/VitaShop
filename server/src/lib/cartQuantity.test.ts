@@ -49,6 +49,15 @@ describe('clampCartQuantity — both bounds, independently and together', () => 
     expect(clampCartQuantity(1, -1)).toEqual({ ok: false, reason: 'OUT_OF_STOCK' })
   })
 
+  it('🔴 rejects a NON-INTEGER STOCK rather than returning quantity: NaN', () => {
+    // NaN <= 0 is false, so before the isInteger guard this returned
+    // { ok: true, quantity: NaN } — serialised to null, rendered as a line
+    // with no quantity, and nothing threw.
+    for (const bad of [Number.NaN, 2.5, Number.POSITIVE_INFINITY]) {
+      expect(clampCartQuantity(1, bad)).toEqual({ ok: false, reason: 'INVALID_STOCK' })
+    }
+  })
+
   it('the cap is 10 — pinned, because C2 chose a number and code should say which', () => {
     expect(CART_LINE_MAX).toBe(10)
   })

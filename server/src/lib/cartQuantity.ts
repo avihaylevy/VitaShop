@@ -19,6 +19,8 @@ export type QuantityRejection =
   | 'NOT_AN_INTEGER'
   | 'NOT_POSITIVE'
   | 'OUT_OF_STOCK'
+  /** 🔴 A stock value that is not a whole number. See `clampCartQuantity`. */
+  | 'INVALID_STOCK'
 
 export type ClampResult =
   | { ok: true; quantity: number; clampedByCap: boolean; clampedByStock: boolean }
@@ -46,6 +48,14 @@ export function parseRequestedQuantity(raw: unknown): number | QuantityRejection
  * bounds independently testable.
  */
 export function clampCartQuantity(requested: number, stock: number): ClampResult {
+  // 🔴 THIS MODULE'S PREMISE IS THAT IT TRUSTS NOTHING — and it trusted `stock`.
+  // `NaN <= 0` is FALSE, so a NaN stock fell straight through the guard below,
+  // `Math.min(10, NaN)` returned NaN, and the caller got
+  // `{ ok: true, quantity: NaN }` — which serialises to `null` and reaches the
+  // client as a cart line with no quantity. No throw, success-shaped, exactly
+  // the failure family this project keeps recording. Same class as the
+  // empty-string guard in `guestSession.ts`.
+  if (!Number.isInteger(stock)) return { ok: false, reason: 'INVALID_STOCK' }
   if (stock <= 0) return { ok: false, reason: 'OUT_OF_STOCK' }
 
   const effectiveMax = Math.min(CART_LINE_MAX, stock)
