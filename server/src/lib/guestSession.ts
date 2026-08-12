@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { SessionData } from 'express-session'
 
 /**
  * MILESTONE-007 Checkpoint B — O8, the guest cart's session identity.
@@ -37,9 +38,11 @@ export const GUEST_CART_TTL_MS = 30 * 24 * 60 * 60 * 1000
  * ANONYMOUS sessions only, and `session.ts`'s 24-hour default stands for the
  * rest. This is called out because the two lifetimes look like one setting.
  */
-type SessionLike = {
-  guestCartId?: string
-  userId?: string
+// 🔴 The REAL express-session types, not a hand-rolled copy. `SessionLike` used
+// to restate `userId` and `guestCartId` structurally, which meant a rename in
+// auth.ts would compile fine here and silently turn every authenticated session
+// into a guest. See src/types/express-session.d.ts.
+type SessionLike = Omit<Partial<SessionData>, 'cookie'> & {
   cookie?: { maxAge?: number | null }
 }
 

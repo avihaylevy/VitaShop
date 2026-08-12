@@ -93,7 +93,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
         req.session.regenerate((err) => (err ? reject(err) : resolve()))
       })
       // A8 depends on this value being present in the payload.
-      ;(req.session as unknown as { userId?: string }).userId = outcome.userId
+      req.session.userId = outcome.userId
       await new Promise<void>((resolve, reject) => {
         req.session.save((err) => (err ? reject(err) : resolve()))
       })
@@ -181,7 +181,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
       req.session.regenerate((err) => (err ? reject(err) : resolve()))
     })
     // A8 — the invalidation helper matches on this.
-    ;(req.session as unknown as { userId?: string }).userId = outcome.userId
+    req.session.userId = outcome.userId
     await new Promise<void>((resolve, reject) => {
       req.session.save((err) => (err ? reject(err) : resolve()))
     })
@@ -201,7 +201,7 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   // already knew; there is no account to enumerate here because the answer
   // does not depend on any address the caller supplies.
   router.get('/auth/session', limit.session, (req, res) => {
-    const userId = (req.session as unknown as { userId?: string } | undefined)?.userId
+    const userId = req.session?.userId
     res.json({ authenticated: typeof userId === 'string' && userId.length > 0 })
   })
 
