@@ -201,6 +201,15 @@ model Product {
   descriptionHe       String   @map("description_he") @db.Text // field 11 — DEC-017, paired
   descriptionEn       String   @map("description_en") @db.Text
   warningsAllergens   String   @map("warnings_allergens") @db.Text // field 12 — Hebrew only, manufacturer text
+  // DEC-032 DECISION B (Accepted 2026-08-12). 🔴 PROVENANCE, NOT ABSENCE: this
+  // is a claim about the SOURCE, not about the product. True means the
+  // official page was checked and warningsAllergens already holds everything
+  // it publishes — which may be a partial declaration, or nothing at all.
+  // It COMPOSES with warningsAllergens rather than replacing it; the four
+  // states are (false,"")=not checked, (false,text)=declared,
+  // (true,"")=nothing published, (true,text)=partial and that is all there is.
+  // A row with this true must NEVER render an empty allergen section.
+  allergenInfoIncomplete Boolean @default(false) @map("allergen_info_incomplete")
   targetAudience      String?  @map("target_audience") // field 15 — TBD closed list, DEC-024 open item 2
   createdAt           DateTime @default(now()) @map("created_at") // field 16
   isActive            Boolean  @default(true) @map("is_active") // soft delete, INV-03, §4.7.1
