@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { TEST_FIXTURE_SLUG_PREFIX } from './testFixturePrefix.js'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -26,7 +27,7 @@ import { syncProductHealthGoals, syncProductImages, syncProductIngredients } fro
  * touches seeded catalogue rows.
  */
 
-const FIXTURE_PREFIX = 'zz-synctest-'
+const FIXTURE_PREFIX = TEST_FIXTURE_SLUG_PREFIX
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })

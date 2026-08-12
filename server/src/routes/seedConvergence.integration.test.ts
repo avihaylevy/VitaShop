@@ -7,6 +7,7 @@ import {
   parseCsvFile,
   readVerifiedProductRows,
 } from '../lib/productsCsv.js'
+import { isTestFixtureSlug } from '../lib/testFixturePrefix.js'
 
 /**
  * 🔴 SEED CONVERGENCE — the database must EQUAL the CSV's desired state.
@@ -62,9 +63,7 @@ afterAll(async () => {
  * ⚠️ It is a NARROW, NAMED prefix on purpose. A broad "ignore anything
  * unexpected" filter would delete the whole point of a set-equality test.
  */
-const TEST_FIXTURE_PREFIX = 'zz-synctest-'
-
-const isFixture = (slug: string) => slug.startsWith(TEST_FIXTURE_PREFIX)
+const isFixture = isTestFixtureSlug
 
 /** Symmetric difference, reported both ways so a failure says WHICH side drifted. */
 function diff(actual: Set<string>, expected: Set<string>) {
