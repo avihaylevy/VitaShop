@@ -16,11 +16,10 @@ solgar-cal-mag-d3,ויטמין D3,Vitamin D3,10,"מק""ג",https://www.solgar.co
 solgar-cal-mag-d3,סידן (ציטראט),Calcium (as calcium citrate),1000,"מ""ג",https://www.solgar.com/products/calcium-magnesium-with-vitamin-d3-tablets,
 solgar-cal-mag-d3,מגנזיום (תחמוצת/ציטראט),Magnesium (as magnesium oxide/citrate),500,"מ""ג",https://www.solgar.com/products/calcium-magnesium-with-vitamin-d3-tablets,
 superherb-multi-men,מגנזיום,Magnesium,150,"מ""ג",https://www.supherb.co.il/product/%D7%9E%D7%95%D7%9C%D7%98%D7%99-%D7%95%D7%99%D7%98%D7%9E%D7%99%D7%9F-%D7%9C%D7%92%D7%91%D7%A8/,
-superherb-multi-kids,,,,,,
 superherb-multi-women,חומצה פולית (פולאט),Folic acid (as folate),400,"מק""ג",https://www.supherb.co.il/product/%D7%9E%D7%95%D7%9C%D7%98%D7%99-%D7%95%D7%99%D7%98%D7%9E%D7%99%D7%9F-%D7%9C%D7%A0%D7%A9%D7%99%D7%9D/,
 salus-multi-syrup,,,,,,
 superherb-multi-women,מגנזיום,Magnesium,200,"מ""ג",https://www.supherb.co.il/product/%D7%9E%D7%95%D7%9C%D7%98%D7%99-%D7%95%D7%99%D7%98%D7%9E%D7%99%D7%9F-%D7%9C%D7%A0%D7%A9%D7%99%D7%9D/,
-superherb-biokid-drops,Bifidobacterium (זן BB-12),"Bifidobacterium animalis subsp. lactis, BB-12(TM)",,,https://www.supherb.co.il/product/%D7%98%D7%99%D7%A4%D7%95%D7%AA-%D7%A4%D7%A8%D7%95%D7%91%D7%99%D7%95%D7%98%D7%99%D7%A7%D7%94-%D7%91%D7%99%D7%95-%D7%A7%D7%99%D7%93/,
+superherb-biokid-drops,Bifidobacterium (זן BB-12),"Bifidobacterium animalis subsp. lactis, BB-12(TM)",1,מיליארד CFU,https://www.supherb.co.il/product/%D7%98%D7%99%D7%A4%D7%95%D7%AA-%D7%A4%D7%A8%D7%95%D7%91%D7%99%D7%95%D7%98%D7%99%D7%A7%D7%94-%D7%91%D7%99%D7%95-%D7%A7%D7%99%D7%93/,yes
 altman-magnesium-citrate-60,מגנזיום (ציטראט),Magnesium (citrate),200,"מ""ג",https://www.altman.co.il/shop/magnesium/magnesium-citrate-60/,yes
 altman-magnesium-bisglycinate-60,מגנזיום (ביסגליצינאט),Magnesium (bisglycinate),250,"מ""ג",https://www.altman.co.il/shop/magnesium/magnesium-bisglycinate/,yes
 altman-vitamin-d-1000-softgel-100,ויטמין D3 (כולקלציפרול),Vitamin D3 (cholecalciferol),1000,"יחב""ל",https://www.altman.co.il/shop/vms/vitamin-d/vitamin-d-1000-gel-cups/,yes
@@ -76,3 +75,7 @@ altman-biosil-hns-60,כולין (ch-OSA),Choline (as ch-OSA),100,"מ""ג",https:
 altman-vitamin-c-d-zinc-100,ויטמין C (Ascorbic acid),Vitamin C (as ascorbic acid),500,"מ""ג",https://www.altman.co.il/shop/winter/vitamin-c/vitamin-cdzinc/,yes
 altman-vitamin-c-d-zinc-100,אבץ (Zinc citrate),Zinc (as zinc citrate),15.5,"מ""ג",https://www.altman.co.il/shop/winter/vitamin-c/vitamin-cdzinc/,yes
 altman-vitamin-c-d-zinc-100,ויטמין D3,Vitamin D3,1000,"יחב""ל",https://www.altman.co.il/shop/winter/vitamin-c/vitamin-cdzinc/,yes
+superherb-multi-kids,ויטמין C,Vitamin C,50,"מ""ג",https://www.supherb.co.il/product/%D7%9E%D7%95%D7%9C%D7%98%D7%99-%D7%95%D7%99%D7%98%D7%9E%D7%99%D7%9F-%D7%9C%D7%99%D7%9C%D7%93%D7%99%D7%9D/,yes
+superherb-multi-kids,סידן,Calcium,25,"מ""ג",https://www.supherb.co.il/product/%D7%9E%D7%95%D7%9C%D7%98%D7%99-%D7%95%D7%99%D7%98%D7%9E%D7%99%D7%9F-%D7%9C%D7%99%D7%9C%D7%93%D7%99%D7%9D/,yes
+superherb-multi-kids,ברזל,Iron,5,"מ""ג",https://www.supherb.co.il/product/%D7%9E%D7%95%D7%9C%D7%98%D7%99-%D7%95%D7%99%D7%98%D7%9E%D7%99%D7%9F-%D7%9C%D7%99%D7%9C%D7%93%D7%99%D7%9D/,yes
+superherb-multi-kids,ויטמין D3,Vitamin D3,400,"יחב""ל",https://www.supherb.co.il/product/%D7%9E%D7%95%D7%9C%D7%98%D7%99-%D7%95%D7%99%D7%98%D7%9E%D7%99%D7%9F-%D7%9C%D7%99%D7%9C%D7%93%D7%99%D7%9D/,yes
