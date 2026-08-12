@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useCatalogData } from '../hooks/useCatalogData'
@@ -6,8 +6,6 @@ import { useCatalogCategories } from '../hooks/useCatalogCategories'
 import { useCatalogFacets } from '../hooks/useCatalogFacets'
 import { useCloseAboveBreakpoint } from '../hooks/useCloseAboveBreakpoint'
 import { useCart } from '../state/CartContext'
-import type { CartItem } from '../types/cart'
-import type { ProductCardModel } from '../types/product'
 import { CategoryShelf, CatalogLoadingState, CatalogErrorState, CatalogEmptyState } from '../components/catalog'
 import { ProductGrid } from '../components/catalog/ProductGrid'
 import { CatalogSearchField } from '../components/catalog/CatalogSearchField'
@@ -36,23 +34,6 @@ import {
 import type { SupportedLanguage } from '../i18n/index'
 
 /**
- * One queued add-to-cart attempt, with everything needed to prove — not
- * assume — that this specific attempt is what increased the cart.
- */
-type AddAttempt = {
-  slug: string
-  /** Cart-wide unit total captured immediately before this attempt dispatched. */
-  totalBefore: number
-  /** This slug's own line quantity at the same moment; 0 when not yet in the cart. */
-  quantityBefore: number
-}
-
-/** This slug's current line quantity, or 0 when it has no line. */
-function quantityOf(items: readonly CartItem[], slug: string): number {
-  return items.find((item) => item.slug === slug)?.quantity ?? 0
-}
-
-/**
  * Production /catalog route. MILESTONE-005 Checkpoint H — category
  * filtering (and every other §4 filter) is now server-side; the page's own
  * job is deriving `activeCategory` for display (heading text) from its own
@@ -79,14 +60,8 @@ export function CatalogPage() {
   } = useCatalogData(language)
   const categorySlug = urlState.category
   const [, setSearchParams] = useSearchParams()
-  const { addItem, items, totalQuantity } = useCart()
-  // One attempt at a time, in click order. See the add-queue comment below.
-  const queueRef = useRef<ProductCardModel[]>([])
-  const processingRef = useRef(false)
+  const { addItem } = useCart()
   const mountedRef = useRef(true)
-  const totalQuantityRef = useRef(totalQuantity)
-  const itemsRef = useRef(items)
-  const [activeAttempt, setActiveAttempt] = useState<AddAttempt | null>(null)
   const [announced, setAnnounced] = useState<{ slug: string; count: number } | null>(null)
 
   /**
@@ -107,18 +82,6 @@ export function CatalogPage() {
   // document-wide query, never by translated text (SLICE_8_PLAN.md §3.1).
   const gridRef = useRef<HTMLDivElement>(null)
   const closeDrawer = useCallback(() => setDrawerSlug(null), [])
-
-  // 🔴 Updated in a layout effect, never during render. A render can be
-  // interrupted or discarded under concurrent React, and a ref written during
-  // one would keep values from a commit that never happened — an event handled
-  // by the committed tree could then snapshot uncommitted cart state, making
-  // `totalBefore`/`quantityBefore` attribute an increase to the wrong attempt.
-  // Layout effects run before passive effects in the same commit, so these are
-  // already fresh when the reconciliation effect starts the next attempt.
-  useLayoutEffect(() => {
-    itemsRef.current = items
-    totalQuantityRef.current = totalQuantity
-  }, [items, totalQuantity])
 
   // Still owned by CatalogPage per §8 — the resolver's output does not
   // always carry activeCategory (e.g. 'loading', 'error', 'invalid-category',
@@ -239,118 +202,63 @@ export function CatalogPage() {
   )
 
   /**
-   * 🔴 An add is announced only once it is PROVEN to have increased the cart,
-   * and attempts are serialized so one can never be lost or misattributed.
+   * 🔴 MILESTONE-007 Checkpoint G — THE SERVER ANSWERS, SO NOTHING IS INFERRED.
    *
-   * The reducer legitimately refuses or clamps a transition (stock ceiling,
-   * invalid price, safe-integer guard) and returns the previous state.
-   * Announcing straight from the click handler would report those failures as
-   * successes and overwrite a previous product's true confirmation.
+   * What stood here was a FIFO attempt queue with `processingRef`, cart-total
+   * refs updated in a layout effect, and a reconciliation effect that concluded
+   * an add had succeeded by observing that the cart-wide total AND the line's
+   * own quantity had both risen. All of that existed for one reason: the
+   * browser-memory reducer refused and clamped SILENTLY, so success could only
+   * ever be guessed at from before/after state.
    *
-   * Comparing before/after totals fixes that for one attempt, but a single
-   * pending slot is still wrong under rapid clicking: two handlers in the same
-   * tick would both read the same stale total and one attempt would go
-   * unreconciled. So attempts go through a FIFO queue with exactly one active
-   * at a time:
+   * `POST /api/cart/items` states the outcome outright — the settled quantity,
+   * whether it was clamped by stock or by the cap, and whether nothing moved.
+   * Inferring any of that from totals now would be inventing a second answer to
+   * a question already answered, so the whole apparatus is deleted rather than
+   * ported. Ordering is still guaranteed: `CartContext` serializes every
+   * mutation onto one chain, in call order.
    *
-   *   click        -> push to the queue, then try to start
-   *   start        -> shift one, capture the CURRENT total, dispatch once
-   *   reconcile    -> success iff total > totalBefore; resolve; start the next
-   *
-   * `processingRef` is a ref, not state, so it flips synchronously — two click
-   * handlers from the same render cannot both start an attempt. No timeout, no
-   * storage, no dependency, and no change to the CartContext API or reducer.
+   * 🔴 THE DRAWER OPENS ONLY ON A CONFIRMED SERVER SUCCESS (DEC-047 D1) —
+   * never from the click handler, never optimistically, never on a refusal.
    */
-  const startNextAttempt = useCallback(() => {
-    if (!mountedRef.current || processingRef.current) {
-      return
-    }
-    const next = queueRef.current.shift()
-    if (!next) {
-      return
-    }
-    processingRef.current = true
-    setActiveAttempt({
-      slug: next.slug,
-      totalBefore: totalQuantityRef.current,
-      // Captured immediately before dispatch, from the committed items.
-      quantityBefore: quantityOf(itemsRef.current, next.slug),
-    })
-    addItem(next)
-  }, [addItem])
+  const handleAddToCart = useCallback(
+    (slug: string) => {
+      // The trigger is resolved BEFORE the await: after it, focus may have
+      // moved and the grid may have re-rendered. The lookup is scoped to this
+      // page's own grid, keyed by slug — never document-wide, never by
+      // translated text. A miss is left null and Modal's #main fallback applies.
+      const trigger =
+        gridRef.current?.querySelector<HTMLElement>(
+          `[${ADD_TO_CART_ATTRIBUTE}="${CSS.escape(slug)}"]`,
+        ) ?? null
 
-  function handleAddToCart(slug: string) {
-    // Checkpoint I — fallback suggestions are real, addable products, so the
-    // lookup spans both sets. They stay OUT of `products` (§6b: never
-    // substituted into the primary result set); this is a lookup, not a
-    // merge, and nothing downstream sees a combined list.
-    const product =
-      products.find((candidate) => candidate.slug === slug) ??
-      fallback?.items.find((candidate) => candidate.slug === slug)
-    if (!product) {
-      return
-    }
-    queueRef.current.push(product)
-    startNextAttempt()
-  }
+      void addItem(slug, 1).then((result) => {
+        if (!result || !mountedRef.current) return
 
-  useEffect(() => {
-    if (!activeAttempt) {
-      return
-    }
-    // 🔴 BOTH conditions, not just the cart-wide total. A rising total alone
-    // does not prove THIS product grew — some other cart operation could have
-    // increased a different line while this attempt was refused, which would
-    // attribute someone else's increase to this slug. The per-slug check is
-    // what makes the announcement provably about the product it names.
-    const grewOverall = totalQuantity > activeAttempt.totalBefore
-    const grewThisLine = quantityOf(items, activeAttempt.slug) > activeAttempt.quantityBefore
+        // The count stays the cart-wide committed total FROM THE RESPONSE, so
+        // the spoken number always matches the Header badge.
+        setAnnounced({ slug, count: result.cart.totalQuantity })
 
-    if (grewOverall && grewThisLine) {
-      // The count stays the cart-wide committed total, so the spoken number
-      // always matches the Header badge.
-      setAnnounced({ slug: activeAttempt.slug, count: totalQuantity })
-
-      // 🔴 Slice 8 — the SAME proven-success branch the announcement above
-      // uses opens the drawer. Never from the click handler, never
-      // optimistically, never on a refusal (SLICE_8_PLAN.md §3.3, DEC-047 D1).
-      if (drawerSlug === null) {
-        // Closed -> open. This transition, and only this one, establishes
-        // the return-focus owner (DEC-047-A, R1). The lookup is scoped to
-        // this page's own grid container, keyed by the successful slug —
-        // never document-wide, never by translated text. A miss (element
-        // not found) is not fabricated and does not throw: returnFocusRef
-        // is simply left null, and Modal's own #main fallback applies later.
-        const trigger = gridRef.current?.querySelector<HTMLElement>(
-          `[${ADD_TO_CART_ATTRIBUTE}="${CSS.escape(activeAttempt.slug)}"]`,
-        )
-        returnFocusRef.current = trigger ?? null
-        setDrawerSlug(activeAttempt.slug)
-      } else {
-        // Already open — content only (DEC-047 D8). No target resolved, no
-        // returnFocusRef write, no re-key, no close/reopen, no replayed
-        // focus entry or opening animation. The first successful add keeps
-        // return-focus ownership for the whole opening.
-        setDrawerSlug(activeAttempt.slug)
-      }
-    }
-    // Resolved exactly once, success or rejection. On a rejection nothing is
-    // published, so the previous announcement's text survives byte-for-byte.
-    setActiveAttempt(null)
-    processingRef.current = false
-    startNextAttempt()
-  }, [activeAttempt, items, totalQuantity, startNextAttempt, drawerSlug])
+        setDrawerSlug((current) => {
+          // Closed -> open. This transition, and only this one, establishes
+          // the return-focus owner (DEC-047-A, R1). While the drawer is
+          // already open a later add changes CONTENT only (D8): no target
+          // resolved, no re-key, no close/reopen, no replayed focus entry.
+          if (current === null) returnFocusRef.current = trigger
+          return slug
+        })
+      })
+    },
+    [addItem],
+  )
 
   // Set in the effect body, not just at ref init, so StrictMode's
-  // mount/unmount/remount cycle restores the mounted flag instead of leaving
-  // the queue permanently disabled. Nothing dispatches or publishes after
-  // unmount, and a pending queue does not survive navigation away.
+  // mount/unmount/remount cycle restores the mounted flag. Nothing publishes
+  // after unmount: a response that lands late finds this false and stops.
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      processingRef.current = false
-      queueRef.current = []
     }
   }, [])
 

@@ -2,189 +2,251 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useCart } from '../../state/CartContext'
-import type { CartItem } from '../../types/cart'
-import { getCartLines } from '../../lib/cartDisplay'
-import { minorToPriceString } from '../../lib/money'
+import { getCartLines, type CartLineDisplay } from '../../lib/cartDisplay'
 import { PriceBlock } from '../catalog/PriceBlock'
+import { Button } from '../ui/Button'
 import { FOCUS_RING } from '../ui/focusRing'
+import type { SupportedLanguage } from '../../i18n'
 import { CartItemRow, CART_ROW_ATTRIBUTE } from './CartItemRow'
+import { CartOutcomeNotice } from './CartOutcomeNotice'
 import { EmptyCart } from './EmptyCart'
 import { UndoRow } from './UndoRow'
 
 /** The one removal that can currently be undone. Never a stack. */
-type PendingUndo = { item: CartItem; index: number }
+type PendingUndo = { slug: string; name: string; quantity: number }
 
 /**
- * Production `/cart` route — Slice 7b (technical/SLICE_7B_PLAN.md, Accepted).
+ * Production `/cart` route — MILESTONE-007 Checkpoint G.
  *
- * DESIGN_SYSTEM.md §8: the full page is the primary and only cart-management
- * surface. `CartDrawer` remains Slice 8 and no drawer behaviour appears here.
+ * 🔴 THE CART COMES FROM THE SERVER. This page used to read a browser-memory
+ * reducer, compute its own subtotal from stored agorot, and legitimately show
+ * an empty cart after a reload. All three are gone: §3.4 puts price, stock and
+ * identity on the server, and the client renders what it is told.
  *
- * 🔴 Reads cart state exclusively from `CartContext` — no local copy, no
- * mirrored counts. The Header badge, the count summary and the subtotal
- * therefore cannot disagree: all three derive from the same reducer state.
+ * 🔴 THREE STATES THE PROTOTYPE NEVER HAD TO HANDLE, because browser memory
+ * never fails: LOADING, FAILED and (now genuinely) EMPTY. A failed load does
+ * NOT render the empty cart — "your cart is empty" would be a claim the client
+ * has no standing to make when it could not reach the server at all.
  *
- * 🔴 Sends no request and touches no storage. The cart is memory-only
- * (DEC-044), so a full reload legitimately shows the empty state — and takes
- * any pending undo with it.
+ * 🔴 UNDO IS A REAL REQUEST NOW. It re-adds the removed product at the quantity
+ * the server last reported for it. It is therefore subject to the same clamp as
+ * any other add, and if stock has gone in the meantime the undo honestly fails
+ * or comes back smaller — which the outcome notice states. The prototype's undo
+ * could never fail because nothing was ever asked.
+ *
+ * ⚠️ The restored line lands at the END of the list rather than at its former
+ * index: line order is the server's (`orderBy: id`), and a re-added line is a
+ * new row. The prototype restored by remembered index; that index no longer
+ * exists to honour, and inventing one client-side would be exactly the kind of
+ * local truth this checkpoint removed.
  *
  * No `<main>` here — `AppShell` already supplies the one main landmark.
  */
 export function CartPage() {
-  const { t } = useTranslation('cart')
-  const { items, incrementItem, decrementItem, removeItem, restoreItem, totalQuantity, subtotalMinor } = useCart()
+  const { t, i18n } = useTranslation('cart')
+  const language = i18n.language as SupportedLanguage
+  const { status, cart, failure, outcome, pending, setLineQuantity, removeLine, addItem, refresh, dismissOutcome } =
+    useCart()
 
-  /**
-   * 🔴 Local to this page, by decision. One pending undo, no stack, no timer,
-   * no storage, no server state. Navigating away unmounts the page and the
-   * opportunity goes with it, which is why returning to /cart can never show
-   * a stale UndoRow.
-   */
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null)
   /** Set only by a successful undo, so focus lands in the restored row. */
   const [pendingRestoreFocus, setPendingRestoreFocus] = useState<string | null>(null)
   const undoRowRef = useRef<HTMLDivElement | null>(null)
 
-  const lines = getCartLines(items)
+  const lines = getCartLines(cart, language)
 
   const handleRemove = useCallback(
-    (slug: string) => {
-      const index = items.findIndex((item) => item.slug === slug)
-      if (index === -1) {
-        return
-      }
-      // The snapshot is captured BEFORE the dispatch, from committed state:
-      // after the removal the line is gone and its index is unknowable.
-      setPendingUndo({ item: items[index], index })
-      removeItem(slug)
+    (line: CartLineDisplay) => {
+      // Captured BEFORE the request: once it succeeds the line is gone and its
+      // quantity is unknowable.
+      const snapshot = { slug: line.slug, name: line.name, quantity: line.quantity }
+      void removeLine(line.id, line.name).then((ok) => {
+        // 🔴 The undo is offered ONLY on a confirmed removal. Offering it after
+        // a failed request would invite the shopper to "undo" something that
+        // never happened, which would then ADD a line they never asked for.
+        setPendingUndo(ok ? snapshot : null)
+      })
     },
-    [items, removeItem],
+    [removeLine],
   )
 
   /**
    * 🔴 Any other cart mutation invalidates the pending undo. Once quantities
-   * have moved, restoring a line at a remembered index is no longer the same
-   * operation the shopper asked to reverse, and an undo that quietly does
-   * something else is worse than no undo. A second removal replaces the
-   * opportunity rather than stacking it.
+   * have moved, restoring a line is no longer the same operation the shopper
+   * asked to reverse. A second removal replaces the opportunity rather than
+   * stacking it.
    */
   const handleIncrement = useCallback(
-    (slug: string) => {
+    (line: CartLineDisplay) => {
       setPendingUndo(null)
-      incrementItem(slug)
+      void setLineQuantity(line.id, line.name, line.quantity + 1)
     },
-    [incrementItem],
+    [setLineQuantity],
   )
 
   const handleDecrement = useCallback(
-    (slug: string) => {
+    (line: CartLineDisplay) => {
       setPendingUndo(null)
-      decrementItem(slug)
+      void setLineQuantity(line.id, line.name, line.quantity - 1)
     },
-    [decrementItem],
+    [setLineQuantity],
   )
 
   const handleUndo = useCallback(() => {
-    if (!pendingUndo) {
-      return
-    }
-    restoreItem(pendingUndo.item, pendingUndo.index)
-    setPendingRestoreFocus(pendingUndo.item.slug)
+    if (!pendingUndo) return
+    const { slug, name, quantity } = pendingUndo
     setPendingUndo(null)
-  }, [pendingUndo, restoreItem])
+    void addItem(slug, quantity, name).then((ok) => {
+      if (ok) setPendingRestoreFocus(slug)
+    })
+  }, [pendingUndo, addItem])
 
   // 🔴 Focus moves only after the commit that puts the Undo button in the DOM
-  // — an effect, never during render, and never on a timeout. DESIGN_SYSTEM.md
-  // §11: "After remove, focus moves to the undo control." It runs for pointer
-  // and keyboard removals alike, as the accepted design states.
+  // — an effect, never during render, and never on a timeout.
   useEffect(() => {
     if (pendingUndo) {
-      // Exactly one button lives inside the UndoRow, and the search is scoped
-      // to that element — no page-wide selector, no translated-text query.
       undoRowRef.current?.querySelector('button')?.focus()
     }
   }, [pendingUndo])
 
   // After a successful undo, focus lands on the restored row's first enabled
-  // control (decrement, else increment, else remove — the row's DOM order).
-  // The row is found by its own slug-bound attribute, never by translated text
-  // and never by a selector that could match another row.
+  // control. The row is found by its own slug-bound attribute, never by
+  // translated text and never by a selector that could match another row.
   useEffect(() => {
-    if (!pendingRestoreFocus) {
-      return
-    }
+    if (!pendingRestoreFocus) return
     const row = document.querySelector(`[${CART_ROW_ATTRIBUTE}="${CSS.escape(pendingRestoreFocus)}"]`)
-    const target = row?.querySelector<HTMLButtonElement>('button:not([disabled])')
-    target?.focus()
+    row?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus()
     setPendingRestoreFocus(null)
   }, [pendingRestoreFocus])
+
+  // A cart the shopper navigated back to may be stale — another tab, or a login
+  // that merged a guest cart into it. Clearing the last outcome on unmount
+  // stops a message about a change made minutes ago from greeting them.
+  useEffect(() => dismissOutcome, [dismissOutcome])
 
   return (
     <div className="px-7 py-8">
       <h1 className="text-2xl font-semibold text-text-ink">{t('page.title')}</h1>
 
       {/*
-        Rendered outside the empty/populated branch on purpose: removing the
-        last line must stay reversible, so EmptyCart and the UndoRow coexist
-        rather than the undo vanishing with the list.
+        🔴 LOADING AND FAILED ARE REAL, RENDERED STATES. The state layer this
+        page replaced could not produce either, so neither had ever been drawn.
       */}
-      {pendingUndo && (
-        <UndoRow productName={pendingUndo.item.name} onUndo={handleUndo} rowRef={undoRowRef} />
+      {status === 'loading' && (
+        <p role="status" className="mt-6 text-sm text-text-muted">
+          {t('state.loading')}
+        </p>
       )}
 
-      {lines.length === 0 ? (
-        <EmptyCart />
-      ) : (
+      {status === 'error' && (
+        <div role="alert" className="mt-6 flex flex-col items-start gap-3">
+          <p className="text-sm text-state-error">
+            {failure?.kind === 'network' ? t('state.errorOffline') : t('state.error')}
+          </p>
+          <Button variant="secondary" onClick={() => void refresh()}>
+            {t('state.retry')}
+          </Button>
+        </div>
+      )}
+
+      {status === 'ready' && (
         <>
           {/*
-            Plain text, deliberately not a live region: the quantity stepper's
-            own aria-live is the single announcement mechanism for quantity
-            (DESIGN_SYSTEM.md §8), and a second page-level region would
-            double-announce every change. Counts total UNITS, matching the
-            Header badge exactly — never distinct lines.
+            Rendered outside the empty/populated branch on purpose: removing the
+            last line must stay reversible, so EmptyCart and the UndoRow coexist
+            rather than the undo vanishing with the list.
           */}
-          <p className="mt-2 text-sm text-text-muted">{t('page.summary', { count: totalQuantity })}</p>
-
-          <ul className="mt-6">
-            {lines.map((line) => (
-              // The divider lives here, on the list item, so the final row
-              // carries none — and `CartItemRow` needs no `isLast` prop.
-              <li key={line.slug} className="border-b border-border-hairline last:border-b-0">
-                <CartItemRow
-                  line={line}
-                  onIncrement={handleIncrement}
-                  onDecrement={handleDecrement}
-                  onRemove={handleRemove}
-                />
-              </li>
-            ))}
-          </ul>
+          {pendingUndo && (
+            <UndoRow productName={pendingUndo.name} onUndo={handleUndo} rowRef={undoRowRef} />
+          )}
 
           {/*
-            🔴 Interim subtotal (DEC-045 as extended by the approved Slice 7b
-            plan). The value is the reducer's own `subtotalMinor` selector,
-            rendered through minorToPriceString -> PriceBlock -> formatPrice,
-            so there is exactly ONE money calculation on this page and no
-            float arithmetic anywhere. CartPage never re-derives it from the
-            rows. The label states plainly that these are the prices captured
-            at add time; a server-authoritative total supersedes it the moment
-            a cart API exists. No shipping, tax, discount, threshold, grand
-            total or checkout — none of them has an approved value yet.
+            🔴 A mutation can fail while a cart is already on screen. The cart
+            stays — nothing changed server-side — and the failure is stated
+            rather than left as a control that visibly did nothing.
           */}
-          <p className="mt-6 flex flex-wrap items-baseline gap-2 border-t border-border-hairline pt-4">
-            <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
-            <PriceBlock price={minorToPriceString(subtotalMinor)} />
-          </p>
+          {failure && (
+            <p role="alert" className="mt-4 text-sm text-state-error">
+              {failure.kind === 'network' ? t('state.errorOffline') : t('state.actionFailed')}
+            </p>
+          )}
 
-          {/* Quiet link, never styled to compete (DESIGN_SYSTEM.md §8). */}
-          <p className="mt-6">
-            <Link
-              to="/catalog"
-              className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline`}
-            >
-              {t('page.backToCatalog')}
-            </Link>
-          </p>
+          {/*
+            🔴 The subject is the product NAME, passed by the handlers above —
+            never the slug. The browser pass caught this reporting
+            "altman-probiotic-intense-30 was removed from the cart": after a
+            removal the line is gone, so a name resolved FROM THE CART is
+            unresolvable exactly when it is needed.
+          */}
+          <CartOutcomeNotice outcome={outcome} />
+
+          {lines.length === 0 ? (
+            <EmptyCart />
+          ) : (
+            <>
+              {/*
+                Plain text, deliberately not a live region: the quantity
+                stepper's own aria-live is the single announcement mechanism for
+                quantity, and a second page-level region would double-announce
+                every change. Counts total UNITS, matching the Header badge
+                exactly — never distinct lines. The count is the SERVER's.
+              */}
+              <p className="mt-2 text-sm text-text-muted">
+                {t('page.summary', { count: cart.totalQuantity })}
+              </p>
+
+              <ul className="mt-6">
+                {lines.map((line) => (
+                  // Keyed by the LINE id, not the slug: the id is what the
+                  // server addresses, and it is what survives a re-add.
+                  <li key={line.id} className="border-b border-border-hairline last:border-b-0">
+                    <CartItemRow
+                      line={line}
+                      busy={pending}
+                      onIncrement={handleIncrement}
+                      onDecrement={handleDecrement}
+                      onRemove={handleRemove}
+                    />
+                  </li>
+                ))}
+              </ul>
+
+              {/*
+                🔴 C3 — checkout is BLOCKED while any line's product is
+                inactive, and the block is stated in words next to the reason.
+                `hasBlockingLine` is the SERVER's flag; the client does not
+                re-derive it from the rows, so the two can never disagree.
+              */}
+              {cart.hasBlockingLine && (
+                <p role="alert" className="mt-6 text-sm font-medium text-state-error">
+                  {t('blocked.message')}
+                </p>
+              )}
+
+              {/*
+                🔴 The subtotal is the SERVER's, recomputed from live product
+                rows on every response. It used to be a client-side sum over
+                prices captured at add time, with a label admitting as much —
+                that label is gone because the caveat it carried is gone. Still
+                no shipping, tax, discount, threshold, grand total or checkout:
+                none of them has an approved value yet.
+              */}
+              <p className="mt-6 flex flex-wrap items-baseline gap-2 border-t border-border-hairline pt-4">
+                <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
+                <PriceBlock price={cart.subtotal} />
+              </p>
+
+              {/* Quiet link, never styled to compete (DESIGN_SYSTEM.md §8). */}
+              <p className="mt-6">
+                <Link
+                  to="/catalog"
+                  className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline`}
+                >
+                  {t('page.backToCatalog')}
+                </Link>
+              </p>
+            </>
+          )}
         </>
       )}
     </div>

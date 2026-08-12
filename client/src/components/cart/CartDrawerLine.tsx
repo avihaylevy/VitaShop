@@ -44,6 +44,16 @@ export function CartDrawerLine({ line }: CartDrawerLineProps) {
         </p>
 
         <p className="text-xs text-text-muted">{t('drawer.quantityLabel', { quantity: line.quantity })}</p>
+
+        {/*
+          🔴 The LINE TOTAL, computed server-side. It appears here as well as
+          on /cart because the drawer's quantity is now a SERVER quantity that
+          may differ from the one the shopper asked for.
+        */}
+        <p className="flex flex-wrap items-baseline gap-1.5 text-xs text-text-muted">
+          <span>{t('item.lineTotal')}</span>
+          <PriceBlock price={line.lineTotal} />
+        </p>
       </div>
     </div>
   )

@@ -6,12 +6,16 @@ import { MinusIcon, PlusIcon } from '../icons'
 type QuantityStepperProps = {
   quantity: number
   /**
-   * This line's snapshot stock ceiling — DEC-044: no invented cap. 🔴 A
-   * snapshot, not live stock: `/cart` performs no catalogue refresh and no
-   * server validation, and REQ-F-022's server-side check remains
-   * unimplemented.
+   * 🔴 BOTH DISABLED STATES ARE PASSED IN, NOT DERIVED HERE — Checkpoint G.
+   *
+   * This used to take a `max` and compute `quantity >= max` itself. That made
+   * the stepper a second opinion about a bound the SERVER owns, and it could
+   * only ever be as fresh as the snapshot it was handed. The caller's display
+   * model now answers both questions from the server's own line, and folds in
+   * whether a request is in flight and whether the product is still active.
    */
-  max: number
+  canIncrement: boolean
+  canDecrement: boolean
   /** Language-resolved product name, for the group's accessible name. */
   productName: string
   onIncrement: () => void
@@ -27,13 +31,18 @@ type QuantityStepperProps = {
  * produces the LTR convention. There is deliberately no `row-reverse`, no
  * mirroring override and no direction-specific branch — do not "fix" this.
  *
- * `min` is not a prop: it is 1, fixed by DEC-044, and a prop would invite a
- * second value. Both disabled states are derived from `quantity`/`max` by the
- * caller's display model rather than passed in, so a disabled control can
- * never disagree with the number beside it. Both buttons are natively
- * `disabled` — never a click-guard.
+ * The floor is 1 and is not configurable — reaching 0 is a REMOVAL, which has
+ * its own labelled control. Both buttons are natively `disabled` — never a
+ * click-guard.
  */
-export function QuantityStepper({ quantity, max, productName, onIncrement, onDecrement }: QuantityStepperProps) {
+export function QuantityStepper({
+  quantity,
+  canIncrement,
+  canDecrement,
+  productName,
+  onIncrement,
+  onDecrement,
+}: QuantityStepperProps) {
   const { t } = useTranslation('cart')
 
   return (
@@ -46,7 +55,7 @@ export function QuantityStepper({ quantity, max, productName, onIncrement, onDec
         variant="secondary"
         icon={<MinusIcon />}
         aria-label={t('quantity.decrease', { product: productName })}
-        disabled={quantity <= 1}
+        disabled={!canDecrement}
         onClick={onDecrement}
       />
       {/*
@@ -66,7 +75,7 @@ export function QuantityStepper({ quantity, max, productName, onIncrement, onDec
         variant="secondary"
         icon={<PlusIcon />}
         aria-label={t('quantity.increase', { product: productName })}
-        disabled={quantity >= max}
+        disabled={!canIncrement}
         onClick={onIncrement}
       />
     </div>

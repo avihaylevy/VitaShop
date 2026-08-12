@@ -25,10 +25,26 @@ import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 export type CartIdentity = { userId?: string | null; guestCartId?: string | null }
 
 export type CartLineDto = {
+  /**
+   * 🔴 THE CART LINE'S OWN ID — added at Checkpoint G, and it is not a
+   * convenience field. `PATCH` and `DELETE /api/cart/items/:id` address a LINE,
+   * and Checkpoints C and D shipped a DTO that carried no line id at all, so
+   * the two routes were physically unaddressable from any client: D's own tests
+   * created the line and held its id in the test, which is why nothing noticed.
+   *
+   * ⚠️ Exposing it discloses nothing: `findOwnedLine` scopes every lookup to
+   * the caller's identity, and a foreign id is already indistinguishable from
+   * an absent one (a 404, never a 403).
+   */
+  id: string
   productId: string
   slug: string
   nameHe: string
   nameEn: string
+  /** For the row's brand line. Read live, exactly like the name. */
+  brandName: string
+  /** For the row's "package quantity" line. */
+  packageQuantity: number
   imageFile: string | null
   quantity: number
   /** Live, from the product row. Never stored on the line. */
@@ -42,6 +58,8 @@ export type CartLineDto = {
   isActive: boolean
   /** So the client can explain a clamp it did not choose. */
   stockQuantity: number
+  /** So the row's stock state is the SERVER's threshold, not a client constant. */
+  lowStockThreshold: number
 }
 
 export type CartDto = {
@@ -74,25 +92,31 @@ function whereForIdentity(identity: CartIdentity) {
 }
 
 function toDto(
-  items: { quantity: number; product: {
+  items: { id: string; quantity: number; product: {
     id: string; slug: string; nameHe: string; nameEn: string; isActive: boolean
-    stockQuantity: number; price: { toFixed: (d: number) => string }
+    stockQuantity: number; lowStockThreshold: number; packageQuantity: number
+    price: { toFixed: (d: number) => string }
+    brand: { name: string }
     images: { url: string }[]
   } }[],
 ): CartDto {
   const lines = items.map((item) => {
     const unit = Number(item.product.price.toFixed(2))
     return {
+      id: item.id,
       productId: item.product.id,
       slug: item.product.slug,
       nameHe: item.product.nameHe,
       nameEn: item.product.nameEn,
+      brandName: item.product.brand.name,
+      packageQuantity: item.product.packageQuantity,
       imageFile: item.product.images[0]?.url.split('/').pop() ?? null,
       quantity: item.quantity,
       unitPrice: item.product.price.toFixed(2),
       lineTotal: (unit * item.quantity).toFixed(2),
       isActive: item.product.isActive,
       stockQuantity: item.product.stockQuantity,
+      lowStockThreshold: item.product.lowStockThreshold,
     }
   })
 
@@ -105,11 +129,14 @@ function toDto(
 }
 
 const LINE_SELECT = {
+  // 🔴 The LINE's id, not the product's. PATCH/DELETE address this value.
+  id: true,
   quantity: true,
   product: {
     select: {
       id: true, slug: true, nameHe: true, nameEn: true, isActive: true,
-      stockQuantity: true, price: true,
+      stockQuantity: true, lowStockThreshold: true, packageQuantity: true, price: true,
+      brand: { select: { name: true } },
       images: { select: { url: true }, orderBy: { sortOrder: 'asc' as const }, take: 1 },
     },
   },

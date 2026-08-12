@@ -1,42 +1,94 @@
 /**
- * Cart domain types — Slice 7 (UI_IMPLEMENTATION_PLAN.md build-order step 7,
- * partial: context only, no CartItemRow/QuantityStepper/cart page).
+ * Cart domain types — MILESTONE-007 Checkpoint G.
  *
- * Deliberately narrower than `ProductCardModel`: a cart line stores what a
- * future CartItemRow needs to render without a refetch, and nothing else.
- * No description, ingredients, warnings, allergens, health goals, dosage
- * form or category data — those are catalogue concerns, and reproducing
- * medical content in a commerce surface is out of scope by rule.
+ * 🔴 THESE MIRROR THE SERVER'S DTO AND NOTHING ELSE. The Slice 7 prototype's
+ * `CartItem` (slug · name · unitPriceMinor · stockQuantity snapshots, held in
+ * browser memory) is GONE, not extended: §3.4 makes a browser that holds prices
+ * a client asserting money, and two sources of cart truth is the defect class
+ * MILESTONE-007 spent six passes removing from the server.
  *
- * 🔴 `unitPriceMinor` is an integer count of agorot, never a float and never
- * a price string parsed with `Number`/`parseFloat`. See lib/money.ts.
+ * 🔴 NOTHING HERE IS A SNAPSHOT. Every field is what the server said on the
+ * last response. The client stores no price, no stock and no quantity of its
+ * own, and never repairs, clamps or defaults a value it was given.
  */
 
-export type CartItem = {
-  /** Identity. Matches `ProductCardModel.slug` and the /product/:slug route. */
+/** One cart line, exactly as `GET /api/cart` reports it. */
+export type CartLine = {
+  /** The LINE's id — what `PATCH`/`DELETE /api/cart/items/:id` address. */
+  id: string
+  productId: string
   slug: string
-  /**
-   * Snapshots taken at add time. `name` is already language-resolved by
-   * `mapCatalogProduct`, so a language toggle does NOT retranslate an
-   * existing line — a known, recorded limitation, not a bug to paper over
-   * with an invented replacement name.
-   */
-  name: string
-  brandName?: string
+  nameHe: string
+  nameEn: string
+  brandName: string
+  packageQuantity: number
   imageFile: string | null
-  packageQuantity?: number
-  /** Integer agorot. Validated before the line is ever created. */
-  unitPriceMinor: number
-  /**
-   * Refreshed from the newest observed catalogue data on every add — the
-   * latest fetch wins over the snapshot taken when the line was created.
-   */
+  quantity: number
+  /** Canonical two-decimal string, live from the product row. Never a number. */
+  unitPrice: string
+  /** Computed SERVER-SIDE. The client does not multiply money. */
+  lineTotal: string
+  isActive: boolean
   stockQuantity: number
   lowStockThreshold: number
-  /** Always a positive integer, always <= stockQuantity. Never 0. */
-  quantity: number
 }
 
-export type CartState = {
-  items: readonly CartItem[]
+export type Cart = {
+  items: readonly CartLine[]
+  totalQuantity: number
+  subtotal: string
+  /** 🔴 C3: true when any line's product is inactive. Checkout is blocked. */
+  hasBlockingLine: boolean
+}
+
+/**
+ * 🔴 WHAT THE SERVER CHANGED THAT THE SHOPPER DID NOT ASK FOR.
+ *
+ * These flags exist so the UI can SAY what happened. `clampedByCap` /
+ * `clampedByStock` / `alreadyAtMaximum` come straight from the add and update
+ * responses; dropping them on the floor re-creates exactly the silent loss the
+ * server work removed.
+ */
+export type CartMutationOutcome = {
+  /** The slug or line the outcome is about, so a message can name it. */
+  subject: string
+  /** 🔴 The quantity the SERVER settled on — never the one the shopper typed. */
+  quantity: number
+  clampedByCap: boolean
+  clampedByStock: boolean
+  alreadyAtMaximum: boolean
+  removed: boolean
+  unchanged: boolean
+}
+
+/** Why a cart request failed. Never a reason invented by the client. */
+export type CartFailure =
+  | { kind: 'network' }
+  | { kind: 'notFound' }
+  | { kind: 'outOfStock' }
+  | { kind: 'server' }
+
+export type CartResult<T> = { ok: true; value: T } | { ok: false; failure: CartFailure }
+
+/**
+ * The login response's cart report — `merged`, `clampedSlugs`, `dropped` and
+ * `mergeFailed`, all produced at the MERGE-GUEST-CART seam.
+ *
+ * 🔴 There is deliberately NO registration equivalent. Registration answers an
+ * identical body whether or not the account already existed (DEC-053 clause 4b);
+ * adding a cart report there would re-open the enumeration oracle ISSUE-067
+ * closed.
+ */
+export type CartMergeReport = {
+  mergeFailed: boolean
+  merged: boolean
+  clampedSlugs: string[]
+  dropped: { slug: string; reason: 'INACTIVE' | 'UNAVAILABLE' }[]
+}
+
+export const EMPTY_CART: Cart = {
+  items: [],
+  totalQuantity: 0,
+  subtotal: '0.00',
+  hasBlockingLine: false,
 }

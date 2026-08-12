@@ -2,12 +2,13 @@ import { useEffect, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useCart } from '../../state/CartContext'
-import { getCartLineDisplay } from '../../lib/cartDisplay'
-import { minorToPriceString } from '../../lib/money'
+import { toCartLineDisplay } from '../../lib/cartDisplay'
+import type { SupportedLanguage } from '../../i18n'
 import { PriceBlock } from '../catalog/PriceBlock'
 import { Drawer } from '../ui/Drawer'
 import { FOCUS_RING } from '../ui/focusRing'
 import { CartDrawerLine } from './CartDrawerLine'
+import { useCartOutcomeMessage } from './CartOutcomeNotice'
 
 type CartDrawerProps = {
   /** Owned by the caller. See the closed<->open invariant note below. */
@@ -44,19 +45,26 @@ type CartDrawerProps = {
  * catalogue's existing `role="status"` confirmation is untouched and
  * unrelated to this component.
  *
- * 🔴 Checkpoint B only: nothing in the application renders this component
- * yet. It is written to the exact contract Checkpoint C will integrate
- * against, so no lifecycle question is left for that checkpoint to invent.
+ * ⚠️ MILESTONE-007 Checkpoint G added the server's clamp report here as
+ * ORDINARY TEXT, not a region — see `useCartOutcomeMessage`. D5 is about the
+ * REGION, not about withholding what the server changed; a drawer that says
+ * "added to cart" over a quantity the server clamped is the silent loss §7.16
+ * forbids, so both rules are honoured rather than one traded for the other.
  */
 export function CartDrawer({ open, slug, onClose, returnFocusRef }: CartDrawerProps) {
-  const { t } = useTranslation('cart')
-  const { items, subtotalMinor } = useCart()
+  const { t, i18n } = useTranslation('cart')
+  const language = i18n.language as SupportedLanguage
+  const { cart, outcome } = useCart()
 
-  // Read live, never a copied/cached line — a replacement add (D8) or any
-  // cart change is reflected on the very next render, with no local state
-  // of its own to go stale.
-  const item = slug !== null ? items.find((candidate) => candidate.slug === slug) : undefined
-  const line = item ? getCartLineDisplay(item) : undefined
+  // Read live from the SERVER's cart, never a copied/cached line — a
+  // replacement add (D8) or any cart change is reflected on the very next
+  // render, with no local state of its own to go stale.
+  const item = slug !== null ? cart.items.find((candidate) => candidate.slug === slug) : undefined
+  const line = item ? toCartLineDisplay(item, language) : undefined
+
+  // 🔴 Registered here, unconditionally, BEFORE the missing-line early return
+  // below — the Rules of Hooks hold whichever branch the render takes.
+  const outcomeMessage = useCartOutcomeMessage(outcome, line?.name)
 
   /**
    * 🔴 Missing-line lifecycle (mandatory contract). Fires only post-commit,
@@ -116,15 +124,24 @@ export function CartDrawer({ open, slug, onClose, returnFocusRef }: CartDrawerPr
           <CartDrawerLine line={line} />
 
           {/*
-            🔴 The ONLY money value in this drawer — the cart's own
-            subtotalMinor selector, read directly from CartContext, never
-            re-derived. Same honest snapshot label /cart uses (DEC-047 D2).
-            No shipping, tax, discount, threshold or grand total (D3) —
-            those rows are absent, not hidden behind a placeholder.
+            🔴 THE DRAWER IS A CONFIRMATION, so it must confirm what actually
+            happened. If the server clamped the add — to stock or to the
+            per-line cap — or refused to move a line already at its maximum,
+            the drawer says so beside the quantity it is showing. Announcing
+            "added to cart" over a clamp the shopper cannot see is precisely
+            the silent loss §7.16 forbids.
+          */}
+          {outcomeMessage && <p className="text-sm text-text-muted">{outcomeMessage}</p>}
+
+          {/*
+            🔴 The ONLY money value in this drawer — the SERVER's subtotal,
+            read directly from CartContext, never re-derived. No shipping, tax,
+            discount, threshold or grand total (DEC-047 D3) — those rows are
+            absent, not hidden behind a placeholder.
           */}
           <p className="flex flex-wrap items-baseline gap-2 border-t border-border-hairline pt-4">
             <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
-            <PriceBlock price={minorToPriceString(subtotalMinor)} />
+            <PriceBlock price={cart.subtotal} />
           </p>
 
           {/* Primary action — a semantic link, per DEC-047 D6's rule that

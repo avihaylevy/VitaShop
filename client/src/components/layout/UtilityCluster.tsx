@@ -75,7 +75,13 @@ export function CartControl() {
   // Total UNITS across every cart line, not the number of distinct lines:
   // adding the same product twice moves the badge 1 -> 2, so the badge and
   // the add-to-cart confirmation can never contradict each other.
-  const { totalQuantity } = useCart()
+  //
+  // 🔴 The count is the SERVER's `totalQuantity`, from the last response —
+  // never summed here from the rows. A badge that re-derives its own total is
+  // a second answer to a question the response already answered, and it is the
+  // one part of the cart visible on every page.
+  const { cart } = useCart()
+  const totalQuantity = cart.totalQuantity
   const ariaLabel =
     totalQuantity > 0 ? t('cart.ariaLabelWithCount', { count: totalQuantity }) : t('cart.ariaLabelEmpty')
 

@@ -1,161 +1,211 @@
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
-import type { CartItem } from '../types/cart'
-import { cartReducer, EMPTY_CART, getSubtotalMinor, getTotalQuantity } from '../lib/cartReducer'
+// @vitest-environment jsdom
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CartProvider, useCart } from './CartContext'
+import type { Cart } from '../types/cart'
 
-/**
- * Context-contract tests. `renderToStaticMarkup` is used deliberately: it
- * runs without a DOM, so this file adds no jsdom and no Testing Library
- * (both would be dependencies requiring their own decision).
- *
- * 🔴 What this covers: the provider's initial derived values, the exact
- * public API surface, and the missing-provider guard.
- * 🔴 What it cannot cover: interaction. A static render has no state
- * updates, so dispatching and re-reading is out of reach here — that
- * behaviour is covered exhaustively by the pure `cartReducer` tests, and
- * end-to-end by the Checkpoint D browser pass.
- */
+const BASE_URL = 'http://localhost:3000'
 
-/** Captures the context value from inside a static render. */
-function captureCartValue() {
-  let captured: ReturnType<typeof useCart> | undefined
-
-  function Probe() {
-    captured = useCart()
-    return null
-  }
-
-  renderToStaticMarkup(
-    <CartProvider>
-      <Probe />
-    </CartProvider>,
-  )
-
-  if (!captured) {
-    throw new Error('the probe never rendered')
-  }
-  return captured
+function mockResponse(status: number, body: unknown): Response {
+  return { ok: status >= 200 && status < 300, status, json: async () => body } as Response
 }
 
-describe('CartProvider', () => {
-  it('starts empty, with both derived values at zero', () => {
-    const cart = captureCartValue()
+function cartWith(quantity: number): Cart {
+  return {
+    items: [
+      {
+        id: 'line-1',
+        productId: 'product-1',
+        slug: 'a-slug',
+        nameHe: 'שם',
+        nameEn: 'Name',
+        brandName: 'Brand',
+        packageQuantity: 30,
+        imageFile: null,
+        quantity,
+        unitPrice: '10.00',
+        lineTotal: `${(10 * quantity).toFixed(2)}`,
+        isActive: true,
+        stockQuantity: 3,
+        lowStockThreshold: 5,
+      },
+    ],
+    totalQuantity: quantity,
+    subtotal: `${(10 * quantity).toFixed(2)}`,
+    hasBlockingLine: false,
+  }
+}
 
-    expect(cart.items).toEqual([])
-    expect(cart.totalQuantity).toBe(0)
-    expect(cart.subtotalMinor).toBe(0)
-  })
+/** Renders the context's state as text, so assertions read the real value. */
+function Probe() {
+  const { status, cart, failure, outcome } = useCart()
+  return (
+    <div>
+      <span data-testid="status">{status}</span>
+      <span data-testid="total">{cart.totalQuantity}</span>
+      <span data-testid="lines">{cart.items.length}</span>
+      <span data-testid="failure">{failure?.kind ?? 'none'}</span>
+      <span data-testid="clamped">{String(outcome?.clampedByStock ?? false)}</span>
+      <span data-testid="outcomeQuantity">{outcome?.quantity ?? 'none'}</span>
+    </div>
+  )
+}
 
-  it('exposes exactly the approved Slice 7b API — no more, no less', () => {
-    // `count` is gone, with no deprecated alias. `restoreItem` was added
-    // deliberately in Slice 7b for the one-item undo. `setQuantity`,
-    // `clearCart` and any undo stack were deliberately NOT added: no
-    // consumer needs them, and an unused public method is an untested one.
-    expect(Object.keys(captureCartValue()).sort()).toEqual([
-      'addItem',
-      'decrementItem',
-      'incrementItem',
-      'items',
-      'removeItem',
-      'restoreItem',
-      'subtotalMinor',
-      'totalQuantity',
-    ])
-  })
+let fetchMock: ReturnType<typeof vi.fn>
+let handle: { current: ReturnType<typeof useCart> | null }
 
-  it('exposes the five mutators as functions', () => {
-    const cart = captureCartValue()
+function Capture() {
+  handle.current = useCart()
+  return null
+}
 
-    expect(cart.addItem).toBeTypeOf('function')
-    expect(cart.incrementItem).toBeTypeOf('function')
-    expect(cart.decrementItem).toBeTypeOf('function')
-    expect(cart.removeItem).toBeTypeOf('function')
-    expect(cart.restoreItem).toBeTypeOf('function')
-  })
+function renderCart() {
+  handle = { current: null }
+  return render(
+    <CartProvider>
+      <Probe />
+      <Capture />
+    </CartProvider>,
+  )
+}
 
-  it('takes (item, index) on restoreItem — the snapshot and its original position', () => {
-    expect(captureCartValue().restoreItem).toHaveLength(2)
-  })
+beforeEach(() => {
+  vi.stubEnv('VITE_API_BASE_URL', BASE_URL)
+  fetchMock = vi.fn()
+  vi.stubGlobal('fetch', fetchMock)
+})
 
-  it('reads and writes no client storage', () => {
-    // In-memory only, by decision — the accepted server-side session cart
-    // stays the eventual single source of truth.
-    const storage = { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }
-    vi.stubGlobal('localStorage', storage)
-    vi.stubGlobal('sessionStorage', storage)
-
-    captureCartValue()
-
-    expect(storage.getItem).not.toHaveBeenCalled()
-    expect(storage.setItem).not.toHaveBeenCalled()
-    expect(storage.removeItem).not.toHaveBeenCalled()
-
-    vi.unstubAllGlobals()
-  })
+afterEach(() => {
+  cleanup()
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
 })
 
 /**
- * 🔴 The provider derives `totalQuantity`/`subtotalMinor` by calling
- * `getTotalQuantity(state)`/`getSubtotalMinor(state)` on whatever
- * `cartReducer` returned — see CartContext.tsx. A static render cannot
- * dispatch, so the post-restore values are asserted over that exact
- * composition instead of through a mounted provider. This is the same code
- * path, not a re-implementation: the reducer and both selectors are the real
- * modules, and the browser pass covers the mounted behaviour end to end.
+ * MILESTONE-007 Checkpoint G.
+ *
+ * 🔴 THESE TEST THE THREE STATES THE PROTOTYPE NEVER HAD, because browser
+ * memory never fails: loading, a FAILED load, and a mutation that fails while a
+ * cart is already on screen.
  */
-describe('the values CartProvider derives, after a restore', () => {
-  const ITEM: CartItem = {
-    slug: 'solgar-omega-3',
-    name: 'אומגה 3',
-    brandName: 'סולגאר',
-    imageFile: null,
-    packageQuantity: 100,
-    unitPriceMinor: 9490,
-    stockQuantity: 60,
-    lowStockThreshold: 5,
-    quantity: 2,
-  }
 
-  it('returns the removed line to the totals it left', () => {
-    const withItem = cartReducer(EMPTY_CART, { type: 'restore', item: ITEM, index: 0 })
-    expect(getTotalQuantity(withItem)).toBe(2)
-    expect(getSubtotalMinor(withItem)).toBe(18_980)
+describe('the load', () => {
+  it('starts in loading and settles in ready', async () => {
+    fetchMock.mockResolvedValue(mockResponse(200, cartWith(2)))
+    renderCart()
 
-    const removed = cartReducer(withItem, { type: 'remove', slug: ITEM.slug })
-    expect(getTotalQuantity(removed)).toBe(0)
-    expect(getSubtotalMinor(removed)).toBe(0)
-
-    const restored = cartReducer(removed, { type: 'restore', item: ITEM, index: 0 })
-    expect(getTotalQuantity(restored)).toBe(2)
-    expect(getSubtotalMinor(restored)).toBe(18_980)
+    expect(screen.getByTestId('status').textContent).toBe('loading')
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('ready'))
+    expect(screen.getByTestId('total').textContent).toBe('2')
   })
 
-  it('leaves the totals untouched when the restore is refused', () => {
-    const withItem = cartReducer(EMPTY_CART, { type: 'restore', item: ITEM, index: 0 })
+  it('🔴 A FAILED LOAD IS NOT AN EMPTY CART', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    renderCart()
 
-    // Same slug already present — a stale undo.
-    const refused = cartReducer(withItem, { type: 'restore', item: ITEM, index: 0 })
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('error'))
+    expect(screen.getByTestId('failure').textContent).toBe('network')
+    // The distinction is the whole point: "your cart is empty" is a claim the
+    // client has no standing to make when it could not reach the server at all.
+    expect(screen.getByTestId('status').textContent).not.toBe('ready')
+  })
 
-    expect(refused).toBe(withItem)
-    expect(getTotalQuantity(refused)).toBe(2)
-    expect(getSubtotalMinor(refused)).toBe(18_980)
+  it('retrying after a failure recovers', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    renderCart()
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('error'))
+
+    fetchMock.mockResolvedValue(mockResponse(200, cartWith(1)))
+    await act(async () => {
+      await handle.current?.refresh()
+    })
+    expect(screen.getByTestId('status').textContent).toBe('ready')
+    expect(screen.getByTestId('total').textContent).toBe('1')
   })
 })
 
-describe('useCart', () => {
-  it('throws a named error when used outside a CartProvider', () => {
-    function Orphan() {
-      useCart()
-      return null
-    }
+describe('🔴 the server decides the quantity — §3.4', () => {
+  it('a clamped add publishes the SERVER quantity, never the requested one', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, cartWith(0)))
+    renderCart()
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('ready'))
 
-    // React logs the thrown error itself; silence it so the suite output
-    // stays readable without swallowing the assertion.
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // Asked for 11; the server clamped to 3 (this product's stock).
+    fetchMock.mockResolvedValue(
+      mockResponse(200, { cart: cartWith(3), quantity: 3, clampedByStock: true, clampedByCap: false }),
+    )
+    await act(async () => {
+      await handle.current?.addItem('a-slug', 11)
+    })
 
-    expect(() => renderToStaticMarkup(<Orphan />)).toThrow('useCart must be used within a CartProvider')
+    expect(screen.getByTestId('total').textContent).toBe('3')
+    expect(screen.getByTestId('outcomeQuantity').textContent).toBe('3')
+    expect(screen.getByTestId('clamped').textContent).toBe('true')
+  })
 
-    error.mockRestore()
+  it('the whole cart is REPLACED from the response, never patched locally', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, cartWith(2)))
+    renderCart()
+    await waitFor(() => expect(screen.getByTestId('total').textContent).toBe('2'))
+
+    // The server answers with a cart the client could not have derived: the
+    // line is GONE, even though the request was an increment.
+    fetchMock.mockResolvedValue(
+      mockResponse(200, { cart: { items: [], totalQuantity: 0, subtotal: '0.00', hasBlockingLine: false }, quantity: 1 }),
+    )
+    await act(async () => {
+      await handle.current?.setLineQuantity('line-1', 'a-slug', 3)
+    })
+
+    expect(screen.getByTestId('lines').textContent).toBe('0')
+    expect(screen.getByTestId('total').textContent).toBe('0')
+  })
+})
+
+describe('🔴 a failed mutation must not report a loss that did not happen', () => {
+  it('keeps the cart on screen and states the failure', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, cartWith(2)))
+    renderCart()
+    await waitFor(() => expect(screen.getByTestId('total').textContent).toBe('2'))
+
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    let result: unknown
+    await act(async () => {
+      result = await handle.current?.removeLine('line-1', 'a-slug')
+    })
+
+    expect(result).toBeNull()
+    // Nothing changed server-side, so nothing may change on screen.
+    expect(screen.getByTestId('total').textContent).toBe('2')
+    expect(screen.getByTestId('status').textContent).toBe('ready')
+    expect(screen.getByTestId('failure').textContent).toBe('network')
+  })
+})
+
+describe('🔴 mutations are serialized, so a slow response cannot overwrite a newer cart', () => {
+  it('two adds issued together resolve in call order', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, cartWith(0)))
+    renderCart()
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('ready'))
+
+    const order: string[] = []
+    fetchMock.mockImplementation(async (_url: string, init: { body?: string }) => {
+      const slug = JSON.parse(init.body ?? '{}').slug as string
+      order.push(slug)
+      // The FIRST request is the slow one. Without serialization it would
+      // settle last and its stale cart would win.
+      if (slug === 'first') await new Promise((resolve) => setTimeout(resolve, 30))
+      return mockResponse(200, { cart: cartWith(slug === 'first' ? 1 : 2), quantity: 1 })
+    })
+
+    await act(async () => {
+      const a = handle.current?.addItem('first', 1)
+      const b = handle.current?.addItem('second', 1)
+      await Promise.all([a, b])
+    })
+
+    expect(order).toEqual(['first', 'second'])
+    // The LAST call's cart is the one on screen.
+    expect(screen.getByTestId('total').textContent).toBe('2')
   })
 })

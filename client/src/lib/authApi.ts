@@ -25,12 +25,18 @@ export type AuthFailure =
 export type AuthResult<T> = { ok: true; value: T } | { ok: false; failure: AuthFailure }
 
 async function post<T>(path: string, body: unknown): Promise<AuthResult<T>> {
+  // 🔴 `getApiBaseUrl()` returns a RESULT OBJECT, not a string. This used to
+  // read `if (!base)` — always false, an object is truthy — and then
+  // interpolate the object, so every auth request was sent to
+  // `[object Object]/api/auth/...`. Found at MILESTONE-007 Checkpoint G while
+  // wiring the cart; see ISSUE-072. The same silent shape as ISSUE-069: the
+  // code compiled, the tests passed, and nothing ever crossed the boundary.
   const base = getApiBaseUrl()
-  if (!base) return { ok: false, failure: { kind: 'unexpected' } }
+  if (!base.ok) return { ok: false, failure: { kind: 'unexpected' } }
 
   let response: Response
   try {
-    response = await fetch(`${base}${path}`, {
+    response = await fetch(`${base.value}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       // 🔴 The session cookie is HttpOnly and cross-origin in development.
@@ -91,8 +97,19 @@ export function register(payload: RegistrationPayload) {
   return post<{ status: string }>('/api/auth/register', payload)
 }
 
+/**
+ * 🔴 The login response carries a CART REPORT — `merged`, `clampedSlugs`,
+ * `dropped` and `mergeFailed`, produced at the MERGE-GUEST-CART seam. It is
+ * typed here rather than discarded: the server produces it precisely so the UI
+ * can say what happened to a guest cart at login, and a client that drops it
+ * re-creates the silent loss MILESTONE-007 removed.
+ *
+ * ⚠️ There is deliberately NO registration equivalent. Registration answers an
+ * identical body whether or not the account already existed (DEC-053 clause 4b);
+ * a cart report there would re-open the enumeration oracle ISSUE-067 closed.
+ */
 export function login(email: string, password: string) {
-  return post<{ status: string }>('/api/auth/login', { email, password })
+  return post<{ status: string; cart?: unknown }>('/api/auth/login', { email, password })
 }
 
 export function logout() {
@@ -110,11 +127,11 @@ export function completePasswordReset(token: string, password: string) {
 /** GET, because verification is a link the user follows from an email. */
 export async function verifyEmail(token: string): Promise<AuthResult<{ status: string }>> {
   const base = getApiBaseUrl()
-  if (!base) return { ok: false, failure: { kind: 'unexpected' } }
+  if (!base.ok) return { ok: false, failure: { kind: 'unexpected' } }
 
   try {
     const response = await fetch(
-      `${base}/api/auth/verify-email?token=${encodeURIComponent(token)}`,
+      `${base.value}/api/auth/verify-email?token=${encodeURIComponent(token)}`,
       { credentials: 'include' },
     )
     return interpret<{ status: string }>(response)
@@ -129,9 +146,9 @@ export async function verifyEmail(token: string): Promise<AuthResult<{ status: s
  */
 export async function fetchSession(): Promise<boolean> {
   const base = getApiBaseUrl()
-  if (!base) return false
+  if (!base.ok) return false
   try {
-    const response = await fetch(`${base}/api/auth/session`, { credentials: 'include' })
+    const response = await fetch(`${base.value}/api/auth/session`, { credentials: 'include' })
     if (!response.ok) return false
     const payload = (await response.json()) as { authenticated?: unknown }
     return payload.authenticated === true

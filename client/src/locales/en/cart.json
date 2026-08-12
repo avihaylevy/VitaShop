@@ -5,16 +5,34 @@
     "summary_other": "{{count}} items in cart",
     "backToCatalog": "Continue shopping"
   },
+  "state": {
+    "loading": "Loading your cart…",
+    "error": "Your cart could not be loaded.",
+    "errorOffline": "The server could not be reached, so your cart could not be loaded.",
+    "actionFailed": "That change could not be saved. Your cart is unchanged.",
+    "retry": "Try again"
+  },
   "item": {
     "packageQuantity": "Package quantity: {{quantity}}",
-    "unitPrice": "Unit price"
+    "unitPrice": "Unit price",
+    "lineTotal": "Line total",
+    "unavailable": "This product is no longer sold. Remove it to continue to checkout."
   },
   "quantity": {
     "groupLabel": "Quantity — {{product}}",
     "valueLabel": "Quantity:",
     "decrease": "Decrease quantity — {{product}}",
     "increase": "Increase quantity — {{product}}",
-    "atStockCap": "The cart has reached the stock last seen in the catalogue. This is not a live stock check."
+    "atStockCap": "This is all the stock currently available. Stock is not reserved until the order is placed."
+  },
+  "outcome": {
+    "clampedByStock": "Only {{quantity}} of {{product}} are in stock, so the cart now holds {{quantity}}.",
+    "clampedByCap": "{{product}} is limited to 10 per order, so the cart now holds {{quantity}}.",
+    "alreadyAtMaximum": "{{product}} is already at its maximum of {{quantity}} — the quantity did not change.",
+    "removed": "{{product}} was removed from the cart."
+  },
+  "blocked": {
+    "message": "One or more products in your cart are no longer sold. Remove them to continue to checkout."
   },
   "remove": {
     "label": "Remove",
@@ -26,7 +44,14 @@
     "actionAriaLabel": "Undo removing {{product}} from the cart"
   },
   "subtotal": {
-    "label": "Subtotal based on prices when items were added"
+    "label": "Subtotal"
+  },
+  "merge": {
+    "merged": "Your guest cart was merged into your account cart.",
+    "failed": "Your guest cart could not be merged into your account. It has not been lost — sign in again to retry.",
+    "clamped": "Some quantities were reduced to the stock available: {{products}}.",
+    "droppedInactive": "These products are no longer sold and were removed: {{products}}.",
+    "droppedUnavailable": "These products are out of stock and were removed: {{products}}."
   },
   "drawer": {
     "title": "Added to cart",
