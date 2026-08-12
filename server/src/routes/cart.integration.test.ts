@@ -59,18 +59,25 @@ async function stockOf(slug: string): Promise<number> {
 
 describe('getCart', () => {
   it('🔴 NO IDENTITY returns an empty cart and touches NOTHING', async () => {
-    const before = await prisma.cart.count()
+    const where = { sessionId: { in: [GUEST_A, GUEST_B] } }
+    const before = await prisma.cart.count({ where })
     const cart = await getCart(prisma, { userId: null, guestCartId: null })
 
     expect(cart).toEqual({ items: [], totalQuantity: 0, subtotal: '0.00', hasBlockingLine: false })
-    // Checkpoint B's whole point: a read must not mint anything.
-    expect(await prisma.cart.count()).toBe(before)
+    // Checkpoint B's whole point: a read must not mint anything. Scoped, so a
+    // sibling suite's carts cannot move the number.
+    expect(await prisma.cart.count({ where })).toBe(before)
   })
 
   it('an identity with no cart yet returns empty, and still creates nothing', async () => {
-    const before = await prisma.cart.count()
+    // 🔴 SCOPED to this session's carts, not the global count. A global count
+    // races the sibling cart suites, which create and delete carts in parallel
+    // workers — the assertion would fail for a reason that has nothing to do
+    // with what it is testing. Same class as ISSUE-065.
+    const where = { sessionId: GUEST_A }
+    const before = await prisma.cart.count({ where })
     expect((await getCart(prisma, { guestCartId: GUEST_A })).items).toEqual([])
-    expect(await prisma.cart.count()).toBe(before)
+    expect(await prisma.cart.count({ where })).toBe(before)
   })
 })
 

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
-import { addItem, getCart, type CartIdentity } from '../lib/cartService.js'
+import { addItem, deleteLine, getCart, updateLine, type CartIdentity } from '../lib/cartService.js'
 import { ensureGuestCartId, peekGuestCartId } from '../lib/guestSession.js'
 
 /**
@@ -70,4 +70,42 @@ cartRouter.post('/items', async (req, res) => {
     // times with no visible change concludes the site is broken.
     alreadyAtMaximum: result.alreadyAtMaximum,
   })
+})
+
+/** The identity for a WRITE. `ensure` creates the guest id if absent. */
+function writeIdentity(req: Parameters<typeof ensureGuestCartId>[0] & { session?: { userId?: string } }): CartIdentity {
+  return { userId: req.session?.userId ?? null, guestCartId: ensureGuestCartId(req) }
+}
+
+cartRouter.patch('/items/:id', async (req, res) => {
+  const body = (req.body ?? {}) as { quantity?: unknown }
+  const result = await updateLine(prisma, writeIdentity(req), req.params.id, body.quantity)
+
+  if (!result.ok) {
+    // 🔴 A foreign line is a 404, never a 403 — a 403 confirms it exists.
+    const status =
+      result.reason === 'LINE_NOT_FOUND' ? 404 : result.reason === 'INVALID_STOCK' ? 500 : 400
+    res.status(status).json({ error: { code: result.reason, message: 'The line could not be updated.' } })
+    return
+  }
+
+  res.status(200).json({
+    cart: result.cart,
+    quantity: result.quantity,
+    removed: result.removed,
+    unchanged: result.unchanged,
+    clampedByCap: result.clampedByCap,
+    clampedByStock: result.clampedByStock,
+  })
+})
+
+cartRouter.delete('/items/:id', async (req, res) => {
+  const result = await deleteLine(prisma, writeIdentity(req), req.params.id)
+  if (!result.ok) {
+    res.status(404).json({ error: { code: 'LINE_NOT_FOUND', message: 'The line could not be removed.' } })
+    return
+  }
+  // Idempotent: `removed` says whether anything was there, and the status does
+  // not change based on it — a retried DELETE is a success, not a 404.
+  res.status(200).json({ cart: result.cart, removed: result.removed })
 })
