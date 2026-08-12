@@ -234,6 +234,12 @@ const BRAND_EN: Record<string, string> = {
   // product "SALUS - סירופ מולטי ויטמין".
   'בריאמיל': 'Briamil',
   'סלוס': 'Salus',
+  // MILESTONE-004 Part 4, cohort B. Already Latin on the manufacturer's own
+  // site and in the CSV, so this maps to itself — the entry exists because the
+  // seed requires an EXPLICIT registration rather than falling through to the
+  // source string, which is what caught this row rather than shipping a
+  // guessed English name.
+  'ECOSUPP': 'ECOSUPP',
 }
 
 // schema.prisma DosageForm enum: CAPSULE/TABLET/DROPS/POWDER/SYRUP, each

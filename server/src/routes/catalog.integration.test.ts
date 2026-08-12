@@ -1081,9 +1081,36 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
     })
     if (expectedCategoryProducts === 0) throw new Error('fixture assumption failed: no active product in "מינרלים"')
 
-    // dosageForm=DROPS matches no product in the Minerals category today ->
-    // forces a genuine zero-result primary query with a VALID category.
-    const res = await fetch(`${baseUrl}/api/products?category=${category.slug}&dosageForm=DROPS`)
+    // 🔴 The empty dosage form is DERIVED, not hardcoded. This assertion used
+    // to say "dosageForm=DROPS matches no product in Minerals today", which
+    // stopped being true the moment `ecosupp-iron-drops-c` (מינרלים · טיפות)
+    // was seeded — and the failure mode was the DANGEROUS direction of
+    // ISSUE-041: had the new row been a category with no fallback to check,
+    // the test would have gone quietly vacuous instead of red.
+    //
+    // So the premise is now computed AND asserted: pick a dosage form with
+    // zero active products in this category, and fail loudly if the catalogue
+    // ever covers all five, because at that point this scenario cannot be
+    // constructed and silently passing would prove nothing.
+    const dosageFormsInCategory = new Set(
+      (
+        await readonlyPrisma.product.findMany({
+          where: { isActive: true, category: { nameHe: 'מינרלים' } },
+          select: { dosageForm: true },
+        })
+      ).map((p) => p.dosageForm),
+    )
+    const emptyDosageForm = (['DROPS', 'POWDER', 'SYRUP', 'TABLET', 'CAPSULE'] as const).find(
+      (form) => !dosageFormsInCategory.has(form),
+    )
+    if (!emptyDosageForm) {
+      throw new Error(
+        'fixture assumption failed: every DosageForm now has an active product in "מינרלים", ' +
+          'so a zero-result query with a valid category cannot be built from this category.',
+      )
+    }
+
+    const res = await fetch(`${baseUrl}/api/products?category=${category.slug}&dosageForm=${emptyDosageForm}`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as ProductsEnvelope & { fallback: { kind: string; items: unknown[]; limit: number } | null }
     expect(body.totalItems).toBe(0)
