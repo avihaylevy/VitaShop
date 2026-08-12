@@ -205,9 +205,32 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     // The only difference is the trigger, not the behaviour.
     //
     // INV-04: no external call inside the transaction.
-    const mergeOutcome = await deps.prisma.$transaction((tx) =>
-      promoteGuestCart(tx, guestSessionId, outcome.userId),
-    )
+    // 🔴 A CART FAILURE MUST NOT LOCK A SHOPPER OUT OF THEIR ACCOUNT.
+    // Decided 2026-08-12 (§7). The credentials have already passed; if the
+    // merge throws, letting it escape means a 500 and no login — a cart
+    // problem denying access to an account. Login is the more important
+    // operation, so it proceeds.
+    //
+    // 🔴 BUT IT IS NOT SWALLOWED. The failure is logged server-side and
+    // reported in the response as `cart.mergeFailed`, so the UI can tell the
+    // shopper their cart could not be merged. A silent catch here would be the
+    // silent-loss class this milestone has spent six passes removing.
+    //
+    // ⚠️ DELIBERATELY DIFFERENT FROM REGISTRATION, where the merge runs INSIDE
+    // the transaction and a throw correctly rolls the whole registration back:
+    // there, no account exists yet, so there is nothing to lock anyone out of,
+    // and a half-made account is worse than no account. The two are different
+    // ON PURPOSE, not by accident.
+    let mergeOutcome: Awaited<ReturnType<typeof promoteGuestCart>> | null = null
+    let mergeFailed = false
+    try {
+      mergeOutcome = await deps.prisma.$transaction((tx) =>
+        promoteGuestCart(tx, guestSessionId, outcome.userId),
+      )
+    } catch (error) {
+      mergeFailed = true
+      console.error('[auth/login] guest cart merge failed; login proceeds', error)
+    }
 
     // ── Step 5: regenerate AFTER the credential check and any commit ───────
     // A6 — session fixation. Everything transactional above has completed.
@@ -226,9 +249,12 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
     res.json({
       status: 'authenticated',
       cart: {
-        merged: mergeOutcome.merged,
-        clampedSlugs: mergeOutcome.clampedSlugs,
-        dropped: mergeOutcome.dropped,
+        // 🔴 Reported, never silent. The shopper is told their cart could not
+        // be merged rather than discovering it missing.
+        mergeFailed,
+        merged: mergeOutcome?.merged ?? false,
+        clampedSlugs: mergeOutcome?.clampedSlugs ?? [],
+        dropped: mergeOutcome?.dropped ?? [],
       },
     })
   })

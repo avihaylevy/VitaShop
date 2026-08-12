@@ -42,6 +42,7 @@ interface Trace {
 async function startApp(
   trace: Trace,
   user: { status?: UserStatus; lockedUntil?: Date | null } | null,
+  options: { mergeThrows?: boolean } = {},
 ) {
   const app = express()
   app.use(express.json())
@@ -94,6 +95,7 @@ async function startApp(
     $transaction: vi.fn(async (fn: (client: unknown) => Promise<unknown>) => {
       trace.events.push('cart.merge')
       trace.sessionIdAtMerge = sessionId
+      if (options.mergeThrows) throw new Error('simulated cart merge failure')
       return fn({ cart: { findFirst: vi.fn(async () => null) } })
     }),
   } as unknown as PrismaClient
@@ -238,5 +240,47 @@ describe('TEST-032 at the HTTP layer — A1: one response for every failure', ()
     expect(regenerateAt).toBeGreaterThanOrEqual(0)
     expect(mergeAt).toBeLessThan(regenerateAt)
     expect(trace.sessionIdAtMerge).toBe('guest-session-id')
+  })
+})
+
+describe('🔴 a cart merge failure must NOT lock a shopper out of their account', () => {
+  it('login SUCCEEDS when the merge throws, and the response SAYS the merge failed', async () => {
+    // Decided 2026-08-12 (§7). The credentials have already passed; letting the
+    // merge escape would mean a 500 and no login — a cart problem denying
+    // access to an account. Login is the more important operation.
+    const trace: Trace = { events: [] }
+    const baseUrl = await startApp(trace, {}, { mergeThrows: true })
+
+    const response = await login(baseUrl)
+    expect(response.status).toBe(200)
+
+    const body = (await response.json()) as {
+      status: string
+      cart: { mergeFailed: boolean; merged: boolean }
+    }
+    expect(body.status).toBe('authenticated')
+    // 🔴 NOT SWALLOWED. The shopper is told, rather than discovering their
+    // cart missing later.
+    expect(body.cart.mergeFailed).toBe(true)
+    expect(body.cart.merged).toBe(false)
+  })
+
+  it('the session is still regenerated and authenticated after a failed merge', async () => {
+    // A partial login would be worse than either outcome: the failure must not
+    // leave the session half-established.
+    const trace: Trace = { events: [] }
+    const baseUrl = await startApp(trace, {}, { mergeThrows: true })
+
+    await login(baseUrl)
+    expect(trace.events).toContain('session.regenerate')
+  })
+
+  it('a healthy merge reports mergeFailed false', async () => {
+    // The other control: a flag that is always true proves nothing.
+    const trace: Trace = { events: [] }
+    const baseUrl = await startApp(trace, {})
+
+    const body = (await (await login(baseUrl)).json()) as { cart: { mergeFailed: boolean } }
+    expect(body.cart.mergeFailed).toBe(false)
   })
 })

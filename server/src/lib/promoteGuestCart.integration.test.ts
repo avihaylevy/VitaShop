@@ -253,3 +253,35 @@ describe('promoteGuestCart — the paths that matter', () => {
     expect(await prisma.cart.count({ where: { userId } })).toBe(0)
   })
 })
+
+describe('🔴 registration and login differ ON PURPOSE when the merge fails', () => {
+  it('at REGISTRATION a throw rolls the whole thing back — no half-made account', async () => {
+    // The merge runs INSIDE registerUser's transaction. A throw must undo the
+    // user row too: no account exists yet, so there is nothing to lock anyone
+    // out of, and a half-made account is worse than no account.
+    //
+    // ⚠️ AT LOGIN the opposite is correct and is implemented that way: the
+    // credentials have already passed, so a cart failure must NOT deny access.
+    // It is caught, logged, and reported as `cart.mergeFailed`. See §7 and
+    // auth.login.test.ts. The two are different DELIBERATELY.
+    const userId = await makeUser()
+    const pid = await productId(LOW_STOCK_3)
+    const guestCart = await makeGuestCart([{ productId: pid, quantity: 2 }])
+
+    await expect(
+      prisma.$transaction(async (tx) => {
+        await promoteGuestCart(tx, GUEST, userId)
+        throw new Error('simulated failure after the merge')
+      }),
+    ).rejects.toThrow('simulated failure after the merge')
+
+    // The guest cart survives, untouched and still reachable.
+    const survivor = await prisma.cart.findFirst({
+      where: { id: guestCart.id },
+      select: { sessionId: true, userId: true },
+    })
+    expect(survivor?.sessionId).toBe(GUEST)
+    expect(survivor?.userId).toBeNull()
+    expect(await prisma.cart.count({ where: { userId } })).toBe(0)
+  })
+})
