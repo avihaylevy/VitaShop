@@ -870,20 +870,36 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
    * results, in the unfiltered catalogue, or in any facet.
    */
   it('inactive products are unreachable via search — probed LIVE against a real soft-deleted product', async () => {
-    const inactive = await readonlyPrisma.product.findFirst({
-      where: { isActive: false },
-      select: { slug: true, nameHe: true },
+    // 🔴 THIS TEST NOW CREATES ITS OWN FIXTURE, and the reason is worth
+    // keeping. It used to probe whatever product happened to be soft-deleted.
+    // On 2026-08-12 the seed gained REACTIVATION, every verified row became
+    // active, and the test failed with "no inactive product to probe" — a
+    // correct, loud failure, but the coverage would have been LOST had the
+    // easy fix been taken (skip when none exists). The soft-delete guarantee
+    // is INV-03's, so it must be provable whether or not the seed happens to
+    // leave a casualty behind.
+    const victim = await readonlyPrisma.product.findFirst({
+      where: { isActive: true },
+      select: { id: true, slug: true, nameHe: true },
     })
-    if (!inactive) throw new Error('fixture assumption failed: no inactive product to probe')
+    if (!victim) throw new Error('fixture assumption failed: no active product to soft-delete')
 
-    // Searching its own name must not surface it.
-    const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent(inactive.nameHe)}`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((i) => i.slug)).not.toContain(inactive.slug)
+    await readonlyPrisma.product.update({ where: { id: victim.id }, data: { isActive: false } })
+    try {
+      // Searching its own name must not surface it.
+      const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent(victim.nameHe)}`)
+      const body = (await res.json()) as ProductsEnvelope
+      expect(body.items.map((i) => i.slug)).not.toContain(victim.slug)
 
-    // Nor may it appear anywhere in the unfiltered catalogue.
-    const { slugs } = await fetchAllPages()
-    expect(slugs).not.toContain(inactive.slug)
+      // Nor may it appear anywhere in the unfiltered catalogue.
+      const { slugs } = await fetchAllPages()
+      expect(slugs).not.toContain(victim.slug)
+    } finally {
+      // 🔴 Restored even when an assertion throws — otherwise a red test
+      // leaves the dev catalogue one product short and the NEXT run fails
+      // somewhere unrelated.
+      await readonlyPrisma.product.update({ where: { id: victim.id }, data: { isActive: true } })
+    }
   })
 })
 
@@ -1074,12 +1090,30 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
   })
 
   it('kind="category" — a zero-result query with a valid category suggests other products from that same category, every other filter relaxed', async () => {
-    const category = CANONICAL_CATEGORIES.find((c) => c.nameHe === 'מינרלים')
-    if (!category) throw new Error('fixture assumption failed: "מינרלים" is not canonical')
-    const expectedCategoryProducts = await readonlyPrisma.product.count({
-      where: { isActive: true, category: { nameHe: 'מינרלים' } },
+    // 🔴 The CATEGORY is derived too, not just the dosage form. Hardcoding
+    // "מינרלים" broke twice as the catalogue grew — once when a drops product
+    // joined it, and again when a tablets product did. Any category with at
+    // least one product and at least one UNUSED dosage form satisfies this
+    // scenario, so the test finds one instead of asserting which it is.
+    const activeByCategory = await readonlyPrisma.product.findMany({
+      where: { isActive: true },
+      select: { dosageForm: true, category: { select: { nameHe: true } } },
     })
-    if (expectedCategoryProducts === 0) throw new Error('fixture assumption failed: no active product in "מינרלים"')
+    const category = CANONICAL_CATEGORIES.find((c) => {
+      const inCat = activeByCategory.filter((p) => p.category.nameHe === c.nameHe)
+      if (inCat.length === 0) return false
+      const forms = new Set(inCat.map((p) => p.dosageForm))
+      return forms.size < 5
+    })
+    if (!category) {
+      throw new Error(
+        'fixture assumption failed: no canonical category has both products and an unused DosageForm, ' +
+          'so a zero-result query with a VALID category cannot be built at all.',
+      )
+    }
+    const expectedCategoryProducts = activeByCategory.filter(
+      (p) => p.category.nameHe === category.nameHe,
+    ).length
 
     // 🔴 The empty dosage form is DERIVED, not hardcoded. This assertion used
     // to say "dosageForm=DROPS matches no product in Minerals today", which
@@ -1092,21 +1126,21 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
     // zero active products in this category, and fail loudly if the catalogue
     // ever covers all five, because at that point this scenario cannot be
     // constructed and silently passing would prove nothing.
-    const dosageFormsInCategory = new Set(
+    const formsInCategory = new Set(
       (
         await readonlyPrisma.product.findMany({
-          where: { isActive: true, category: { nameHe: 'מינרלים' } },
+          where: { isActive: true, category: { nameHe: category.nameHe } },
           select: { dosageForm: true },
         })
       ).map((p) => p.dosageForm),
     )
     const emptyDosageForm = (['DROPS', 'POWDER', 'SYRUP', 'TABLET', 'CAPSULE'] as const).find(
-      (form) => !dosageFormsInCategory.has(form),
+      (form) => !formsInCategory.has(form),
     )
     if (!emptyDosageForm) {
       throw new Error(
-        'fixture assumption failed: every DosageForm now has an active product in "מינרלים", ' +
-          'so a zero-result query with a valid category cannot be built from this category.',
+        `fixture assumption failed: every DosageForm now has an active product in "${category.nameHe}", ` +
+          'so a zero-result query with a valid category cannot be built from it. Pick another category.',
       )
     }
 
@@ -1117,7 +1151,10 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
     expect(body.fallback).not.toBeNull()
     expect(body.fallback!.kind).toBe('category')
     expect(body.fallback!.limit).toBe(8)
-    expect(body.fallback!.items).toHaveLength(expectedCategoryProducts)
+    // Capped by the fallback's own limit of 8, exactly as the sibling
+    // kind="popular" test does. The uncapped form only ever passed because the
+    // hardcoded category happened to hold fewer than 8 products.
+    expect(body.fallback!.items).toHaveLength(Math.min(expectedCategoryProducts, 8))
   })
 
   it('kind="popular" — a zero-result query with no category suggests popular products across the whole active catalogue', async () => {

@@ -470,6 +470,15 @@ async function seedProduct(db: Db, row: ValidatedProductRow, ingredients: Valida
     warningsAllergens: row.warningsAllergens,
     allergenInfoIncomplete: row.allergenInfoIncomplete,
     targetAudience: row.targetAudience,
+    // 🔴 REACTIVATION. The seed already SOFT-DELETES rows that leave the
+    // verified set; it did not bring one back when it RETURNED, so the five
+    // Solgar rows demoted in 397f7e0 stayed isActive=false after 01b58bc
+    // re-verified them — 49 verified rows, 44 visible to shoppers.
+    //
+    // Third instance of the same convergence family: the seed grew but did
+    // not converge. Being in this row means the CSV says verified=yes, which
+    // is exactly the condition for being active.
+    isActive: true,
   }
 
   const product = await db.product.upsert({
