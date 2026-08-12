@@ -91,6 +91,23 @@ export function isUniqueViolationOn(error: unknown, accepted: readonly string[])
   // constraint name alongside its field names. Both call sites do
   // (`['email', 'users_email_key']`, `['carts_session_id_key', 'sessionId',
   // 'session_id']`). Field names alone are served by the structured path only.
+  // 🔴 UNMISUSABLE, NOT MERELY DOCUMENTED, and checked HERE rather than at
+  // entry — a caller passing only field names is perfectly correct as long as
+  // the structured path answers, which it does under today's adapter. The
+  // misuse only bites when the fallback is actually REACHED, so that is where
+  // it must fail, and it fails LOUDLY.
+  //
+  // Without this, a third call site written as ['email'] would get a fallback
+  // that can never match, with every test still green — the same silent-failure
+  // shape this file has now produced three times.
+  if (!accepted.some((value) => /_key$/i.test(value))) {
+    throw new Error(
+      'isUniqueViolationOn: the structured error data was empty, so the message fallback ran, ' +
+        'but `accepted` lists no full constraint name (e.g. users_email_key) for it to match. ' +
+        `Got: ${JSON.stringify(accepted)}`,
+    )
+  }
+
   const quoted = /unique constraint "([^"]+)"/i.exec(message)?.[1]
   if (!quoted) return false
   const quotedName = normaliseConstraint(quoted)

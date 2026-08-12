@@ -88,6 +88,11 @@ async function startApp(trace: Trace, existingUser: { id: string } | null) {
             return { id: 'tok-1' }
           }),
         },
+        // Checkpoint E filled the seam, which now reads the cart INSIDE the
+        // transaction. Returning "no guest cart" keeps these ORDERING tests
+        // about ordering. 🔴 The promotion itself is covered against the REAL
+        // database in promoteGuestCart.integration.test.ts.
+        cart: { findFirst: vi.fn(async () => null) },
       })
       trace.events.push('tx.commit')
       return result

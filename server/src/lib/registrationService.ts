@@ -1,4 +1,5 @@
 import argon2 from 'argon2'
+import { promoteGuestCart } from './promoteGuestCart.js'
 import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 import type { PrismaClient } from '@prisma/client'
 import type { EmailService } from './emailService.js'
@@ -196,9 +197,10 @@ async function createUserAndToken(
     // false, so an untouched session is never written and its id does not
     // recur. M-007 must write to `req.session` when it CREATES a guest cart.
     //
-    // `guestSessionId` is referenced here so no unused-variable cleanup
-    // deletes it before M-007 arrives.
-    void guestSessionId
+    // ✅ FILLED by MILESTONE-007 Checkpoint E. Still INSIDE the transaction,
+    // so it rolls back with the user row. DEC-053's ordering is untouched:
+    // regeneration remains outside, after the commit.
+    await promoteGuestCart(tx, guestSessionId, created.id)
 
     return created
   })

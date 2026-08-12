@@ -42,6 +42,17 @@ function fakePrisma(existingUser: { id: string } | null, recorded: Recorded) {
         return { id: 'tok-1' }
       }),
     },
+    // MILESTONE-007 Checkpoint E filled the PROMOTE-GUEST-CART seam, which
+    // reads the cart INSIDE this transaction. This fake returns "no guest
+    // cart", so these ORDERING tests keep testing ordering and nothing else.
+    // 🔴 The promotion's own behaviour is covered against the REAL database in
+    // promoteGuestCart.integration.test.ts — a fake would only prove the fake.
+    cart: {
+      findFirst: vi.fn(async () => {
+        recorded.events.push('cart.lookup')
+        return null
+      }),
+    },
   }
 
   return {

@@ -82,12 +82,21 @@ describe('the message fallback — only when nothing structured answered', () =>
     // permissive enough to accept the first also accepts the second, which is
     // the false positive that would answer ALREADY-REGISTERED for an unrelated
     // collision. Field names are served by the STRUCTURED path.
-    expect(isUniqueViolationOn(messageOnly('users_email_key'), ['email'])).toBe(false)
+    // 🔴 SUPERSEDED BY THE MISUSE GUARD: this used to return false silently,
+    // which is precisely the dead fallback the guard now refuses. Reaching the
+    // fallback with only field names THROWS.
+    expect(() => isUniqueViolationOn(messageOnly('users_email_key'), ['email'])).toThrow(
+      /constraint name/,
+    )
   })
 
   it('🔴 pending_email never matches the email constraint on this path either', () => {
     expect(isUniqueViolationOn(messageOnly('users_pending_email_key'), ['users_email_key'])).toBe(false)
-    expect(isUniqueViolationOn(messageOnly('users_pending_email_key'), ['email'])).toBe(false)
+    // With a constraint name present the guard is satisfied, and the answer is
+    // still a correct NO: pending_email is not email.
+    expect(
+      isUniqueViolationOn(messageOnly('users_pending_email_key'), ['email', 'users_email_key']),
+    ).toBe(false)
   })
 
   it('returns false when there is no quoted constraint to read', () => {
@@ -126,5 +135,39 @@ describe('🔴 the real call sites list their constraint name, so the fallback c
         accepted,
       ),
     ).toBe(true)
+  })
+})
+
+describe('🔴 the misuse guard — a dead fallback fails loudly instead of silently', () => {
+  const structured = {
+    code: 'P2002',
+    meta: { driverAdapterError: { cause: { constraint: { fields: ['email'] } } } },
+  }
+  const messageOnlyError = {
+    code: 'P2002',
+    meta: {
+      driverAdapterError: {
+        cause: { originalMessage: 'duplicate key value violates unique constraint "users_email_key"' },
+      },
+    },
+  }
+
+  it('field names alone are FINE while the structured path answers', () => {
+    // The guard must not punish a correct caller. Today's adapter always
+    // supplies `fields`, so ['email'] is legitimate and never reaches the
+    // fallback.
+    expect(() => isUniqueViolationOn(structured, ['email'])).not.toThrow()
+    expect(isUniqueViolationOn(structured, ['email'])).toBe(true)
+  })
+
+  it('🔴 reaching the fallback with only field names THROWS', () => {
+    // This is the case that would otherwise be a silently dead fallback with
+    // every test green — how the previous three defects in this file survived.
+    expect(() => isUniqueViolationOn(messageOnlyError, ['email'])).toThrow(/full constraint name|constraint name/)
+  })
+
+  it('a caller listing its constraint name reaches the fallback and matches', () => {
+    expect(() => isUniqueViolationOn(messageOnlyError, ['email', 'users_email_key'])).not.toThrow()
+    expect(isUniqueViolationOn(messageOnlyError, ['email', 'users_email_key'])).toBe(true)
   })
 })
