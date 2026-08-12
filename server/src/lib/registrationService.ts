@@ -1,4 +1,5 @@
 import argon2 from 'argon2'
+import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 import type { PrismaClient } from '@prisma/client'
 import type { EmailService } from './emailService.js'
 import { emailStrings, type EmailContent } from './emailStrings.js'
@@ -126,21 +127,21 @@ export async function registerUser(
 }
 
 /**
- * Prisma P2002 = unique constraint violation. `meta.target` names the
- * constraint's field(s); anything other than `email` is a different bug and
- * must keep propagating.
+ * 🔴 SECURITY CONTROL. A duplicate email must produce the SAME 201 as the
+ * already-registered path (clause 4b); a 500 here is distinguishable from a
+ * 201 and is exactly the account-enumeration oracle 4b exists to close.
+ *
+ * ⚠️ THIS WAS DEAD CODE FROM `54f7402` UNTIL 2026-08-12. It read only
+ * `meta.target`, which the pg driver adapter NEVER SETS, and returned false
+ * when it was missing — so every REAL collision rethrew and answered 500. Its
+ * test could not catch it: it threw a hand-built error carrying the very field
+ * the driver does not produce. See ISSUE-067.
+ *
+ * The matcher is now shared with `cartService` — two detectors for one fact is
+ * how the shapes diverged in the first place. It stays NARROW: `email` only.
  */
 function isEmailUniqueViolation(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false
-  const candidate = error as { code?: unknown; meta?: { target?: unknown } }
-  if (candidate.code !== 'P2002') return false
-
-  const target = candidate.meta?.target
-  if (typeof target === 'string') return target.includes('email')
-  if (Array.isArray(target)) return target.includes('email')
-  // P2002 with no usable target: do NOT swallow it. A unique violation we
-  // cannot attribute to `email` is not a race we understand.
-  return false
+  return isUniqueViolationOn(error, ['email', 'users_email_key'])
 }
 
 async function createUserAndToken(

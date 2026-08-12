@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client'
 import { clampAddition, clampCartQuantity, parseRequestedQuantity } from './cartQuantity.js'
+import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 
 /**
  * MILESTONE-007 Checkpoint C — the cart service.
@@ -114,54 +115,6 @@ const LINE_SELECT = {
   },
 }
 
-
-/**
- * 🔴 DEC-055's AMENDED P2002 HANDLING — two constraints, each matched NARROWLY.
- *
- * The measured damage came from the CART, not the line: five concurrent
- * requests produced three carts. So a handler that matched only
- * `cart_items_cart_id_product_id_key` would turn the losing racer on cart
- * CREATION into an unhandled 500 on the exact path that caused the harm.
- *
- * 🔴 IT MATCHES THE CONSTRAINT, NOT THE ERROR CLASS. A P2002 on any other
- * target, and every other error code, RETHROWS. The MILESTONE-006 precedent is
- * explicit: a broad catch there re-hid clause 4b's enumeration oracle.
- */
-function isUniqueViolationOn(error: unknown, accepted: readonly string[]): boolean {
-  const candidate = error as
-    | {
-        code?: unknown
-        meta?: {
-          target?: unknown
-          driverAdapterError?: { cause?: { originalMessage?: unknown; constraint?: { fields?: unknown } } }
-        }
-      }
-    | null
-  if (!candidate || candidate.code !== 'P2002') return false
-
-  // ⚠️ THE CONSTRAINT IS NOT WHERE THE DOCS SUGGEST. Under the pg DRIVER
-  // ADAPTER this project uses, `meta.target` is ABSENT entirely; the identity
-  // of the violated constraint lives at
-  // `meta.driverAdapterError.cause.constraint.fields` (column names) and in
-  // that error's `originalMessage` (the index name). Verified by probing a
-  // real duplicate insert on 2026-08-12 rather than assumed from the shape the
-  // documentation describes.
-  //
-  // 🔴 Matching only `meta.target` would have made this handler DEAD CODE that
-  // still looked correct — every P2002 would rethrow as a 500, on exactly the
-  // path DEC-055 exists to protect.
-  const meta = candidate.meta ?? {}
-  const cause = meta.driverAdapterError?.cause
-  const fields = Array.isArray(cause?.constraint?.fields) ? cause.constraint.fields.map(String) : []
-  const target = Array.isArray(meta.target) ? meta.target.map(String) : [String(meta.target ?? '')]
-  const message = String(cause?.originalMessage ?? '')
-
-  const haystack = [...fields, ...target].map((value) => value.toLowerCase())
-  return accepted.some(
-    (value) =>
-      haystack.includes(value.toLowerCase()) || message.toLowerCase().includes(value.toLowerCase()),
-  )
-}
 
 /** Runs `attempt`; on ITS constraint only, runs `recover` once instead. */
 async function withUniqueRetry(
