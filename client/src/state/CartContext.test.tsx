@@ -33,6 +33,14 @@ function cartWith(quantity: number): Cart {
     totalQuantity: quantity,
     subtotal: `${(10 * quantity).toFixed(2)}`,
     hasBlockingLine: false,
+    shipping: {
+      basis: `${(10 * quantity).toFixed(2)}`,
+      cost: '30.00',
+      isFree: false,
+      threshold: '249.00',
+      remainingForFree: '249.00',
+      hasShippableLines: quantity > 0,
+    },
   }
 }
 
@@ -151,7 +159,23 @@ describe('🔴 the server decides the quantity — §3.4', () => {
     // The server answers with a cart the client could not have derived: the
     // line is GONE, even though the request was an increment.
     fetchMock.mockResolvedValue(
-      mockResponse(200, { cart: { items: [], totalQuantity: 0, subtotal: '0.00', hasBlockingLine: false }, quantity: 1 }),
+      mockResponse(200, {
+        cart: {
+          items: [],
+          totalQuantity: 0,
+          subtotal: '0.00',
+          hasBlockingLine: false,
+          shipping: {
+            basis: '0.00',
+            cost: '0.00',
+            isFree: false,
+            threshold: '249.00',
+            remainingForFree: '0.00',
+            hasShippableLines: false,
+          },
+        },
+        quantity: 1,
+      }),
     )
     await act(async () => {
       await handle.current?.setLineQuantity('line-1', 'a-slug', 3)

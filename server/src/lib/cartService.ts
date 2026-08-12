@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { clampAddition, clampCartQuantity, parseRequestedQuantity } from './cartQuantity.js'
 import { isUniqueViolationOn } from './prismaUniqueViolation.js'
+import { computeShipping, toAgorot, type ShippingDto } from './shipping.js'
 
 /**
  * MILESTONE-007 Checkpoint C — the cart service.
@@ -65,10 +66,21 @@ export type CartLineDto = {
 export type CartDto = {
   items: CartLineDto[]
   totalQuantity: number
-  /** Sum of live line totals. Recomputed per request, never stored. */
+  /**
+   * Sum of live line totals, ALL lines. Recomputed per request, never stored.
+   *
+   * ⚠️ This INCLUDES withdrawn lines, by C3: the cart must not lie about what
+   * was put in it. It is therefore NOT the figure shipping is measured against
+   * — see `shipping.basis`, and see `lib/shipping.ts` for why they differ.
+   */
   subtotal: string
   /** 🔴 C4: true when any line's product is inactive. Checkout is blocked. */
   hasBlockingLine: boolean
+  /**
+   * DEC-058. Computed SERVER-SIDE and reported whole, so the client renders
+   * money rather than deriving it (§3.4).
+   */
+  shipping: ShippingDto
 }
 
 export type AddItemResult =
@@ -78,7 +90,14 @@ export type AddItemResult =
       alreadyAtMaximum: boolean }
   | { ok: false; reason: 'PRODUCT_NOT_FOUND' | 'INVALID_QUANTITY' | 'OUT_OF_STOCK' | 'INVALID_STOCK' }
 
-const EMPTY_CART: CartDto = { items: [], totalQuantity: 0, subtotal: '0.00', hasBlockingLine: false }
+const EMPTY_CART: CartDto = {
+  items: [],
+  totalQuantity: 0,
+  subtotal: '0.00',
+  hasBlockingLine: false,
+  // Nothing to ship, so no charge and no free-shipping promise.
+  shipping: computeShipping(0, false),
+}
 
 /** No identity means no cart — and 🔴 no session row is created to find out. */
 function hasIdentity(identity: CartIdentity): boolean {
@@ -120,11 +139,22 @@ function toDto(
     }
   })
 
+  // 🔴 DEC-058's basis is the ACTIVE lines ONLY, which is why it is summed
+  // separately from `subtotal` rather than reused from it. A withdrawn line
+  // blocks checkout, so counting it toward free shipping would promise
+  // something about an order that cannot be placed — and the promise would
+  // REVERSE when the shopper removes the line the cart told them to remove.
+  const shippable = lines.filter((line) => line.isActive)
+  const basisAgorot = shippable.reduce((sum, line) => sum + toAgorot(line.lineTotal), 0)
+
   return {
     items: lines,
     totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
-    subtotal: lines.reduce((sum, line) => sum + Number(line.lineTotal), 0).toFixed(2),
+    // Summed in agorot for the same reason the basis is: a float sum of
+    // two-decimal strings can land a cent off, and this figure is money.
+    subtotal: (lines.reduce((sum, line) => sum + toAgorot(line.lineTotal), 0) / 100).toFixed(2),
     hasBlockingLine: lines.some((line) => !line.isActive),
+    shipping: computeShipping(basisAgorot, shippable.length > 0),
   }
 }
 

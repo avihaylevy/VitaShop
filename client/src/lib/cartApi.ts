@@ -53,6 +53,22 @@ function isCartLine(value: unknown): value is CartLine {
   )
 }
 
+function isShipping(value: unknown): value is Cart['shipping'] {
+  if (!isPlainObject(value)) return false
+  return (
+    isMoney(value.basis) &&
+    isMoney(value.cost) &&
+    isMoney(value.threshold) &&
+    isMoney(value.remainingForFree) &&
+    // 🔴 Strict on BOTH booleans. A missing `isFree` defaulting to false would
+    // charge a shopper who qualified; a missing `hasShippableLines` defaulting
+    // to true would render a shipping row for an empty cart. Absence is a
+    // broken response, not a value.
+    typeof value.isFree === 'boolean' &&
+    typeof value.hasShippableLines === 'boolean'
+  )
+}
+
 export function isCart(value: unknown): value is Cart {
   if (!isPlainObject(value)) return false
   return (
@@ -63,7 +79,8 @@ export function isCart(value: unknown): value is Cart {
     // 🔴 Strict: a MISSING flag rejects the response rather than defaulting to
     // false, because false is exactly the value that lets checkout proceed over
     // a line the server said was blocking.
-    typeof value.hasBlockingLine === 'boolean'
+    typeof value.hasBlockingLine === 'boolean' &&
+    isShipping(value.shipping)
   )
 }
 

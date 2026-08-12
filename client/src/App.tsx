@@ -11,6 +11,7 @@ import { RegisterPage } from './pages/RegisterPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
+import { NotFoundPage } from './pages/NotFoundPage'
 
 function App() {
   return (
@@ -55,6 +56,17 @@ function App() {
         */}
         {import.meta.env.DEV && <Route path="/ui-showcase" element={<OverlayShowcase />} />}
         {import.meta.env.DEV && <Route path="/catalog-showcase" element={<CatalogShowcase />} />}
+        {/*
+          🔴 ISSUE-066 — the catch-all, and it must stay LAST: react-router
+          ranks `*` below every literal path, but keeping it here means the
+          file reads in match order too.
+
+          Without it an unknown URL matched nothing and AppShell rendered its
+          chrome around an empty page, which is indistinguishable from a store
+          that failed to load. The three dead nav tabs that exposed this are
+          gone; the gap was never about them.
+        */}
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AppShell>
   )

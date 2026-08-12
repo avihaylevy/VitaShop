@@ -34,6 +34,16 @@ function validCart(lines: CartLine[] = [validLine()]) {
     totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
     subtotal: '189.80',
     hasBlockingLine: lines.some((line) => !line.isActive),
+    // DEC-058. Present because `isCart` REQUIRES it — a response without
+    // shipping is a broken response, not a cart with free delivery.
+    shipping: {
+      basis: '189.80',
+      cost: '30.00',
+      isFree: false,
+      threshold: '249.00',
+      remainingForFree: '59.20',
+      hasShippableLines: true,
+    },
   }
 }
 

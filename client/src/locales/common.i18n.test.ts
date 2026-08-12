@@ -54,10 +54,17 @@ describe('common namespace — the shipped locale pair', () => {
     }
   })
 
-  it('no other common key was added or removed beyond the approved HealthCheck deletion', () => {
-    // Exactly app, nav, dialog remain at the top level — health is gone,
-    // nothing new was introduced.
-    expect(Object.keys(HE).sort()).toEqual(['app', 'dialog', 'nav'])
-    expect(Object.keys(EN).sort()).toEqual(['app', 'dialog', 'nav'])
+  it('no common key was added or removed without a deliberate acknowledgement here', () => {
+    // 🔴 A DRIFT GUARD, and updating it is the acknowledgement it exists to
+    // force. It fired on `notFound` (2026-08-12, ISSUE-066's catch-all route),
+    // which is exactly its job: a namespace does not grow by accident.
+    //
+    //   app · dialog · nav   the original three; `health` was deleted with
+    //                        HealthCheck and has not come back
+    //   notFound             ISSUE-066 — the `path="*"` page. A store that
+    //                        renders blank chrome on an unknown URL is worse
+    //                        than one that says "not found"
+    expect(Object.keys(HE).sort()).toEqual(['app', 'dialog', 'nav', 'notFound'])
+    expect(Object.keys(EN).sort()).toEqual(['app', 'dialog', 'nav', 'notFound'])
   })
 })

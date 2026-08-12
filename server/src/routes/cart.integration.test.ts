@@ -63,7 +63,25 @@ describe('getCart', () => {
     const before = await prisma.cart.count({ where })
     const cart = await getCart(prisma, { userId: null, guestCartId: null })
 
-    expect(cart).toEqual({ items: [], totalQuantity: 0, subtotal: '0.00', hasBlockingLine: false })
+    // 🔴 The WHOLE shape, deliberately — `toEqual` here is what catches a
+    // field silently appearing in the DTO. It did exactly that when DEC-058
+    // added `shipping`, which is why this assertion is worth its brittleness.
+    expect(cart).toEqual({
+      items: [],
+      totalQuantity: 0,
+      subtotal: '0.00',
+      hasBlockingLine: false,
+      // No identity means no cart means nothing to ship: no charge, and no
+      // free-shipping promise either.
+      shipping: {
+        basis: '0.00',
+        cost: '0.00',
+        isFree: false,
+        threshold: '249.00',
+        remainingForFree: '0.00',
+        hasShippableLines: false,
+      },
+    })
     // Checkpoint B's whole point: a read must not mint anything. Scoped, so a
     // sibling suite's carts cannot move the number.
     expect(await prisma.cart.count({ where })).toBe(before)

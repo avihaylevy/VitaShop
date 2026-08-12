@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import layoutHe from './he/layout.json'
 import layoutEn from './en/layout.json'
 import { indexKeys, valueAt, validateNamespacePair, type LocaleTree } from './localeIntegrity'
+import { NAV_ITEMS } from '../components/layout/navItems'
 
 /**
  * Namespace-integrity test for `layout` — Slice 10 Checkpoint C. First
@@ -22,10 +23,18 @@ import { indexKeys, valueAt, validateNamespacePair, type LocaleTree } from './lo
  *   client/src/components/layout/Header.tsx:47 — t(`nav.${item.key}`)
  *   client/src/components/layout/MobileMenu.tsx:81 — t(`nav.${item.key}`)
  *
- * `next` is a language code ('he'/'en'); `item.key` iterates
- * `navItems.ts`'s `{ key: 'home' | 'catalog' | 'sales' | 'about' | 'contact' }`.
- * Asserted present BY NAME below, not just by the validator's key-parity
- * check (which cannot know these particular keys are load-bearing).
+ * `next` is a language code ('he'/'en'); `item.key` iterates `navItems.ts`.
+ * Asserted present below, not just by the validator's key-parity check (which
+ * cannot know these particular keys are load-bearing).
+ *
+ * 🔴 THE NAV KEYS ARE DERIVED FROM `NAV_ITEMS`, NOT RETYPED. This file used to
+ * hardcode `['home','catalog','sales','about','contact']` — a second copy of a
+ * list that already existed, and therefore a list that could disagree with it.
+ * ISSUE-066 made the disagreement real: three of those items pointed at routes
+ * that did not exist, and when they were deleted this test still demanded their
+ * translations, so the orphaned keys would have been kept to satisfy it.
+ * Importing the real list means adding or removing a nav item updates this
+ * assertion by construction.
  */
 
 const HE = layoutHe as unknown as LocaleTree
@@ -48,8 +57,9 @@ describe('layout namespace — the shipped locale pair', () => {
   })
 
   it('every nav.* key reachable via t(`nav.${item.key}`) (Header.tsx, MobileMenu.tsx) remains present, matching navItems.ts', () => {
-    // navItems.ts: home, catalog, sales, about, contact
-    for (const key of ['home', 'catalog', 'sales', 'about', 'contact']) {
+    // Derived from the SAME array the components iterate — see the header note.
+    expect(NAV_ITEMS.length).toBeGreaterThan(0)
+    for (const key of NAV_ITEMS.map((item) => item.key)) {
       const path = `nav.${key}`
       const heValue = valueAt(HE, path)
       const enValue = valueAt(EN, path)

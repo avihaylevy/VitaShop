@@ -46,6 +46,14 @@
   "subtotal": {
     "label": "Subtotal"
   },
+  "shipping": {
+    "label": "Shipping",
+    "free": "Free",
+    "qualified": "Your order qualifies for free shipping ({{threshold}} or more).",
+    "qualifiedExcludingWithdrawn": "Your order qualifies for free shipping ({{threshold}} or more), counted on the {{basis}} of items still available — products no longer sold do not count towards it.",
+    "remaining": "Add {{amount}} more to get free shipping (from {{threshold}}).",
+    "remainingExcludingWithdrawn": "Free shipping starts at {{threshold}}, counted on the {{basis}} of items still available — products no longer sold do not count towards it. Add {{amount}} more to qualify."
+  },
   "merge": {
     "merged": "Your guest cart was merged into your account cart.",
     "failed": "Your guest cart could not be merged into your account. It has not been lost — sign in again to retry.",

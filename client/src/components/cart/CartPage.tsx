@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import { useCart } from '../../state/CartContext'
 import { getCartLines, type CartLineDisplay } from '../../lib/cartDisplay'
 import { PriceBlock } from '../catalog/PriceBlock'
+import { formatPrice } from '../../lib/formatPrice'
 import { Button } from '../ui/Button'
 import { FOCUS_RING } from '../ui/focusRing'
 import type { SupportedLanguage } from '../../i18n'
@@ -54,6 +55,8 @@ export function CartPage() {
   const undoRowRef = useRef<HTMLDivElement | null>(null)
 
   const lines = getCartLines(cart, language)
+  /** One money-formatting path for the whole app — DESIGN_SYSTEM §2. */
+  const money = (value: string) => formatPrice(value, language)
 
   const handleRemove = useCallback(
     (line: CartLineDisplay) => {
@@ -224,17 +227,89 @@ export function CartPage() {
               )}
 
               {/*
-                🔴 The subtotal is the SERVER's, recomputed from live product
-                rows on every response. It used to be a client-side sum over
-                prices captured at add time, with a label admitting as much —
-                that label is gone because the caveat it carried is gone. Still
-                no shipping, tax, discount, threshold, grand total or checkout:
-                none of them has an approved value yet.
+                🔴 Every figure below is the SERVER's, recomputed from live
+                product rows on every response. The client renders money and
+                never derives it — it does not compare the basis to the
+                threshold, does not subtract to find the remainder, and does
+                not decide whether shipping is free (§3.4).
+
+                Still absent, deliberately: VAT and any grand total. Both are
+                `TBD` (DEC-058), and a placeholder would read as a real number.
               */}
-              <p className="mt-6 flex flex-wrap items-baseline gap-2 border-t border-border-hairline pt-4">
-                <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
-                <PriceBlock price={cart.subtotal} />
-              </p>
+              <div className="mt-6 flex flex-col gap-2 border-t border-border-hairline pt-4">
+                <p className="flex flex-wrap items-baseline gap-2">
+                  <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
+                  <PriceBlock price={cart.subtotal} />
+                </p>
+
+                {/*
+                  🔴 DEC-058. Shown ONLY when something is actually shippable —
+                  an empty cart, or one whose every line is withdrawn, gets no
+                  shipping row at all. Not ₪0, not "free": free shipping is a
+                  promise about an ORDER, and there is no order for one to be
+                  about.
+                */}
+                {cart.shipping.hasShippableLines && (
+                  <>
+                    <p className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-sm text-text-muted">{t('shipping.label')}</span>
+                      {cart.shipping.isFree ? (
+                        // `state-commerce`, not a new "success" token: the
+                        // design system reserves it for discount labels, and a
+                        // free-shipping label is one. Inventing a colour would
+                        // be a design decision, and those are gated.
+                        <span className="text-sm font-medium text-state-commerce">
+                          {t('shipping.free')}
+                        </span>
+                      ) : (
+                        <PriceBlock price={cart.shipping.cost} />
+                      )}
+                    </p>
+
+                    {/*
+                      🔴 THE BASIS IS STATED, and this is a requirement rather
+                      than a nicety. When a withdrawn line is in the cart the
+                      screen shows a subtotal of one figure while shipping is
+                      measured against a smaller one, and an unexplained gap
+                      between two numbers on one screen reads as a bug.
+
+                      The sentence therefore names WHICH total the threshold
+                      measures whenever the two differ, and states the plain
+                      rule when they do not.
+                    */}
+                    {/*
+                      🔴 Money is formatted by `formatPrice` — Intl only, never
+                      by hand (DESIGN_SYSTEM §2 / DEC-035). The first version of
+                      these strings hand-wrote "₪{{amount}}", which put the
+                      shekel sign on the wrong side of the number in Hebrew and
+                      bypassed the single formatting path the whole site uses.
+                    */}
+                    <p className="text-xs text-text-muted">
+                      {cart.shipping.basis === cart.subtotal
+                        ? cart.shipping.isFree
+                          ? t('shipping.qualified', { threshold: money(cart.shipping.threshold) })
+                          : t('shipping.remaining', {
+                              amount: money(cart.shipping.remainingForFree),
+                              threshold: money(cart.shipping.threshold),
+                            })
+                        : // 🔴 The two figures DISAGREE, so the basis is named —
+                          // whether or not shipping came out free. A cart that
+                          // says "qualifies" beside a larger subtotal is the
+                          // same unexplained gap as one that says "add ₪X".
+                          cart.shipping.isFree
+                          ? t('shipping.qualifiedExcludingWithdrawn', {
+                              threshold: money(cart.shipping.threshold),
+                              basis: money(cart.shipping.basis),
+                            })
+                          : t('shipping.remainingExcludingWithdrawn', {
+                              amount: money(cart.shipping.remainingForFree),
+                              threshold: money(cart.shipping.threshold),
+                              basis: money(cart.shipping.basis),
+                            })}
+                    </p>
+                  </>
+                )}
+              </div>
 
               {/* Quiet link, never styled to compete (DESIGN_SYSTEM.md §8). */}
               <p className="mt-6">

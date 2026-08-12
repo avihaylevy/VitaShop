@@ -10,12 +10,29 @@
  * product-level promotional UI, not for a permanently-visible nav item.
  * Every item now shares identical rest/hover/active treatment.
  */
+/**
+ * 🔴 ISSUE-066, fixed 2026-08-12: `sales`, `about` and `contact` were REMOVED.
+ *
+ * All three declared a route the router does not, and there was no catch-all,
+ * so clicking any of them rendered an EMPTY page — header, footer, nothing
+ * between — in both languages and in both the desktop header and the mobile
+ * menu.
+ *
+ * 🔴 THE FIX IS DELETION, NOT THREE NEW PAGES. The specification was checked
+ * (2026-08-12) and requires none of them; promotions appear only as REQ-F-062,
+ * an ADMIN capability under MILESTONE-010. Building pages the spec does not ask
+ * for would be inventing scope to justify a nav item.
+ *
+ * ⚠️ Their i18n keys were deleted from both locales in the same change. The
+ * locale-integrity suite is what names an orphan, so the keys cannot outlive
+ * the items unnoticed.
+ *
+ * A `path="*"` route now exists regardless (see `App.tsx`), so an unknown URL
+ * says "not found" instead of rendering blank chrome.
+ */
 export const NAV_ITEMS = [
   { key: 'home', to: '/', end: true },
   { key: 'catalog', to: '/catalog', end: false },
-  { key: 'sales', to: '/sales', end: false },
-  { key: 'about', to: '/about', end: false },
-  { key: 'contact', to: '/contact', end: false },
 ] as const
 
 export type NavItem = (typeof NAV_ITEMS)[number]

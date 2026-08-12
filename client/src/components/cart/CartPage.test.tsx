@@ -33,12 +33,27 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
   }
 }
 
-function cart(lines: CartLine[]): Cart {
+/**
+ * @param shipping overrides — DEC-058's figures arrive from the SERVER, so the
+ * fixture states them explicitly rather than deriving them here. Deriving would
+ * make this file a second implementation of the rule under test.
+ */
+function cart(lines: CartLine[], shipping: Partial<Cart['shipping']> = {}): Cart {
+  const active = lines.filter((l) => l.isActive)
   return {
     items: lines,
     totalQuantity: lines.reduce((sum, l) => sum + l.quantity, 0),
     subtotal: '189.80',
     hasBlockingLine: lines.some((l) => !l.isActive),
+    shipping: {
+      basis: '189.80',
+      cost: '30.00',
+      isFree: false,
+      threshold: '249.00',
+      remainingForFree: '59.20',
+      hasShippableLines: active.length > 0,
+      ...shipping,
+    },
   }
 }
 
@@ -216,5 +231,117 @@ describe('Hebrew renders the same structure, from the same code', () => {
     // The English name is NOT rendered — the line is language-resolved from the
     // server's paired names on every render, not frozen at add time.
     expect(screen.queryByText('Probiotic Intense')).toBeNull()
+  })
+})
+
+/**
+ * 🔴 DEC-058 — THE SHIPPING DISPLAY, AND THE SENTENCE THAT EXPLAINS IT.
+ *
+ * The arithmetic is the server's and is proved there. What is proved here is
+ * that the page RENDERS what it was told and never derives money: the figures
+ * below are the fixture's, and if the page ever computed its own the numbers
+ * would stop matching.
+ *
+ * 🔴 The basis sentence is a REQUIREMENT, not decoration. With a withdrawn line
+ * in the cart the screen shows a subtotal of one figure while shipping is
+ * measured against a smaller one, and an unexplained gap between two numbers on
+ * one screen reads as a bug.
+ */
+describe('🔴 DEC-058 — shipping is shown, and the basis is stated', () => {
+  it('a chargeable cart shows ₪30 and how much more earns free shipping', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse(200, cart([line()], { basis: '189.80', cost: '30.00', remainingForFree: '59.20' })),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Shipping')).toBeDefined())
+    expect(screen.getAllByText(/30\.00/).length).toBeGreaterThan(0)
+    // The remaining amount and the threshold both come from the SERVER.
+    expect(screen.getByText(/Add .*59\.20.* more to get free shipping/)).toBeDefined()
+  })
+
+  it('a qualifying cart says FREE rather than showing ₪0.00', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse(200, cart([line()], { basis: '260.00', cost: '0.00', isFree: true, remainingForFree: '0.00' })),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Free')).toBeDefined())
+    expect(screen.getByText(/qualifies for free shipping/)).toBeDefined()
+  })
+
+  it('🔴 when a WITHDRAWN line makes the basis differ from the subtotal, the page SAYS which figure counts', async () => {
+    // subtotal 189.80 (fixture) vs basis 120.00 — the gap a shopper would
+    // otherwise read as a bug.
+    fetchMock.mockResolvedValue(
+      mockResponse(200, cart([line({ isActive: false })], {
+        basis: '120.00',
+        cost: '30.00',
+        remainingForFree: '129.00',
+        hasShippableLines: true,
+      })),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Shipping')).toBeDefined())
+    // 🔴 Names the basis AND says withdrawn products do not count toward it.
+    const explained = screen.getByText(/counted on the .*120\.00.* of items still available/)
+    expect(explained).toBeDefined()
+    expect(explained.textContent).toMatch(/no longer sold do not count/)
+  })
+
+  it('🔴 a cart with NOTHING shippable shows no shipping figure at all — not ₪0, not "free"', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse(200, cart([line({ isActive: false })], {
+        basis: '0.00',
+        cost: '0.00',
+        isFree: false,
+        hasShippableLines: false,
+      })),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Probiotic Intense')).toBeDefined())
+    // The row is absent, not zeroed: free shipping is a promise about an ORDER
+    // and there is no order for one to be about.
+    expect(screen.queryByText('Shipping')).toBeNull()
+    expect(screen.queryByText('Free')).toBeNull()
+    // The subtotal is still shown — C3 is untouched, the cart still reports
+    // what was put in it.
+    expect(screen.getAllByText(/189\.80/).length).toBeGreaterThan(0)
+  })
+
+  it('Hebrew renders the same structure from the same code', async () => {
+    await i18n.changeLanguage('he')
+    fetchMock.mockResolvedValue(
+      mockResponse(200, cart([line()], { basis: '189.80', cost: '30.00', remainingForFree: '59.20' })),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('משלוח')).toBeDefined())
+    expect(screen.getByText(/הוספה של .*59\.20/)).toBeDefined()
+  })
+})
+
+describe('🔴 the basis is named whenever the two figures disagree — free or not', () => {
+  it('a FREE cart with a withdrawn line still says which total the threshold measured', async () => {
+    // subtotal 189.80 (fixture) vs basis 260.00 is impossible; use a basis that
+    // is genuinely smaller yet still qualifying, which is the real shape: a
+    // large active total plus a withdrawn line on top.
+    fetchMock.mockResolvedValue(
+      mockResponse(200, cart([line({ isActive: false })], {
+        basis: '260.00',
+        cost: '0.00',
+        isFree: true,
+        remainingForFree: '0.00',
+        hasShippableLines: true,
+      })),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Free')).toBeDefined())
+    // 🔴 Without this branch the page would say only "qualifies for free
+    // shipping" beside a subtotal that does not match the basis.
+    expect(screen.getByText(/counted on the .*260\.00.* of items still available/)).toBeDefined()
   })
 })

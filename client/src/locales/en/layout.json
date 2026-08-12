@@ -9,10 +9,7 @@
     "mainLabel": "Main navigation",
     "mobileLabel": "Mobile navigation",
     "home": "Home",
-    "catalog": "Catalog",
-    "sales": "Sales",
-    "about": "About",
-    "contact": "Contact"
+    "catalog": "Catalog"
   },
   "language": {
     "toggleLabel": "Change language",

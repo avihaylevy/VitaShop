@@ -427,3 +427,152 @@ describe('🔴 TEST-022 clause 4 — the clamp holds over HTTP, not just in the 
     expect(stored?.quantity).toBe(3)
   })
 })
+
+/**
+ * 🔴 DEC-058 — SHIPPING, OVER HTTP AND WITH A WITHDRAWN LINE.
+ *
+ * `shipping.test.ts` proves the arithmetic exhaustively, including the ₪249
+ * boundary, with arguments the test chooses. This proves the WIRING: that the
+ * route reports shipping at all, and that the basis handed to the calculation
+ * EXCLUDES withdrawn lines. That second half cannot be shown by a pure test —
+ * it lives in `toDto`'s filter, on the other side of the boundary, and it is
+ * the half that decides whether a shopper is promised free shipping on an
+ * order they cannot place.
+ */
+describe('🔴 DEC-058 — the shipping basis excludes withdrawn lines, over the wire', () => {
+  it('an ordinary cart is charged ₪30 and reports the rule', async () => {
+    await wipe()
+    const cookies = jar()
+
+    const added = await fetch(`${baseUrl}/api/cart/items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: SLUG, quantity: 1 }),
+    })
+    cookies.capture(added)
+    const body = (await added.json()) as {
+      cart: { subtotal: string; shipping: Record<string, unknown> }
+    }
+
+    const guest = await prisma.cart.findFirst({
+      where: { userId: null, items: { some: { product: { slug: SLUG } } } },
+      select: { sessionId: true },
+      orderBy: { id: 'desc' },
+    })
+    if (guest?.sessionId) createdCartSessionIds.add(guest.sessionId)
+
+    expect(body.cart.shipping.cost).toBe('30.00')
+    expect(body.cart.shipping.isFree).toBe(false)
+    expect(body.cart.shipping.hasShippableLines).toBe(true)
+    // The threshold travels with the response so the UI states the rule
+    // without hardcoding ₪249 in a second place.
+    expect(body.cart.shipping.threshold).toBe('249.00')
+    // Nothing withdrawn, so the two figures agree — which is what makes the
+    // disagreement in the next case meaningful.
+    expect(body.cart.shipping.basis).toBe(body.cart.subtotal)
+  })
+
+  it('🔴 a WITHDRAWN line counts toward the subtotal but NOT toward free shipping', async () => {
+    await wipe()
+    const cookies = jar()
+
+    // Two products, both active, both added through the real route.
+    for (const slug of [SLUG, SLUG_B]) {
+      const res = await fetch(`${baseUrl}/api/cart/items`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: cookies.header },
+        body: JSON.stringify({ slug, quantity: 1 }),
+      })
+      cookies.capture(res)
+      expect(res.status).toBe(200)
+    }
+    await cartHoldsLines(cookies.header, 2)
+
+    const guest = await prisma.cart.findFirst({
+      where: { userId: null, items: { some: { product: { slug: SLUG_B } } } },
+      select: { sessionId: true },
+      orderBy: { id: 'desc' },
+    })
+    if (guest?.sessionId) createdCartSessionIds.add(guest.sessionId)
+
+    // Withdraw one of them, exactly as a soft delete would.
+    await prisma.product.update({ where: { slug: SLUG_B }, data: { isActive: false } })
+    try {
+      const cart = (await fetch(`${baseUrl}/api/cart`, { headers: { cookie: cookies.header } }).then(
+        (r) => r.json(),
+      )) as {
+        subtotal: string
+        hasBlockingLine: boolean
+        items: { slug: string; isActive: boolean; lineTotal: string }[]
+        shipping: { basis: string; cost: string; isFree: boolean; hasShippableLines: boolean }
+      }
+
+      // C3 is UNCHANGED: the line is still there, still counted in the subtotal.
+      expect(cart.items).toHaveLength(2)
+      expect(cart.hasBlockingLine).toBe(true)
+
+      const withdrawn = cart.items.find((i) => i.slug === SLUG_B)
+      const active = cart.items.find((i) => i.slug === SLUG)
+      expect(withdrawn?.isActive).toBe(false)
+
+      // 🔴 THE CLAIM: basis is the ACTIVE line alone, and it is STRICTLY LESS
+      // than the displayed subtotal. Compared against the response's own
+      // figures, never against a literal — a hardcoded number here would pass
+      // with the filter deleted if the seed prices ever changed.
+      expect(cart.shipping.basis).toBe(active?.lineTotal)
+      expect(Number(cart.shipping.basis)).toBeLessThan(Number(cart.subtotal))
+      expect(cart.shipping.hasShippableLines).toBe(true)
+    } finally {
+      // 🔴 Restored even if an assertion throws, or the dev catalogue is left
+      // one product short and the NEXT run fails somewhere unrelated.
+      await prisma.product.update({ where: { slug: SLUG_B }, data: { isActive: true } })
+    }
+  })
+
+  it('🔴 a cart of ONLY withdrawn lines is shipped-nothing: no charge, and NOT free', async () => {
+    await wipe()
+    const cookies = jar()
+
+    const added = await fetch(`${baseUrl}/api/cart/items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: SLUG_B, quantity: 1 }),
+    })
+    cookies.capture(added)
+    expect(added.status).toBe(200)
+
+    const guest = await prisma.cart.findFirst({
+      where: { userId: null, items: { some: { product: { slug: SLUG_B } } } },
+      select: { sessionId: true },
+      orderBy: { id: 'desc' },
+    })
+    if (guest?.sessionId) createdCartSessionIds.add(guest.sessionId)
+
+    await prisma.product.update({ where: { slug: SLUG_B }, data: { isActive: false } })
+    try {
+      const cart = (await fetch(`${baseUrl}/api/cart`, { headers: { cookie: cookies.header } }).then(
+        (r) => r.json(),
+      )) as { subtotal: string; shipping: { cost: string; isFree: boolean; hasShippableLines: boolean } }
+
+      // The subtotal is NOT zero — the line is still displayed (C3).
+      expect(Number(cart.subtotal)).toBeGreaterThan(0)
+      // But there is nothing to ship, so there is no charge AND no promise.
+      expect(cart.shipping.hasShippableLines).toBe(false)
+      expect(cart.shipping.cost).toBe('0.00')
+      expect(cart.shipping.isFree).toBe(false)
+    } finally {
+      await prisma.product.update({ where: { slug: SLUG_B }, data: { isActive: true } })
+    }
+  })
+
+  it('an EMPTY cart reports no shipping at all', async () => {
+    const cart = (await fetch(`${baseUrl}/api/cart`).then((r) => r.json())) as {
+      subtotal: string
+      shipping: { cost: string; isFree: boolean; hasShippableLines: boolean }
+    }
+    expect(cart.subtotal).toBe('0.00')
+    expect(cart.shipping.hasShippableLines).toBe(false)
+    expect(cart.shipping.cost).toBe('0.00')
+    expect(cart.shipping.isFree).toBe(false)
+  })
+})

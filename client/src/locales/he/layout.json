@@ -9,10 +9,7 @@
     "mainLabel": "ניווט ראשי",
     "mobileLabel": "ניווט נייד",
     "home": "בית",
-    "catalog": "קטלוג",
-    "sales": "מבצעים",
-    "about": "אודות",
-    "contact": "צור קשר"
+    "catalog": "קטלוג"
   },
   "language": {
     "toggleLabel": "שינוי שפה",
