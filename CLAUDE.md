@@ -65,7 +65,7 @@ in BUILD mode when explicitly requested by the user. See AGENTS.md and DEC-025.
 |---|---|
 | INV-01 | No overselling. Order creation and stock decrement are atomic, with full rollback on failure |
 | INV-02 | `OrderItem` stores a frozen price and name — never a reference to current values |
-| INV-03 | Soft delete only. No `DELETE` on `Product` or `Order` |
+| INV-03 | Soft delete only. No `DELETE` on `Product` or `Order` **in application code**. Test fixtures may remove rows they themselves created, and only those (DEC-063) |
 | INV-04 | External calls (email, AI) happen **outside** the DB transaction, after the commit |
 
 Detail: `technical/ARCHITECTURE.md`

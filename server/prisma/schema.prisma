@@ -77,18 +77,18 @@ enum FunnelEventType {
 // ── Core ──────────────────────────────────────────────
 
 model User {
-  id                String    @id @default(uuid())
-  firstName         String    @map("first_name")
-  lastName          String    @map("last_name")
-  email             String    @unique
-  passwordHash      String    @map("password_hash")
-  phone             String?
-  termsAcceptedAt   DateTime  @map("terms_accepted_at")
-  role              UserRole  @default(customer)
-  status            UserStatus @default(pending_verification)
-  failedLoginCount  Int       @default(0) @map("failed_login_count")
-  lockedUntil       DateTime? @map("locked_until")
-  createdAt         DateTime  @default(now()) @map("created_at")
+  id               String     @id @default(uuid())
+  firstName        String     @map("first_name")
+  lastName         String     @map("last_name")
+  email            String     @unique
+  passwordHash     String     @map("password_hash")
+  phone            String?
+  termsAcceptedAt  DateTime   @map("terms_accepted_at") @db.Timestamptz
+  role             UserRole   @default(customer)
+  status           UserStatus @default(pending_verification)
+  failedLoginCount Int        @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
   addresses               Address[]
   orders                  Order[]
@@ -113,20 +113,20 @@ model Address {
   city      String
   zipCode   String?  @map("zip_code")
   isDefault Boolean  @default(false) @map("is_default")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@index([userId])
   @@map("addresses")
 }
 
 model EmailVerificationToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id])
-  token     String   @unique
-  expiresAt DateTime @map("expires_at") // §4.4.2 — 24-hour validity
-  usedAt    DateTime? @map("used_at") // single-use
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz // §4.4.2 — 24-hour validity
+  usedAt    DateTime? @map("used_at") @db.Timestamptz // single-use
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   @@map("email_verification_tokens")
 }
@@ -136,8 +136,8 @@ model PasswordResetToken {
   userId    String    @map("user_id")
   user      User      @relation(fields: [userId], references: [id])
   token     String    @unique
-  expiresAt DateTime  @map("expires_at")
-  usedAt    DateTime? @map("used_at") // single-use, §4.4.3
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz // single-use, §4.4.3
 
   @@map("password_reset_tokens")
 }
@@ -185,38 +185,38 @@ model Category {
 
 model Brand {
   id       String    @id @default(uuid())
-  name     String    // DEC-017 — brand names not translated
+  name     String // DEC-017 — brand names not translated
   products Product[]
 
   @@map("brands")
 }
 
 model HealthGoal {
-  id       String               @id @default(uuid())
-  nameHe   String               @map("name_he") // DEC-017 — paired
-  nameEn   String               @map("name_en")
+  id       String              @id @default(uuid())
+  nameHe   String              @map("name_he") // DEC-017 — paired
+  nameEn   String              @map("name_en")
   products ProductHealthGoal[]
 
   @@map("health_goals")
 }
 
 model Product {
-  id                  String   @id @default(uuid())
-  slug                String   @unique // stable seed identifier, DEC-033 — never change once shipped
-  nameHe              String   @map("name_he") // field 02 — DEC-017, paired
-  nameEn              String   @map("name_en")
-  categoryId          String   @map("category_id") // field 03 — exactly one category
-  category            Category @relation(fields: [categoryId], references: [id])
-  brandId             String   @map("brand_id") // field 04
-  brand               Brand    @relation(fields: [brandId], references: [id])
-  dosageForm          DosageForm @map("dosage_form") // field 05
-  packageQuantity     Int      @map("package_quantity") // field 06, > 0
-  usageInstructions   String   @map("usage_instructions") @db.Text // field 07 — Hebrew only, manufacturer text
-  price               Decimal  @db.Decimal(10, 2) // field 08 — never Float
-  stockQuantity       Int      @default(0) @map("stock_quantity") // field 09, >= 0
-  descriptionHe       String   @map("description_he") @db.Text // field 11 — DEC-017, paired
-  descriptionEn       String   @map("description_en") @db.Text
-  warningsAllergens   String   @map("warnings_allergens") @db.Text // field 12 — Hebrew only, manufacturer text
+  id                     String     @id @default(uuid())
+  slug                   String     @unique // stable seed identifier, DEC-033 — never change once shipped
+  nameHe                 String     @map("name_he") // field 02 — DEC-017, paired
+  nameEn                 String     @map("name_en")
+  categoryId             String     @map("category_id") // field 03 — exactly one category
+  category               Category   @relation(fields: [categoryId], references: [id])
+  brandId                String     @map("brand_id") // field 04
+  brand                  Brand      @relation(fields: [brandId], references: [id])
+  dosageForm             DosageForm @map("dosage_form") // field 05
+  packageQuantity        Int        @map("package_quantity") // field 06, > 0
+  usageInstructions      String     @map("usage_instructions") @db.Text // field 07 — Hebrew only, manufacturer text
+  price                  Decimal    @db.Decimal(10, 2) // field 08 — never Float
+  stockQuantity          Int        @default(0) @map("stock_quantity") // field 09, >= 0
+  descriptionHe          String     @map("description_he") @db.Text // field 11 — DEC-017, paired
+  descriptionEn          String     @map("description_en") @db.Text
+  warningsAllergens      String     @map("warnings_allergens") @db.Text // field 12 — Hebrew only, manufacturer text
   // DEC-032 DECISION B (Accepted 2026-08-12). 🔴 PROVENANCE, NOT ABSENCE: this
   // is a claim about the SOURCE, not about the product. True means the
   // official page was checked and warningsAllergens already holds everything
@@ -225,18 +225,18 @@ model Product {
   // states are (false,"")=not checked, (false,text)=declared,
   // (true,"")=nothing published, (true,text)=partial and that is all there is.
   // A row with this true must NEVER render an empty allergen section.
-  allergenInfoIncomplete Boolean @default(false) @map("allergen_info_incomplete")
-  targetAudience      String?  @map("target_audience") // field 15 — TBD closed list, DEC-024 open item 2
-  createdAt           DateTime @default(now()) @map("created_at") // field 16
-  isActive            Boolean  @default(true) @map("is_active") // soft delete, INV-03, §4.7.1
-  lowStockThreshold   Int      @default(5) @map("low_stock_threshold") // §4.7.2
+  allergenInfoIncomplete Boolean    @default(false) @map("allergen_info_incomplete")
+  targetAudience         String?    @map("target_audience") // field 15 — TBD closed list, DEC-024 open item 2
+  createdAt              DateTime   @default(now()) @map("created_at") @db.Timestamptz // field 16
+  isActive               Boolean    @default(true) @map("is_active") // soft delete, INV-03, §4.7.1
+  lowStockThreshold      Int        @default(5) @map("low_stock_threshold") // §4.7.2
 
-  images      ProductImage[]        // field 10 — 1 to 4
-  ingredients ProductIngredient[]   // field 13 — structured, not JSON
-  healthGoals ProductHealthGoal[]   // field 14 — many-to-many
-  cartItems   CartItem[]
-  orderItems  OrderItem[]
-  favorites   Favorite[]
+  images       ProductImage[] // field 10 — 1 to 4
+  ingredients  ProductIngredient[] // field 13 — structured, not JSON
+  healthGoals  ProductHealthGoal[] // field 14 — many-to-many
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  favorites    Favorite[]
   funnelEvents FunnelEvent[]
 
   @@index([isActive, categoryId])
@@ -258,8 +258,8 @@ model ProductImage {
 
 // Field 13 — structured, drives search (REQ-F-010) and filtering (Table 2)
 model ActiveIngredient {
-  id       String               @id @default(uuid())
-  name     String               @unique
+  id       String              @id @default(uuid())
+  name     String              @unique
   products ProductIngredient[]
 
   @@map("active_ingredients")
@@ -293,12 +293,12 @@ model ProductHealthGoal {
 
 // Guest identification mechanism — placeholder, DEC-024 open item 4
 model Cart {
-  id        String     @id @default(uuid())
-  userId    String?    @map("user_id") // nullable — null for a guest
-  user      User?      @relation(fields: [userId], references: [id])
-  sessionId String?    @map("session_id") // nullable — placeholder for a guest
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id") // nullable — null for a guest
+  user      User?    @relation(fields: [userId], references: [id])
+  sessionId String?  @map("session_id") // nullable — placeholder for a guest
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   items CartItem[]
 
@@ -347,7 +347,7 @@ model Order {
   user        User        @relation(fields: [userId], references: [id])
   status      OrderStatus @default(pending_payment)
   totalAmount Decimal     @map("total_amount") @db.Decimal(10, 2)
-  createdAt   DateTime    @default(now()) @map("created_at")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
   // ── INV-05, DEC-059 answer 1 ─────────────────────────────────────────────
   // 🔴 CLIENT-SUPPLIED and NOT NULL. `orderNumber` is unique but generated per
@@ -404,13 +404,13 @@ model Order {
 
 // Frozen price and name — INV-02. Never references current Product values.
 model OrderItem {
-  id                     String  @id @default(uuid())
-  orderId                String  @map("order_id")
-  order                  Order   @relation(fields: [orderId], references: [id])
-  productId              String  @map("product_id") // reference — display/linking only
-  product                Product @relation(fields: [productId], references: [id])
-  quantity               Int
-  unitPriceAtPurchase    Decimal @map("unit_price_at_purchase") @db.Decimal(10, 2)
+  id                  String  @id @default(uuid())
+  orderId             String  @map("order_id")
+  order               Order   @relation(fields: [orderId], references: [id])
+  productId           String  @map("product_id") // reference — display/linking only
+  product             Product @relation(fields: [productId], references: [id])
+  quantity            Int
+  unitPriceAtPurchase Decimal @map("unit_price_at_purchase") @db.Decimal(10, 2)
 
   // 🔴 THE FREEZE IS BILINGUAL — MILESTONE-008 Checkpoint B, ISSUE-077 gap 5.
   // There was ONE `productNameAtPurchase` column in a store that sells in two
@@ -440,7 +440,7 @@ model OrderStatusHistory {
   orderId   String      @map("order_id")
   order     Order       @relation(fields: [orderId], references: [id])
   status    OrderStatus
-  createdAt DateTime    @default(now()) @map("created_at")
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
   // 🔴 WHO DID IT — MILESTONE-008 Checkpoint B, ISSUE-077 gap 6.
   // DEC-050's framework says transitions are PERMISSION-CHECKED, but the record
@@ -478,7 +478,7 @@ model Favorite {
   user      User     @relation(fields: [userId], references: [id])
   productId String   @map("product_id")
   product   Product  @relation(fields: [productId], references: [id])
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@unique([userId, productId])
   @@map("favorites")
@@ -494,7 +494,7 @@ model FunnelEvent {
   product   Product?        @relation(fields: [productId], references: [id])
   orderId   String?         @map("order_id")
   order     Order?          @relation(fields: [orderId], references: [id])
-  createdAt DateTime        @default(now()) @map("created_at")
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz
 
   @@index([eventType, createdAt])
   @@map("funnel_events")
