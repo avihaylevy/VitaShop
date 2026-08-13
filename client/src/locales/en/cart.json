@@ -16,7 +16,10 @@
     "packageQuantity": "Package quantity: {{quantity}}",
     "unitPrice": "Unit price",
     "lineTotal": "Line total",
-    "unavailable": "This product is no longer sold. Remove it to continue to checkout."
+    "unavailable": "This product is no longer sold. Remove it to continue to checkout.",
+    "soldOut": "This product is sold out. Remove it to continue to checkout.",
+    "shortStock": "Only {{available}} left in stock. Lower the quantity to {{available}} to continue to checkout.",
+    "notCounted": "This line is not included in the subtotal."
   },
   "quantity": {
     "groupLabel": "Quantity — {{product}}",

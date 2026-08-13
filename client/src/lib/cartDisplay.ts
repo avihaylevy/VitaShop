@@ -21,6 +21,39 @@ import type { SupportedLanguage } from '../i18n'
  * limitation is gone with the state layer that caused it.
  */
 
+/**
+ * 🔴 ISSUE-080 / DEC-059 answer 3 — WHY THE ROW NEEDS A DISCRIMINANT AND NOT
+ * ANOTHER BOOLEAN.
+ *
+ * "Unpurchasable" is ONE condition with three shapes, and the shopper's next
+ * action is different in each: a withdrawn product must be REMOVED, a sold-out
+ * one must be REMOVED, and a short-stock one is fixed by LOWERING the quantity
+ * — the line can still be bought. A boolean would have collapsed the third
+ * into the first two and told the shopper to delete a line they can keep.
+ *
+ * ⚠️ Until Checkpoint F1 the row's only unpurchasability signal was
+ * `!isActive`. Nothing rendered from `quantity > stockQuantity`, which is the
+ * condition the SERVER blocks on — so a short-stock line blocked checkout
+ * while its row said "this is all the stock currently available", which is
+ * reassurance printed on the line that is stopping the order.
+ *
+ * 🔴 ORDER MATTERS. A withdrawn product's stock is irrelevant, and DEC-059
+ * requires the two to read differently ("no longer sold" vs "sold out"), so
+ * `withdrawn` is tested first and a withdrawn line never reports as sold out.
+ */
+export type CartLinePurchasability = 'ok' | 'withdrawn' | 'soldOut' | 'shortStock'
+
+function purchasabilityOf(line: CartLine): CartLinePurchasability {
+  if (!line.isActive) return 'withdrawn'
+  if (line.stockQuantity === 0) return 'soldOut'
+  // 🔴 The SERVER's rule, quoted: `orderService`'s guarded decrement needs
+  // `stockQuantity >= quantity`, and `lib/purchasability.ts` is where the
+  // server states it. A row testing `stockQuantity > 0` instead would call a
+  // cart of 3 against a stock of 1 fine, and checkout would refuse it.
+  if (line.quantity > line.stockQuantity) return 'shortStock'
+  return 'ok'
+}
+
 export type CartLineDisplay = {
   /** The LINE id — what PATCH/DELETE address. Never the product id. */
   id: string
@@ -42,10 +75,22 @@ export type CartLineDisplay = {
   canDecrement: boolean
   canIncrement: boolean
   atStockCap: boolean
+  /** 🔴 ISSUE-080 — which of the three unbuyable shapes this line is, if any. */
+  purchasability: CartLinePurchasability
+  /**
+   * 🔴 F1a: an unpurchasable line contributes to NOTHING (DEC-059 answer 3),
+   * so its `lineTotal` is displayed but is NOT part of the subtotal. The row
+   * has to say so, or the shopper is left adding the line totals up and
+   * getting a different number than the cart shows.
+   */
+  countsTowardTotal: boolean
 }
 
 export function toCartLineDisplay(line: CartLine, language: SupportedLanguage): CartLineDisplay {
+  const purchasability = purchasabilityOf(line)
   return {
+    purchasability,
+    countsTowardTotal: purchasability === 'ok',
     id: line.id,
     slug: line.slug,
     name: language === 'he' ? line.nameHe : line.nameEn,

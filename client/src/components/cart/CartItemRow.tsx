@@ -97,10 +97,37 @@ export function CartItemRow({ line, busy, onIncrement, onDecrement, onRemove }: 
           <PriceBlock price={line.lineTotal} />
         </p>
 
-        {line.isActive ? (
+        {/*
+          🔴 ISSUE-080. This branched on `isActive` alone, so the SHORT-STOCK
+          line — the one the server actually blocks on — fell through to
+          `StockState`, which reports 4 against a threshold of 3 as "in stock"
+          and renders an EMPTY, aria-hidden box. The row said nothing at all
+          while being the reason checkout was refused.
+
+          Each state names the SHOPPER'S NEXT ACTION, not just the condition:
+          two of them can only be removed, and the third is fixed by lowering
+          a number, which is why they cannot share one message.
+        */}
+        {line.purchasability === 'ok' ? (
           <StockState stockQuantity={line.maxQuantity} lowStockThreshold={line.lowStockThreshold} />
         ) : (
-          <p className="text-xs font-medium text-state-error">{t('item.unavailable')}</p>
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium text-state-error">
+              {line.purchasability === 'withdrawn' && t('item.unavailable')}
+              {line.purchasability === 'soldOut' && t('item.soldOut')}
+              {line.purchasability === 'shortStock' &&
+                t('item.shortStock', { available: line.maxQuantity })}
+            </p>
+            {/*
+              F1a made the subtotal purchasable-only, so this line's total is
+              displayed above and counted nowhere. Saying so is the difference
+              between a shopper trusting the number and adding the rows up
+              themselves.
+            */}
+            {!line.countsTowardTotal && (
+              <p className="text-xs text-text-muted">{t('item.notCounted')}</p>
+            )}
+          </div>
         )}
       </div>
 
@@ -121,7 +148,14 @@ export function CartItemRow({ line, busy, onIncrement, onDecrement, onRemove }: 
           reported it on the last response — but it is still not a reservation,
           and another shopper may take the last unit before checkout.
         */}
-        {line.isActive && line.atStockCap && (
+        {/*
+          🔴 ISSUE-080 — `purchasability === 'ok'`, NOT `isActive`. At quantity
+          5 against stock 4 this printed "this is all the stock currently
+          available" on the very line blocking the order: reassurance that
+          contradicts the block, and the shopper's actual fix (lower it to 4)
+          appeared nowhere. The short-stock message above replaces it.
+        */}
+        {line.purchasability === 'ok' && line.atStockCap && (
           <p className="max-w-xs text-xs text-text-muted md:text-end">{t('quantity.atStockCap')}</p>
         )}
 
