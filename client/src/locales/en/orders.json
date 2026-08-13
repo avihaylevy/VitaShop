@@ -1,0 +1,10 @@
+{
+  "status": {
+    "pendingPayment": "Awaiting payment",
+    "paid": "Received",
+    "processing": "Picking",
+    "shipped": "Shipped",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled"
+  }
+}
