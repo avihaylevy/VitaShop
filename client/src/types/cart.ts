@@ -43,25 +43,38 @@ export type CartLine = {
  */
 export type Shipping = {
   /**
-   * 🔴 The total the threshold measures — ACTIVE lines ONLY, so it can be
-   * LESS than `subtotal` when a withdrawn line is in the cart. The UI must say
-   * so: two unexplained numbers on one screen read as a bug.
+   * 🔴 The total the threshold measures — PURCHASABLE lines only, meaning
+   * active AND stocked to the quantity asked for. So it can be LESS than
+   * `subtotal` whenever a line cannot be bought, whether because the product
+   * was withdrawn or because there is not enough of it. The UI must say so:
+   * two unexplained numbers on one screen read as a bug.
    */
   basis: string
   cost: string
   isFree: boolean
   threshold: string
   remainingForFree: string
-  /** False for an empty cart and for a cart of only withdrawn lines. */
+  /** False for an empty cart and for a cart with no purchasable line. */
   hasShippableLines: boolean
+  /**
+   * 🔴 Self pickup — nothing is being delivered, so the free-shipping threshold
+   * is MOOT rather than unmet. Branch on this before rendering any "add ₪X more
+   * for free shipping" prompt, or a pickup order is offered ₪0.00 more.
+   */
+  noDeliveryRequired: boolean
 }
 
 export type Cart = {
   items: readonly CartLine[]
   totalQuantity: number
-  /** ⚠️ ALL lines, withdrawn included (C3). NOT the shipping basis. */
+  /** ⚠️ ALL lines, unpurchasable included (C3). NOT the shipping basis. */
   subtotal: string
-  /** 🔴 C3: true when any line's product is inactive. Checkout is blocked. */
+  /**
+   * 🔴 C3 / DEC-059 answer 3: true when any line cannot be bought — the product
+   * is inactive, OR there is less stock than the line asks for. Checkout is
+   * blocked either way; the two read differently to a shopper, so the copy must
+   * cover both without claiming one.
+   */
   hasBlockingLine: boolean
   shipping: Shipping
 }
@@ -123,5 +136,6 @@ export const EMPTY_CART: Cart = {
     threshold: '249.00',
     remainingForFree: '0.00',
     hasShippableLines: false,
+    noDeliveryRequired: false,
   },
 }

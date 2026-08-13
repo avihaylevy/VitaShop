@@ -43,6 +43,7 @@ function validCart(lines: CartLine[] = [validLine()]) {
       threshold: '249.00',
       remainingForFree: '59.20',
       hasShippableLines: true,
+      noDeliveryRequired: false,
     },
   }
 }
@@ -117,6 +118,19 @@ describe('🔴 an invalid response is a FAILURE, never a partly-rendered cart', 
     delete (cart as Record<string, unknown>).hasBlockingLine
     // false is exactly the value that would let checkout proceed over a line
     // the server called blocking, so absence must not become it.
+    expect(isCart(cart)).toBe(false)
+  })
+
+  it('🔴 a MISSING noDeliveryRequired is rejected, not defaulted to false', () => {
+    const cart = validCart()
+    delete (cart.shipping as Record<string, unknown>).noDeliveryRequired
+    // 🔴 THE FIELD WAS ADDED TO THE TYPE AND NOT TO THE GUARD, which is worse
+    // than never having it: the response passed, TypeScript reported the flag
+    // as `boolean` while it was `undefined`, and `undefined` is falsy — so the
+    // self-pickup branch it exists to force never fired, and the type system
+    // asserted that could not happen. `false` is exactly the wrong default:
+    // it is the value that renders "add ₪0.00 more for free shipping" on an
+    // order with no delivery at all.
     expect(isCart(cart)).toBe(false)
   })
 

@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client'
 import { clampAddition, clampCartQuantity, parseRequestedQuantity } from './cartQuantity.js'
 import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 import { computeShipping, toAgorot, type ShippingDto } from './shipping.js'
+import { isPurchasable } from './purchasability.js'
 
 /**
  * MILESTONE-007 Checkpoint C — the cart service.
@@ -139,13 +140,37 @@ function toDto(
     }
   })
 
-  // 🔴 DEC-058's basis is the ACTIVE lines ONLY, which is why it is summed
-  // separately from `subtotal` rather than reused from it. A withdrawn line
-  // blocks checkout, so counting it toward free shipping would promise
-  // something about an order that cannot be placed — and the promise would
-  // REVERSE when the shopper removes the line the cart told them to remove.
-  const shippable = lines.filter((line) => line.isActive)
-  const basisAgorot = shippable.reduce((sum, line) => sum + toAgorot(line.lineTotal), 0)
+  // 🔴 DEC-058's basis is the PURCHASABLE lines ONLY, which is why it is summed
+  // separately from `subtotal` rather than reused from it. An unpurchasable line
+  // blocks checkout, so counting it toward free shipping would promise something
+  // about an order that cannot be placed — and the promise would REVERSE when
+  // the shopper removes the line the cart told them to remove.
+  //
+  // 🔴 DEC-059 ANSWER 3 — "UNPURCHASABLE" IS ONE CONDITION WITH TWO CAUSES:
+  // inactive OR not enough stock. This filter tested only `isActive` until
+  // 2026-08-13, which is ISSUE-076 exactly: a cart holding one active-but-
+  // SOLD-OUT product at ₪260 showed FREE SHIPPING and flagged nothing, checkout
+  // then refused it, the shopper removed the line because they had no other
+  // option, and shipping jumped ₪0 -> ₪30. The reversal `lib/shipping.ts`'s own
+  // header says must not happen.
+  //
+  // 🔴 `>= line.quantity`, NOT `> 0`. The first fix used `> 0` and closed only
+  // half the hole, because CHECKOUT'S REAL RULE IS THE QUANTITY — the guarded
+  // decrement in `orderService` needs `stockQuantity >= line.quantity`. With
+  // `> 0` a cart holding 3 x ₪100 against stock 1 still said "purchasable",
+  // still promised free shipping at ₪300, and checkout still refused it with
+  // INSUFFICIENT_STOCK. The shopper then cut the line to 1 and shipping jumped
+  // ₪0 -> ₪30 — the SAME reversal, reached by a different route.
+  //
+  // ⚠️ THE RULE MUST MATCH THE ONE CHECKOUT ENFORCES, not merely resemble it.
+  // The order side got this first and the cart side followed twice; both times
+  // the gap was a cart that promised something checkout would refuse.
+  // 🔴 THE SHARED RULE, not a second copy of it. This filter was written out by
+  // hand twice and drifted from checkout twice — `isActive` only, then `> 0` —
+  // and each drift produced the same shipping reversal. `lib/purchasability.ts`
+  // makes the agreement mechanical.
+  const purchasable = lines.filter(isPurchasable)
+  const basisAgorot = purchasable.reduce((sum, line) => sum + toAgorot(line.lineTotal), 0)
 
   return {
     items: lines,
@@ -153,8 +178,10 @@ function toDto(
     // Summed in agorot for the same reason the basis is: a float sum of
     // two-decimal strings can land a cent off, and this figure is money.
     subtotal: (lines.reduce((sum, line) => sum + toAgorot(line.lineTotal), 0) / 100).toFixed(2),
-    hasBlockingLine: lines.some((line) => !line.isActive),
-    shipping: computeShipping(basisAgorot, shippable.length > 0),
+    // 🔴 The same shared rule — otherwise the cart lets a shopper proceed into
+    // a checkout that will refuse them.
+    hasBlockingLine: lines.some((line) => !isPurchasable(line)),
+    shipping: computeShipping(basisAgorot, purchasable.length > 0),
   }
 }
 

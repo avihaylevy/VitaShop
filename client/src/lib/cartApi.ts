@@ -65,7 +65,16 @@ function isShipping(value: unknown): value is Cart['shipping'] {
     // to true would render a shipping row for an empty cart. Absence is a
     // broken response, not a value.
     typeof value.isFree === 'boolean' &&
-    typeof value.hasShippableLines === 'boolean'
+    typeof value.hasShippableLines === 'boolean' &&
+    // 🔴 AND on the third. This one was ADDED to the type and NOT to the guard,
+    // which is worse than never having had it: a response missing the field
+    // passed here, TypeScript then reported `noDeliveryRequired` as `boolean`
+    // while it was `undefined` at runtime, and `undefined` is falsy — so the
+    // branch the flag exists to force never fired, silently. The self-pickup
+    // "add ₪0.00 more for free shipping" render that `shipping.ts` calls
+    // "impossible rather than unlikely" would have been back, with the type
+    // system asserting it could not be.
+    typeof value.noDeliveryRequired === 'boolean'
   )
 }
 

@@ -285,7 +285,21 @@ export function CartPage() {
                       bypassed the single formatting path the whole site uses.
                     */}
                     <p className="text-xs text-text-muted">
-                      {cart.shipping.basis === cart.subtotal
+                      {/*
+                        🔴 THE THRESHOLD IS MOOT WHEN NOTHING IS DELIVERED, and
+                        this branch is what makes that true rather than merely
+                        stated. Self pickup returns basis === subtotal with
+                        isFree false and remainingForFree '0.00', so without it
+                        the very next line renders "add ₪0.00 more to get free
+                        shipping" to someone collecting their own order.
+                        ⚠️ It is unreachable today only because the cart has no
+                        method picker and the server defaults to courier — which
+                        is exactly the coincidence the flag exists to stop
+                        relying on. Checkpoint F feeds a real method in here.
+                      */}
+                      {cart.shipping.noDeliveryRequired
+                        ? t('shipping.noDelivery')
+                        : cart.shipping.basis === cart.subtotal
                         ? cart.shipping.isFree
                           ? t('shipping.qualified', { threshold: money(cart.shipping.threshold) })
                           : t('shipping.remaining', {
@@ -297,11 +311,11 @@ export function CartPage() {
                           // says "qualifies" beside a larger subtotal is the
                           // same unexplained gap as one that says "add ₪X".
                           cart.shipping.isFree
-                          ? t('shipping.qualifiedExcludingWithdrawn', {
+                          ? t('shipping.qualifiedExcludingUnavailable', {
                               threshold: money(cart.shipping.threshold),
                               basis: money(cart.shipping.basis),
                             })
-                          : t('shipping.remainingExcludingWithdrawn', {
+                          : t('shipping.remainingExcludingUnavailable', {
                               amount: money(cart.shipping.remainingForFree),
                               threshold: money(cart.shipping.threshold),
                               basis: money(cart.shipping.basis),

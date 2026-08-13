@@ -52,6 +52,7 @@ function cart(lines: CartLine[], shipping: Partial<Cart['shipping']> = {}): Cart
       threshold: '249.00',
       remainingForFree: '59.20',
       hasShippableLines: active.length > 0,
+      noDeliveryRequired: false,
       ...shipping,
     },
   }
@@ -279,15 +280,48 @@ describe('🔴 DEC-058 — shipping is shown, and the basis is stated', () => {
         cost: '30.00',
         remainingForFree: '129.00',
         hasShippableLines: true,
+        noDeliveryRequired: false,
       })),
     )
     renderPage()
 
     await waitFor(() => expect(screen.getByText('Shipping')).toBeDefined())
-    // 🔴 Names the basis AND says withdrawn products do not count toward it.
-    const explained = screen.getByText(/counted on the .*120\.00.* of items still available/)
+    // 🔴 Names the basis AND says which items were left out of it.
+    //
+    // ⚠️ The wording deliberately no longer says "no longer sold". Since
+    // DEC-059 answer 3 a line is excluded when it is withdrawn OR short of the
+    // quantity asked for, and the old sentence told a shopper that a
+    // temporarily out-of-stock product was discontinued — the opposite of the
+    // distinction the server itself draws.
+    const explained = screen.getByText(/counted on the .*120\.00.* of items you can buy right now/)
     expect(explained).toBeDefined()
-    expect(explained.textContent).toMatch(/no longer sold do not count/)
+    expect(explained.textContent).toMatch(/cannot buy right now do not count/)
+  })
+
+  it('🔴 SELF PICKUP is never offered "add ₪0.00 more for free shipping"', async () => {
+    // The flag existed, was validated, was in every fixture — and had NO
+    // CONSUMER. Self pickup returns basis === subtotal, isFree false and
+    // remainingForFree '0.00', which is precisely the shape that renders the
+    // "add ₪X more" prompt, so the safety property was asserted in three
+    // comments and implemented nowhere.
+    fetchMock.mockResolvedValue(
+      mockResponse(
+        200,
+        cart([line()], {
+          basis: '189.80',
+          cost: '0.00',
+          isFree: false,
+          remainingForFree: '0.00',
+          noDeliveryRequired: true,
+        }),
+      ),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Shipping')).toBeDefined())
+    expect(screen.queryByText(/Add .* more to qualify/i)).toBeNull()
+    expect(screen.queryByText(/₪0\.00 more/)).toBeNull()
+    expect(screen.getByText(/nothing is shipped/i)).toBeDefined()
   })
 
   it('🔴 a cart with NOTHING shippable shows no shipping figure at all — not ₪0, not "free"', async () => {
@@ -297,6 +331,7 @@ describe('🔴 DEC-058 — shipping is shown, and the basis is stated', () => {
         cost: '0.00',
         isFree: false,
         hasShippableLines: false,
+        noDeliveryRequired: false,
       })),
     )
     renderPage()
@@ -335,6 +370,7 @@ describe('🔴 the basis is named whenever the two figures disagree — free or 
         isFree: true,
         remainingForFree: '0.00',
         hasShippableLines: true,
+        noDeliveryRequired: false,
       })),
     )
     renderPage()
@@ -342,6 +378,6 @@ describe('🔴 the basis is named whenever the two figures disagree — free or 
     await waitFor(() => expect(screen.getByText('Free')).toBeDefined())
     // 🔴 Without this branch the page would say only "qualifies for free
     // shipping" beside a subtotal that does not match the basis.
-    expect(screen.getByText(/counted on the .*260\.00.* of items still available/)).toBeDefined()
+    expect(screen.getByText(/counted on the .*260\.00.* of items you can buy right now/)).toBeDefined()
   })
 })

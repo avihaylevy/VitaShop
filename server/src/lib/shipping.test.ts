@@ -142,3 +142,53 @@ describe('the two numbers have ONE definition', () => {
     expect(THRESHOLD).toBe(24_900)
   })
 })
+
+/**
+ * 🔴 THE DELIVERY-METHOD PARAMETER HAD NO TESTS AT ALL. It was added for
+ * MILESTONE-008 and every existing case here calls `computeShipping` with two
+ * arguments, so `self_pickup` and `pickup_point` were both unexercised —
+ * including `noDeliveryRequired` in the no-shippable-lines branch, which could
+ * be replaced with a hardcoded `false` and leave every test green.
+ *
+ * ⚠️ That is `browser-verification.md`'s catalogued shape: a guarantee never
+ * confronted with a case whose answer is already known.
+ */
+describe('DEC-058 as amended — the delivery method changes the answer', () => {
+  it('self pickup is ₪0 and is NOT reported as earned free shipping', () => {
+    // ₪10 of goods — nowhere near the threshold, and still free, because
+    // nothing is being shipped. `isFree` stays FALSE: free shipping is a
+    // promotion earned by spending ₪249, and saying a pickup order earned it
+    // tells the shopper they got something they did not.
+    const result = computeShipping(1_000, true, 'self_pickup')
+    expect(result.cost).toBe('0.00')
+    expect(result.isFree).toBe(false)
+    expect(result.noDeliveryRequired).toBe(true)
+    expect(result.remainingForFree).toBe('0.00')
+  })
+
+  it('🔴 a PICKUP POINT is a delivery — ₪30, and the threshold applies', () => {
+    const under = computeShipping(1_000, true, 'pickup_point')
+    expect(under.cost).toBe('30.00')
+    expect(under.noDeliveryRequired).toBe(false)
+
+    const over = computeShipping(24_900, true, 'pickup_point')
+    expect(over.cost).toBe('0.00')
+    expect(over.isFree).toBe(true)
+  })
+
+  it('courier is the default, so the cart keeps showing what it shows today', () => {
+    expect(computeShipping(1_000, true)).toEqual(computeShipping(1_000, true, 'courier'))
+  })
+
+  it('🔴 an EMPTY self-pickup order still reports that no delivery is required', () => {
+    // The branch the review found unreachable and untested. Hardcoding `false`
+    // here would make the flag LIE in the one state it exists to describe: a
+    // pickup order whose last line just became unpurchasable.
+    const result = computeShipping(0, false, 'self_pickup')
+    expect(result.hasShippableLines).toBe(false)
+    expect(result.noDeliveryRequired).toBe(true)
+
+    // ...and the same state under courier is the opposite.
+    expect(computeShipping(0, false, 'courier').noDeliveryRequired).toBe(false)
+  })
+})

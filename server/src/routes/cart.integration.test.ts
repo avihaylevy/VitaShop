@@ -47,8 +47,15 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await wipeTestCarts()
-  await prisma.$disconnect()
+  // 🔴 THE DISCONNECT IS IN A `finally` BECAUSE THE CLEANUP CAN THROW, and a
+  // throw here took the disconnect with it, leaking the connection and leaving
+  // the run to hang instead of failing readably. Same fix, same reason, in
+  // `orderService.integration.test.ts`.
+  try {
+    await wipeTestCarts()
+  } finally {
+    await prisma.$disconnect()
+  }
 })
 
 async function stockOf(slug: string): Promise<number> {
@@ -80,6 +87,10 @@ describe('getCart', () => {
         threshold: '249.00',
         remainingForFree: '0.00',
         hasShippableLines: false,
+        // Not a pickup order — there is no order at all. The flag means
+        // "nothing is being delivered BECAUSE the shopper collects it", which
+        // an absent cart is not.
+        noDeliveryRequired: false,
       },
     })
     // Checkpoint B's whole point: a read must not mint anything. Scoped, so a
@@ -257,5 +268,102 @@ describe('🔴 the cart stores no price — INV-02 belongs to checkout', () => {
     expect(cart.items[0]?.isActive).toBe(true)
     expect(cart.items[0]?.stockQuantity).toBe(3)
     expect(cart.hasBlockingLine).toBe(false)
+  })
+
+  /**
+   * 🔴 DEC-059 ANSWER 3 — "unpurchasable" is ONE condition with TWO causes.
+   *
+   * ⚠️ THESE TESTS EXIST BECAUSE THEIR ABSENCE WAS INVISIBLE. `shippable` and
+   * `hasBlockingLine` tested only `isActive` until 2026-08-13, and changing
+   * them to also test stock broke NOTHING in a 582-test suite — which is how a
+   * defect this size survives: not because a test failed, but because none
+   * existed. ISSUE-076.
+   */
+  describe('a line short of stock is unpurchasable, exactly as a withdrawn one is', () => {
+    /**
+     * ⚠️ ITS OWN PRODUCT, NOT A SEEDED ONE. The first version of these tests
+     * dropped `altman-probiotic-intense-30` to stock 0 and restored it in a
+     * `finally` — which this very file already learned not to do (see the
+     * fixture note above): kill the run inside that window and the seeded
+     * catalogue is left at 0, breaking unrelated suites and tripping
+     * `check-catalogue-facts.py` against a REAL product.
+     */
+    async function ownProduct(stockQuantity: number): Promise<string> {
+      const shape = await prisma.product.findFirst({
+        where: { isActive: true },
+        select: { categoryId: true, brandId: true },
+      })
+      if (!shape) throw new Error('fixture assumption failed: no product to copy shape from')
+      const slug = `${TEST_FIXTURE_SLUG_PREFIX}cart-shortstock`
+      await prisma.product.upsert({
+        where: { slug },
+        create: {
+          slug, nameHe: 'בדיקה', nameEn: 'fixture', categoryId: shape.categoryId,
+          brandId: shape.brandId, dosageForm: 'CAPSULE', packageQuantity: 1,
+          usageInstructions: '', price: '100.00', stockQuantity,
+          descriptionHe: 'בדיקה', descriptionEn: 'fixture', warningsAllergens: '',
+          isActive: true,
+        },
+        update: { stockQuantity, isActive: true, price: '100.00' },
+        select: { id: true },
+      })
+      return slug
+    }
+
+    it('SOLD OUT entirely — no basis, and checkout is blocked', async () => {
+      await wipeTestCarts()
+      const slug = await ownProduct(5)
+      try {
+        await addItem(prisma, { guestCartId: GUEST_A }, slug, 1)
+        const before = await getCart(prisma, { guestCartId: GUEST_A })
+        expect(before.hasBlockingLine).toBe(false)
+        expect(before.shipping.basis).toBe('100.00')
+
+        // It sells out AFTER being added — the sequence ISSUE-076 names, and
+        // one a shopper cannot see coming.
+        await prisma.product.update({ where: { slug }, data: { stockQuantity: 0 } })
+        const after = await getCart(prisma, { guestCartId: GUEST_A })
+
+        // 🔴 The line still SHOWS — C3: the cart must not lie about what was put
+        // in it — so the subtotal is unchanged...
+        expect(after.items).toHaveLength(1)
+        expect(after.subtotal).toBe(before.subtotal)
+
+        // ...but it buys nothing.
+        expect(after.shipping.basis).toBe('0.00')
+        expect(after.shipping.hasShippableLines).toBe(false)
+        expect(after.hasBlockingLine).toBe(true)
+      } finally {
+        await prisma.cartItem.deleteMany({ where: { product: { slug } } })
+        await prisma.product.deleteMany({ where: { slug } })
+      }
+    })
+
+    it('🔴 SHORT of the quantity asked for — the case `> 0` missed', async () => {
+      // The cart rule must be the rule CHECKOUT enforces, `stock >= quantity`,
+      // not merely `stock > 0`. With `> 0` this cart of 3 against a stock of 1
+      // still promised free shipping on ₪300 and still passed the block check,
+      // and checkout still refused it with INSUFFICIENT_STOCK. The shopper then
+      // cut the line to 1 and shipping jumped ₪0 -> ₪30 — the same reversal,
+      // reached by a different route.
+      await wipeTestCarts()
+      const slug = await ownProduct(10)
+      try {
+        await addItem(prisma, { guestCartId: GUEST_A }, slug, 3)
+        expect((await getCart(prisma, { guestCartId: GUEST_A })).shipping.basis).toBe('300.00')
+
+        await prisma.product.update({ where: { slug }, data: { stockQuantity: 1 } })
+        const after = await getCart(prisma, { guestCartId: GUEST_A })
+
+        expect(after.items[0]?.stockQuantity).toBe(1)
+        expect(after.subtotal).toBe('300.00')
+        // 🔴 Not purchasable: 1 in stock cannot satisfy a line of 3.
+        expect(after.shipping.basis).toBe('0.00')
+        expect(after.hasBlockingLine).toBe(true)
+      } finally {
+        await prisma.cartItem.deleteMany({ where: { product: { slug } } })
+        await prisma.product.deleteMany({ where: { slug } })
+      }
+    })
   })
 })

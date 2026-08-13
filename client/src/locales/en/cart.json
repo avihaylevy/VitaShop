@@ -32,7 +32,7 @@
     "removed": "{{product}} was removed from the cart."
   },
   "blocked": {
-    "message": "One or more products in your cart are no longer sold. Remove them to continue to checkout."
+    "message": "One or more products in your cart cannot be purchased right now. Update or remove them to continue to checkout."
   },
   "remove": {
     "label": "Remove",
@@ -50,9 +50,10 @@
     "label": "Shipping",
     "free": "Free",
     "qualified": "Your order qualifies for free shipping ({{threshold}} or more).",
-    "qualifiedExcludingWithdrawn": "Your order qualifies for free shipping ({{threshold}} or more), counted on the {{basis}} of items still available — products no longer sold do not count towards it.",
     "remaining": "Add {{amount}} more to get free shipping (from {{threshold}}).",
-    "remainingExcludingWithdrawn": "Free shipping starts at {{threshold}}, counted on the {{basis}} of items still available — products no longer sold do not count towards it. Add {{amount}} more to qualify."
+    "qualifiedExcludingUnavailable": "Your order qualifies for free shipping ({{threshold}} or more), counted on the {{basis}} of items you can buy right now — items you cannot buy right now do not count towards it.",
+    "remainingExcludingUnavailable": "Free shipping starts at {{threshold}}, counted on the {{basis}} of items you can buy right now — items you cannot buy right now do not count towards it. Add {{amount}} more to qualify.",
+    "noDelivery": "Collect your order yourself — nothing is shipped, so there is no delivery charge."
   },
   "merge": {
     "merged": "Your guest cart was merged into your account cart.",

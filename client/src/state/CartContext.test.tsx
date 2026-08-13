@@ -40,6 +40,7 @@ function cartWith(quantity: number): Cart {
       threshold: '249.00',
       remainingForFree: '249.00',
       hasShippableLines: quantity > 0,
+      noDeliveryRequired: false,
     },
   }
 }
@@ -172,6 +173,7 @@ describe('🔴 the server decides the quantity — §3.4', () => {
             threshold: '249.00',
             remainingForFree: '0.00',
             hasShippableLines: false,
+            noDeliveryRequired: false,
           },
         },
         quantity: 1,
