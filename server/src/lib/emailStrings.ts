@@ -1,3 +1,5 @@
+import type { DeliveryEstimate } from './deliveryEstimate.js'
+
 /**
  * Every server-generated user-facing string in the application.
  *
@@ -112,7 +114,81 @@ export const emailStringsHe = {
       ]),
     }
   },
+
+  /**
+   * INV-04 / REQ-F-044 — the order confirmation, sent AFTER the commit.
+   *
+   * 🔴 EVERY FIGURE ARRIVES FINISHED. This function formats nothing and
+   * computes nothing: every money string here is one the ORDER froze, and the
+   * delivery promise is rendered from `deliveryEstimate`'s value by
+   * `deliveryPromiseHe`. §3.4 is about the client, but the reason generalises —
+   * one place decides money, everywhere else prints it.
+   *
+   * 🔴 THE LINES COME FROM `OrderItem`, NOT FROM THE PRODUCT ROWS. That is
+   * INV-02: the name and the unit price were frozen at purchase, so an email
+   * re-read next month still says what was actually bought and charged. Reading
+   * them through the `product` relation would make an old confirmation change
+   * when a price or a name changes.
+   *
+   * ⚠️ IT CARRIES A SUMMARY BECAUSE A TOTAL ALONE CANNOT BE CHECKED. The first
+   * version listed only the order number and the total, which gives the shopper
+   * a number and nothing to verify it against. TEST-044 names a summary.
+   *
+   * ⚠️ NO MEDICAL OR LEGAL WORDING, deliberately. This module's header says
+   * that adding any brings the project's disclaimer and legal-wording rules
+   * into play, and an order confirmation is not the place to introduce them.
+   */
+  orderConfirmation(details: {
+    orderNumber: string
+    /** Frozen on `OrderItem` — the Hebrew name and the price at purchase. */
+    lines: readonly { name: string; quantity: number; unitPrice: string }[]
+    shippingCost: string
+    totalAmount: string
+    /** Already rendered in Hebrew by `deliveryPromiseHe` — see below. */
+    deliveryPromise: string
+  }): EmailContent {
+    return {
+      subject: `VitaShop — הזמנה ${details.orderNumber} התקבלה`,
+      body: joinBody([
+        'תודה על ההזמנה.',
+        '',
+        `מספר הזמנה: ${details.orderNumber}`,
+        '',
+        'פירוט ההזמנה:',
+        ...details.lines.map(
+          (line) => `· ${line.name} — ${line.quantity} × ${line.unitPrice} ₪`,
+        ),
+        '',
+        `דמי משלוח: ${details.shippingCost} ₪`,
+        `סכום לתשלום: ${details.totalAmount} ₪`,
+        '',
+        details.deliveryPromise,
+        '',
+        'ניתן לעקוב אחר ההזמנה בעמוד ההזמנות בחשבון.',
+      ]),
+    }
+  },
 } as const
+
+/**
+ * DEC-059 answer 5's estimate, rendered in Hebrew.
+ *
+ * 🔴 THE NUMBERS COME FROM `deliveryEstimate`, NEVER FROM HERE. That module
+ * returns a VALUE and no sentence precisely so the bilingual UI and this
+ * Hebrew-only email can share one source; retyping "3-5" in this file would
+ * re-create the split it was written to avoid.
+ *
+ * ⚠️ TWO SENTENCES, because the two promises differ. Self pickup is an order
+ * READY TO COLLECT; courier and pickup point are a delivery ARRIVING. The
+ * estimate's own shape carries that distinction, and flattening it here would
+ * throw away the reason it has two shapes.
+ */
+export function deliveryPromiseHe(estimate: DeliveryEstimate): string {
+  if (estimate.kind === 'ready_within') {
+    return `ההזמנה תהיה מוכנה לאיסוף עצמי תוך ${estimate.businessDays} ימי עסקים.`
+  }
+  return `זמן האספקה המשוער: ${estimate.minBusinessDays}–${estimate.maxBusinessDays} ימי עסקים.`
+}
 
 /**
  * The active table. 🔴 When English is added, this becomes a lookup by locale

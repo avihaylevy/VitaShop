@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CHECKOUT_RATE_LIMITS, AUTH_RATE_LIMITS, createCheckoutRateLimiters } from './rateLimit.js'
 import { createCheckoutRouter } from '../routes/checkout.js'
+import { NullEmailProvider } from './emailService.js'
 
 /** Minimal shape of an Express router layer — enough to walk the stack. */
 interface RouterLayer {
@@ -23,7 +24,7 @@ describe('🔴 EVERY route mounted on the checkout router carries a limiter', ()
     // THIRD checkout route is covered the moment it is mounted, without anyone
     // remembering there was a rule. Checkpoint H added `GET /auth/session` and
     // it slipped past exactly that rule on the auth side.
-    const router = createCheckoutRouter({ prisma: {} as never })
+    const router = createCheckoutRouter({ prisma: {} as never, emailService: new NullEmailProvider() })
 
     const layers = (router as unknown as { stack: RouterLayer[] }).stack.filter((l) => l.route)
 
@@ -59,7 +60,7 @@ describe('🔴 EVERY route mounted on the checkout router carries a limiter', ()
     // Injecting the limiters gives this test something to fail on: it can name
     // the handler it expects and where.
     const limiters = createCheckoutRateLimiters()
-    const router = createCheckoutRouter({ prisma: {} as never, rateLimiters: limiters })
+    const router = createCheckoutRouter({ prisma: {} as never, emailService: new NullEmailProvider(), rateLimiters: limiters })
     const layers = (router as unknown as { stack: RouterLayer[] }).stack.filter((l) => l.route)
 
     const first = (path: string) =>
@@ -75,7 +76,7 @@ describe('🔴 EVERY route mounted on the checkout router carries a limiter', ()
   })
 
   it('both checkout routes are present and are POSTs', () => {
-    const router = createCheckoutRouter({ prisma: {} as never })
+    const router = createCheckoutRouter({ prisma: {} as never, emailService: new NullEmailProvider() })
     const layers = (router as unknown as { stack: RouterLayer[] }).stack.filter((l) => l.route)
     const routes = layers
       .map((l) => `${Object.keys(l.route?.methods ?? {}).join('/')} ${l.route?.path}`)

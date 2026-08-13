@@ -11,7 +11,7 @@ import { createAuthRateLimiters } from '../lib/rateLimit.js'
 import { ARGON2_OPTIONS } from '../lib/registrationService.js'
 import { prewarmDummyHash } from '../lib/loginService.js'
 import { createSessionMiddleware } from '../lib/session.js'
-import { NullEmailProvider } from '../lib/emailService.js'
+import { NullEmailProvider, type EmailMessage, type EmailService } from '../lib/emailService.js'
 import { TEST_FIXTURE_SLUG_PREFIX } from '../lib/testFixturePrefix.js'
 
 /**
@@ -36,7 +36,34 @@ let prisma: PrismaClient
 let server: Server
 let baseUrl: string
 
+/**
+ * 🔴 CAPTURES SENDS AND CAN BE MADE TO FAIL — TEST-044c's whole mechanism.
+ * INV-04 says a mail failure leaves the order intact, and the only honest way
+ * to test that is to make a real send throw at the real call site.
+ */
+class TestMailbox implements EmailService {
+  readonly sent: EmailMessage[] = []
+  failNext = false
+  /**
+   * 🔴 A HOLD, so a test can prove the RESPONSE does not wait on the send. The
+   * send blocks until the test releases it; the 201 must already have arrived.
+   */
+  gate: Promise<void> | undefined
+  async send(message: EmailMessage): Promise<void> {
+    if (this.failNext) {
+      this.failNext = false
+      throw new Error('simulated mail outage')
+    }
+    if (this.gate) await this.gate
+    this.sent.push(message)
+  }
+}
+const mailbox = new TestMailbox()
+
 const SLUG_A = `${TEST_FIXTURE_SLUG_PREFIX}route-checkout-a`
+/** 🔴 A SECOND LINE EXISTS ONLY SO THE EMAIL'S LINE ORDER CAN BE PROVED. With
+ *  one line every ordering is identical and the `orderBy` guard is untestable. */
+const SLUG_B = `${TEST_FIXTURE_SLUG_PREFIX}route-checkout-b`
 const EMAIL = 'zz-checkoutroute@example.test'
 const PASSWORD = 'Abcdef12xyz'
 const ADDRESS = { line1: 'רחוב הבדיקה 1', city: 'תל אביב', zipCode: '6100000' }
@@ -82,6 +109,21 @@ async function stockOf(): Promise<number> {
 async function cartWith(quantity: number): Promise<void> {
   const userId = (await prisma.user.findUniqueOrThrow({ where: { email: EMAIL }, select: { id: true } })).id
   const product = await prisma.product.findUniqueOrThrow({ where: { slug: SLUG_A }, select: { id: true } })
+  const cart = await prisma.cart.upsert({
+    where: { userId }, create: { userId }, update: {}, select: { id: true },
+  })
+  await prisma.cartItem.upsert({
+    where: { cartId_productId: { cartId: cart.id, productId: product.id } },
+    create: { cartId: cart.id, productId: product.id, quantity },
+    update: { quantity },
+    select: { id: true },
+  })
+}
+
+/** Adds `quantity` of the SECOND fixture, so an order has two frozen lines. */
+async function alsoCartWith(quantity: number): Promise<void> {
+  const userId = (await prisma.user.findUniqueOrThrow({ where: { email: EMAIL }, select: { id: true } })).id
+  const product = await prisma.product.findUniqueOrThrow({ where: { slug: SLUG_B }, select: { id: true } })
   const cart = await prisma.cart.upsert({
     where: { userId }, create: { userId }, update: {}, select: { id: true },
   })
@@ -146,6 +188,20 @@ beforeAll(async () => {
     select: { id: true },
   })
 
+  await prisma.product.upsert({
+    where: { slug: SLUG_B },
+    create: {
+      slug: SLUG_B, nameHe: 'בדיקה שנייה', nameEn: 'Route test B',
+      categoryId: seeded.categoryId, brandId: seeded.brandId,
+      dosageForm: 'CAPSULE', packageQuantity: 30, usageInstructions: 'בדיקה',
+      price: '20.00', stockQuantity: 100,
+      descriptionHe: 'בדיקה', descriptionEn: 'test', warningsAllergens: '',
+      isActive: true,
+    },
+    update: { price: '20.00', stockQuantity: 100, isActive: true },
+    select: { id: true },
+  })
+
   await prisma.user.upsert({
     where: { email: EMAIL },
     create: {
@@ -166,7 +222,7 @@ beforeEach(async () => {
   const app = express()
   app.use(express.json())
   app.use(createSessionMiddleware())
-  app.use('/api/checkout', createCheckoutRouter({ prisma }))
+  app.use('/api/checkout', createCheckoutRouter({ prisma, emailService: mailbox }))
   app.use('/api', createAuthRouter({
     prisma,
     emailService: new NullEmailProvider(),
@@ -181,6 +237,9 @@ beforeEach(async () => {
 
   await setStock(100)
   await setPrice('100.00')
+  mailbox.sent.length = 0
+  mailbox.failNext = false
+  mailbox.gate = undefined
 })
 
 afterEach(async () => {
@@ -193,7 +252,7 @@ afterEach(async () => {
 afterAll(async () => {
   try {
     await wipe()
-    await prisma.product.deleteMany({ where: { slug: SLUG_A } })
+    await prisma.product.deleteMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } })
     await prisma.user.deleteMany({ where: { email: EMAIL } })
   } finally {
     await prisma.$disconnect()
@@ -343,11 +402,10 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
       where: { user: { email: EMAIL } },
       select: { status: true, shippingLine1: true, items: { select: { quantity: true } } },
     })
-    // ⚠️ STILL `pending_payment`. §8.9 makes `pending_payment -> paid` a SYSTEM
-    // transition, and Checkpoint D3 writes it with INV-04's email. Pinned so
-    // the gap is visible rather than discovered — and so D3 has a test that
-    // must change when it closes it.
-    expect(order.status).toBe('pending_payment')
+    // ✅ `paid` — Checkpoint D3 closed this. It was pinned as `pending_payment`
+    // on purpose so the missing transition could not be skipped quietly, and
+    // this line changing IS D3 landing.
+    expect(order.status).toBe('paid')
     expect(order.shippingLine1).toBe(ADDRESS.line1)
     expect(order.items).toEqual([{ quantity: 2 }])
   })
@@ -678,6 +736,318 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
       expect(line.lineId.length).toBeGreaterThan(0)
     }
     expect(await prisma.order.count({ where: { user: { email: EMAIL } } })).toBe(0)
+  })
+
+  it('🔴 §8.9 — the paid transition is recorded with a NULL actor, once', async () => {
+    // Null is not "unknown" here: the schema note and §8.9's table both say a
+    // SYSTEM transition has no human actor, and the simulated payment is one.
+    // Writing the shopper's id would claim they performed an action they did not.
+    const cookie = await signIn()
+    await cartWith(1)
+    const quote = await validate(cookie)
+    await post('/api/checkout/pay', {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-paid-history', simulatedOutcome: 'success',
+    }, cookie)
+
+    const order = await prisma.order.findFirstOrThrow({
+      where: { user: { email: EMAIL } },
+      select: { id: true, status: true },
+    })
+    expect(order.status).toBe('paid')
+
+    const history = await prisma.orderStatusHistory.findMany({
+      where: { orderId: order.id },
+      select: { status: true, changedByUserId: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    // 🔴 APPEND-ONLY (DEC-050): the creation row AND the payment row, in order.
+    expect(history.map((h) => h.status)).toEqual(['pending_payment', 'paid'])
+    // The shopper placed it; the SYSTEM paid it.
+    expect(history[0]?.changedByUserId).not.toBeNull()
+    expect(history[1]?.changedByUserId).toBeNull()
+  })
+
+  it('a RETRY leaves exactly one paid row', async () => {
+    // ⚠️ RENAMED AFTER MUTATION. This was called "the log is an audit trail" and
+    // credited `markOrderPaid`'s status guard — and it does NOT exercise that
+    // guard: the retry is answered at step 0 and never reaches the transition at
+    // all. Dropping the guard from the WHERE left this test green.
+    //
+    // The guard is proved directly in `checkoutService.integration.test.ts`
+    // ("markOrderPaid is idempotent"). What THIS test still proves end to end is
+    // worth keeping: a retried checkout does not produce a second paid row by
+    // any route.
+    const cookie = await signIn()
+    await cartWith(1)
+    const quote = await validate(cookie)
+    const payload = {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-paid-once', simulatedOutcome: 'success',
+    }
+    await post('/api/checkout/pay', payload, cookie)
+    await post('/api/checkout/pay', payload, cookie)
+
+    const order = await prisma.order.findFirstOrThrow({
+      where: { user: { email: EMAIL } }, select: { id: true },
+    })
+    const paidRows = await prisma.orderStatusHistory.count({
+      where: { orderId: order.id, status: 'paid' },
+    })
+    expect(paidRows).toBe(1)
+  })
+
+  it('🔴 INV-04 — the confirmation email is sent AFTER the commit, in Hebrew', async () => {
+    const cookie = await signIn()
+    await cartWith(2)
+    const quote = await validate(cookie)
+    const response = await post('/api/checkout/pay', {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-email', simulatedOutcome: 'success',
+    }, cookie)
+    const body = (await response.json()) as { orderNumber: string }
+
+    expect(mailbox.sent).toHaveLength(1)
+    const mail = mailbox.sent[0]!
+    expect(mail.to).toBe(EMAIL)
+    // 🔴 HEBREW ONLY — DEC-054 / A11-SERVER. There is no i18next on the server.
+    expect(mail.subject).toContain('הזמנה')
+    expect(mail.subject).toContain(body.orderNumber)
+    expect(mail.body).toContain(body.orderNumber)
+    // The delivery promise comes from `deliveryEstimate`'s VALUE, rendered here.
+    expect(mail.body).toContain('3–5 ימי עסקים')
+
+    // 🔴 A SUMMARY, NOT JUST A TOTAL. The first version listed the order number
+    // and the total alone, which gives the shopper a number and nothing to
+    // check it against. The line is INV-02's FROZEN name and unit price.
+    expect(mail.body).toContain('בדיקת מסלול — 2 × 100.00 ₪')
+    expect(mail.body).toContain('דמי משלוח: 30.00 ₪')
+    expect(mail.body).toContain('סכום לתשלום: 230.00 ₪')
+  })
+
+  it('🔴 the email survives the PAID TRANSITION throwing — still 201, order intact', async () => {
+    // ⚠️ `markOrderPaid` returning `{ok:false}` was handled; THROWING was not.
+    // It can throw — a connection reset, a P2028 timeout, a deadlock — and by
+    // then the order is committed, the stock decremented and the cart emptied,
+    // so an exception produced a 500 for an order that exists. That is the same
+    // lie the unreachable replay told, reached a third way.
+    const cookie = await signIn()
+    await cartWith(1)
+    const quote = await validate(cookie)
+
+    // A fresh app whose transition always throws.
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()))
+    })
+    const app = express()
+    app.use(express.json())
+    app.use(createSessionMiddleware())
+    app.use('/api/checkout', createCheckoutRouter({
+      prisma,
+      emailService: mailbox,
+      markPaid: async () => { throw new Error('simulated database blip') },
+    }))
+    app.use('/api', createAuthRouter({
+      prisma, emailService: new NullEmailProvider(),
+      appBaseUrl: 'http://127.0.0.1', rateLimiters: createAuthRateLimiters(),
+    }))
+    await new Promise<void>((resolve) => { server = app.listen(0, () => resolve()) })
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('no ephemeral port')
+    baseUrl = `http://127.0.0.1:${address.port}`
+    const cookie2 = await signIn()
+
+    const response = await post('/api/checkout/pay', {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-paid-throws', simulatedOutcome: 'success',
+    }, cookie2)
+
+    // 🔴 The shopper is told the truth: the order was placed.
+    expect(response.status).toBe(201)
+    expect(await prisma.order.count({ where: { user: { email: EMAIL } } })).toBe(1)
+    expect(await stockOf()).toBe(99)
+    // The status lags — a support problem, not a lost order. And the email
+    // still went, because the order is real.
+    const order = await prisma.order.findFirstOrThrow({
+      where: { user: { email: EMAIL } }, select: { status: true },
+    })
+    expect(order.status).toBe('pending_payment')
+    expect(mailbox.sent).toHaveLength(1)
+  })
+
+  it('🔴 a RETRY REPAIRS an order left at pending_payment', async () => {
+    // The order and the transition are two transactions, so a connection drop
+    // between them leaves an order committed and unpayable-forward: §8.9 allows
+    // only `paid` or `cancelled` from `pending_payment`, so not even an admin
+    // could push it to `processing`. The retry used to return before the
+    // transition and leave it stuck.
+    const cookie = await signIn()
+    await cartWith(1)
+    const quote = await validate(cookie)
+    await post('/api/checkout/pay', {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-repair', simulatedOutcome: 'success',
+    }, cookie)
+
+    // Simulate the drop: the order exists, the transition never ran.
+    const placed = await prisma.order.findFirstOrThrow({
+      where: { user: { email: EMAIL } }, select: { id: true },
+    })
+    await prisma.order.update({ where: { id: placed.id }, data: { status: 'pending_payment' } })
+    await prisma.orderStatusHistory.deleteMany({ where: { orderId: placed.id, status: 'paid' } })
+
+    const retry = await post('/api/checkout/pay', {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-repair', simulatedOutcome: 'success',
+    }, cookie)
+
+    expect(retry.status).toBe(200)
+    const repaired = await prisma.order.findUniqueOrThrow({
+      where: { id: placed.id }, select: { status: true },
+    })
+    expect(repaired.status).toBe('paid')
+    expect(
+      await prisma.orderStatusHistory.count({ where: { orderId: placed.id, status: 'paid' } }),
+    ).toBe(1)
+  })
+
+  it('a RETRY sends NO second confirmation email', async () => {
+    // ⚠️ WHAT THIS DOES AND DOES NOT PROVE. It proves the end-to-end promise:
+    // one order, one confirmation. It does NOT exercise the `order.replayed`
+    // guard added for the duplicate-email finding — the sequential retry is
+    // answered at step 0, which never sends, so removing that guard leaves this
+    // test green. Measured, not assumed.
+    //
+    // 🔴 That guard is on the SAME unreachable branch as `res.status(order
+    // .replayed ? 200 : 201)`: both need `createOrder` itself to answer a
+    // replay, which requires the concurrent loser to pass step 0 before the
+    // winner commits — and it never does here. Both are defensive rather than
+    // demonstrated. Do not read this green tick as proof of either.
+    const cookie = await signIn()
+    await cartWith(1)
+    const quote = await validate(cookie)
+    const payload = {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-no-second-mail', simulatedOutcome: 'success',
+    }
+    await post('/api/checkout/pay', payload, cookie)
+    expect(mailbox.sent).toHaveLength(1)
+
+    await post('/api/checkout/pay', payload, cookie)
+    expect(mailbox.sent).toHaveLength(1)
+  })
+
+  it('🔴 SELF PICKUP gets the collection sentence, not the delivery one', async () => {
+    // The two promises are different sentences, which is why the estimate has
+    // two shapes. A single range would have printed "0–2 ימי עסקים".
+    const cookie = await signIn()
+    await cartWith(1)
+    const quote = await validate(cookie, 'self_pickup')
+    await post('/api/checkout/pay', {
+      fingerprint: quote.fingerprint, deliveryMethod: 'self_pickup', address: null,
+      idempotencyKey: 'route-email-pickup', simulatedOutcome: 'success',
+    }, cookie)
+
+    expect(mailbox.sent[0]!.body).toContain('מוכנה לאיסוף עצמי תוך 2 ימי עסקים')
+  })
+
+  it('🔴 TEST-044c — the email FAILS and the order SURVIVES', async () => {
+    // INV-04's whole point. The send is outside every transaction and after the
+    // commit, so a mail outage cannot undo an order, a stock decrement or a
+    // status. Rethrowing here would turn a mail outage into a failed checkout
+    // for an order that is already placed and paid.
+    const cookie = await signIn()
+    await cartWith(2)
+    const quote = await validate(cookie)
+    mailbox.failNext = true
+
+    const response = await post('/api/checkout/pay', {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-mail-fails', simulatedOutcome: 'success',
+    }, cookie)
+
+    // 🔴 The shopper is told the truth: the order was placed.
+    expect(response.status).toBe(201)
+    expect(mailbox.sent).toHaveLength(0)
+
+    const order = await prisma.order.findFirstOrThrow({
+      where: { user: { email: EMAIL } }, select: { status: true },
+    })
+    expect(order.status).toBe('paid')
+    expect(await stockOf()).toBe(98)
+    // And the cart is still empty — the order transaction is untouched by this.
+    const lines = await prisma.cartItem.findMany({ where: { cart: { user: { email: EMAIL } } } })
+    expect(lines).toEqual([])
+  })
+
+  it('🔴 the RESPONSE does not wait on the email — a hung transport cannot fail a checkout', async () => {
+    // 🔴 THE LAST PATH THAT COULD STILL PRODUCE A PHANTOM FAILURE. The send used
+    // to sit BETWEEN the committed order and the response, so with a real SMTP
+    // transport a hung socket stalled POST /pay past the browser's timeout — and
+    // the shopper saw a failed checkout for an order that was committed, paid
+    // and had already emptied their cart.
+    //
+    // The gate holds the send open. If the response waited on it, this `await`
+    // would never resolve and the test would time out rather than fail.
+    const cookie = await signIn()
+    await cartWith(1)
+    const quote = await validate(cookie)
+
+    let release!: () => void
+    mailbox.gate = new Promise<void>((resolve) => { release = resolve })
+
+    const response = await post('/api/checkout/pay', {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-mail-slow', simulatedOutcome: 'success',
+    }, cookie)
+
+    // 🔴 The 201 arrived while the send is STILL BLOCKED.
+    expect(response.status).toBe(201)
+    expect(mailbox.sent).toHaveLength(0)
+
+    release()
+  })
+
+  it('🔴 the email lists its lines in a STABLE order', async () => {
+    // Postgres returns rows in whatever order it likes without an `orderBy`, so
+    // the same order could list its lines differently on two reads. This email
+    // exists to be CHECKED against a screen, and a summary whose lines move is
+    // one a shopper cannot check.
+    //
+    // ⚠️ TWO LINES ARE REQUIRED FOR THIS TO MEAN ANYTHING — with one, every
+    // ordering is identical. That is why the second fixture exists.
+    //
+    // 🔴 MEASURED, AND THE GUARD IS STILL NOT DEMONSTRATED: removing the
+    // `orderBy` leaves this test GREEN. The order transaction inserts its items
+    // in ascending productId, so the heap order already matches and a sequential
+    // scan returns them in the order the guard asks for. What the `orderBy`
+    // protects against is the day that stops being true — an UPDATE moving a row
+    // to the end of the heap, a vacuum, a different plan — none of which this
+    // fixture can produce. Correct and cheap; do not read this tick as proof.
+    const cookie = await signIn()
+    await cartWith(1)
+    await alsoCartWith(3)
+    const quote = await validate(cookie)
+    await post('/api/checkout/pay', {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-line-order', simulatedOutcome: 'success',
+    }, cookie)
+
+    expect(mailbox.sent).toHaveLength(1)
+    const body = mailbox.sent[0]!.body
+
+    // The order the transaction writes them in: ascending productId.
+    const order = await prisma.order.findFirstOrThrow({
+      where: { user: { email: EMAIL } },
+      select: { items: { orderBy: { productId: 'asc' }, select: { productNameHeAtPurchase: true } } },
+    })
+    const expected = order.items.map((item) => item.productNameHeAtPurchase)
+    expect(expected).toHaveLength(2)
+
+    const positions = expected.map((name) => body.indexOf(name))
+    expect(positions.every((p) => p >= 0)).toBe(true)
+    // 🔴 STRICTLY ASCENDING — the email's lines follow the same order.
+    expect(positions[1]!).toBeGreaterThan(positions[0]!)
   })
 
   it('🔴 TEST-043 — no card data is stored anywhere on the order', async () => {

@@ -1,9 +1,12 @@
 import { Router, type RequestHandler } from 'express'
 import type { PrismaClient } from '@prisma/client'
 import { quoteCheckout } from '../lib/checkoutService.js'
-import { deliveryEstimate } from '../lib/deliveryEstimate.js'
+import { deliveryEstimate, type DeliveryEstimate } from '../lib/deliveryEstimate.js'
 import { addressProblem, createOrder, findOrderByIdempotencyKey, idempotencyKeyProblem } from '../lib/orderService.js'
 import { createCheckoutRateLimiters, type CheckoutRateLimiters } from '../lib/rateLimit.js'
+import { markOrderPaid } from '../lib/orderPaid.js'
+import { emailStrings, deliveryPromiseHe } from '../lib/emailStrings.js'
+import type { EmailService } from '../lib/emailService.js'
 import type { DeliveryMethodName } from '../lib/shipping.js'
 
 /**
@@ -20,6 +23,19 @@ import type { DeliveryMethodName } from '../lib/shipping.js'
 
 export type CheckoutRouterDeps = {
   prisma: PrismaClient
+  /**
+   * 🔴 INV-04's transport, INJECTED — so a test can make the send FAIL and
+   * prove the order survives it (TEST-044c). A module-level import could not
+   * be made to fail without mocking the module, which proves less.
+   */
+  emailService: EmailService
+  /**
+   * 🔴 INJECTABLE FOR ONE REASON: so a test can make the paid transition THROW
+   * and prove the response is still 201. `markOrderPaid` returning `{ok:false}`
+   * was covered; throwing was not, and a thrown database error was the case
+   * that produced a 500 for an order that already existed.
+   */
+  markPaid?: typeof markOrderPaid
   /**
    * 🔴 INJECTABLE SO THE COVERAGE TEST CAN IDENTIFY THEM, not merely count
    * them. Same shape `createAuthRouter` already uses.
@@ -125,6 +141,22 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
     const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : ''
     const replay = await findOrderByIdempotencyKey(prisma, userId, idempotencyKey)
     if (replay) {
+      // 🔴 THE RETRY ALSO REPAIRS A TRANSITION THAT NEVER RAN. The order is
+      // created and marked paid in two separate transactions, so a connection
+      // drop between them leaves an order committed at `pending_payment` with
+      // nothing to move it — and §8.9 allows only `paid` or `cancelled` from
+      // there, so not even an admin can push it to `processing`.
+      // ⚠️ Safe to call unconditionally: `markOrderPaid` is idempotent and
+      // answers `moved: false` for an order that is already paid.
+      //
+      // 🔴 IT REPAIRS ONE CAUSE, NOT THE CONDITION — ISSUE-082. This only helps
+      // when a retry actually arrives, which means the DROPPED-RESPONSE case.
+      // When `settleAsPaid` swallows a real failure on the ordinary path the
+      // shopper receives a 201, so no retry is ever sent and the order is just
+      // as stuck. Closing that needs a reconciliation sweep, which is
+      // Checkpoint E's. Do not read this call as sealing the hole.
+      await settleAsPaid(deps, replay.orderId, replay.orderNumber)
+
       res.status(200).json({
         orderId: replay.orderId,
         orderNumber: replay.orderNumber,
@@ -305,29 +337,214 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
       return
     }
 
-    // ⚠️ THE ORDER IS `pending_payment`, NOT `paid`. §8.9 makes
-    // `pending_payment -> paid` a SYSTEM transition and Checkpoint D3 writes it
-    // together with INV-04's email. Stated here so the gap is visible rather
-    // than discovered: a simulated payment has succeeded and the order does not
-    // yet say so.
-    // 🔴 200 WHEN IT WAS A REPLAY, 201 ONLY FOR A NEW ORDER. `createOrder` can
-    // return `replayed: true` here — two `/pay` calls with one key racing, both
-    // passing step 0 before either committed, the loser answered by
-    // `orderService`'s own layer-one lookup. Reporting 201 for that told a
-    // client (or a conversion counter) that a SECOND order had been created,
-    // double-counting one order. The sequential retry already answers 200 for
-    // the identical semantic; these two must not disagree.
-    res.status(order.replayed ? 200 : 201).json({
+    // ── 5. THE PAID TRANSITION — §8.9's ONE SYSTEM MOVE ───────────────────
+    // 🔴 AFTER the order transaction, in its own. The simulated payment
+    // succeeded, so the order stops being `pending_payment`. The actor is NULL:
+    // no human moved it, which is exactly what the nullable column means.
+    //
+    // ⚠️ ITS FAILURE DOES NOT UNDO THE ORDER. The order is committed, the stock
+    // is decremented and the shopper has paid; refusing the response now would
+    // tell them checkout failed for an order that exists — the same lie the
+    // unreachable replay told. A status that lags is a support problem; a
+    // phantom failure is a lost order.
+    await settleAsPaid(deps, order.orderId, order.orderNumber)
+
+    // ── 6. INV-04 — THE EMAIL, AFTER THE COMMIT AND OUTSIDE EVERY TRANSACTION ─
+    // 🔴 THE INVARIANT IS THE ORDERING, AND THIS IS THE ONLY PLACE IT CAN HOLD.
+    // Every write above is committed before this line runs. A mail failure is
+    // LOGGED AND SWALLOWED — never rethrown, never rolled back — because INV-04
+    // says the order survives it, and TEST-044c is the test that proves it.
+    //
+    // ⚠️ HEBREW ONLY (DEC-054 / A11-SERVER). There is no i18next on the server
+    // and no `locale` column; `Accept-Language` was rejected precisely because
+    // this send happens outside the request that carried the header.
+    //
+    // 🔴 NOT ON A REPLAY. `createOrder` can answer `replayed: true` here when
+    // two `/pay` calls race, and sending again would put a SECOND confirmation
+    // for one order in the shopper's inbox. Step 0's replay path sends none;
+    // these two must agree.
+    // 🔴 THE SHORT-CIRCUIT IS OUTSIDE THE TRY, and that placement is not
+    // cosmetic. Inside it, a throw from `res.json` — a destroyed socket, a
+    // serialization error — was swallowed by the email's catch and execution
+    // fell through to the second `respondWithOrder` below: ERR_HTTP_HEADERS_SENT
+    // as an unhandled rejection instead of a clean failure. Control flow does
+    // not belong in a block whose catch is designed to swallow everything.
+    if (order.replayed) {
+      respondWithOrder(res, order, requote.quote.estimate)
+      return
+    }
+
+    // 🔴 THE RESPONSE GOES FIRST, AND THE EMAIL FOLLOWS IT.
+    //
+    // ⚠️ THIS WAS THE LAST PATH THAT COULD STILL PRODUCE A PHANTOM FAILURE, the
+    // fourth time that shape has appeared in this checkpoint. The send sat
+    // BETWEEN the committed order and the response. `emailService.ts` says
+    // moving to SMTP is "a swap of implementation plus an environment variable —
+    // no caller changes", and with SMTP a hung connection (Node's socket
+    // timeouts are minutes) stalls `POST /pay` past the browser's own timeout.
+    // The shopper sees a failed checkout for an order that is committed, paid
+    // and has already emptied their cart — and their retry is answered at step
+    // 0, which deliberately sends no email, so the confirmation never arrives
+    // either.
+    //
+    // Writing the response first makes the send's duration irrelevant to the
+    // shopper. It is still AWAITED so the handler's promise covers it — an
+    // unawaited send would surface a rejection with no request to attribute it
+    // to — and BOUNDED, so a hung transport cannot hold the handler open
+    // indefinitely.
+    respondWithOrder(res, order, requote.quote.estimate)
+    await sendConfirmation(deps, {
+      userId,
       orderId: order.orderId,
       orderNumber: order.orderNumber,
-      totalAmount: order.totalAmount,
       shippingCost: order.shippingCost,
-      replayed: order.replayed,
+      totalAmount: order.totalAmount,
       estimate: requote.quote.estimate,
     })
+
   })
 
   return router
+}
+
+/** How long a confirmation send may take before it is abandoned and logged. */
+const CONFIRMATION_SEND_TIMEOUT_MS = 10_000
+
+/**
+ * INV-04's send, AFTER the response has been written.
+ *
+ * 🔴 A MAIL FAILURE IS LOGGED AND SWALLOWED — never rethrown, never rolled
+ * back. The order is committed, paid and the cart emptied by the time this
+ * runs, and TEST-044c is the test that pins it.
+ *
+ * ⚠️ HEBREW ONLY (DEC-054 / A11-SERVER). There is no i18next on the server and
+ * no `locale` column; `Accept-Language` was rejected precisely because this send
+ * happens outside the request that carried the header.
+ *
+ * ⚠️ ONE QUERY, NOT TWO. The shopper's address and the order's frozen lines were
+ * fetched separately, which is two round trips for one email.
+ */
+async function sendConfirmation(
+  deps: CheckoutRouterDeps,
+  details: {
+    userId: string
+    orderId: string
+    orderNumber: string
+    shippingCost: string
+    totalAmount: string
+    estimate: DeliveryEstimate
+  },
+): Promise<void> {
+  try {
+    const placed = await deps.prisma.order.findUniqueOrThrow({
+      where: { id: details.orderId },
+      select: {
+        user: { select: { email: true } },
+        items: {
+          // 🔴 A STABLE ORDER. Postgres returns rows in whatever order it likes
+          // without one, so the same order could list its lines differently on
+          // two reads. This email exists to be CHECKED against a screen, and a
+          // summary whose lines move is one a shopper cannot check. The order
+          // transaction already writes them in ascending productId.
+          orderBy: { productId: 'asc' },
+          select: {
+            quantity: true,
+            unitPriceAtPurchase: true,
+            // 🔴 INV-02's FROZEN name and price, not the product row's. An
+            // email re-read next month must still say what was bought and
+            // charged, not what the catalogue says today.
+            productNameHeAtPurchase: true,
+          },
+        },
+      },
+    })
+
+    const mail = emailStrings.orderConfirmation({
+      orderNumber: details.orderNumber,
+      lines: placed.items.map((item) => ({
+        name: item.productNameHeAtPurchase,
+        quantity: item.quantity,
+        unitPrice: item.unitPriceAtPurchase.toFixed(2),
+      })),
+      shippingCost: details.shippingCost,
+      totalAmount: details.totalAmount,
+      deliveryPromise: deliveryPromiseHe(details.estimate),
+    })
+
+    // 🔴 BOUNDED. The response is already written, so a slow send costs the
+    // shopper nothing — but an unbounded one would hold this handler open for
+    // as long as a hung SMTP socket takes to notice, which is minutes.
+    let timer: NodeJS.Timeout | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`confirmation send exceeded ${CONFIRMATION_SEND_TIMEOUT_MS}ms`)),
+        CONFIRMATION_SEND_TIMEOUT_MS,
+      )
+    })
+    try {
+      await Promise.race([deps.emailService.send({ to: placed.user.email, ...mail }), timeout])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  } catch (error) {
+    console.error(`[checkout] confirmation email failed for ${details.orderNumber}`, error)
+  }
+}
+
+/**
+ * The success body, in ONE place — the replay short-circuit above and the
+ * ordinary exit both come here, so they cannot drift into different shapes.
+ *
+ * 🔴 200 WHEN IT WAS A REPLAY, 201 ONLY FOR A NEW ORDER. `createOrder` can
+ * answer `replayed: true` when two `/pay` calls with one key race, both passing
+ * step 0 before either committed, the loser answered by `orderService`'s own
+ * layer-one lookup. Reporting 201 for that told a client — or a conversion
+ * counter — that a SECOND order had been created, double-counting one order.
+ * The sequential retry already answers 200 for the identical semantic.
+ */
+function respondWithOrder(
+  res: Parameters<RequestHandler>[1],
+  order: Extract<Awaited<ReturnType<typeof createOrder>>, { ok: true }>,
+  estimate: DeliveryEstimate,
+): void {
+  res.status(order.replayed ? 200 : 201).json({
+    orderId: order.orderId,
+    orderNumber: order.orderNumber,
+    totalAmount: order.totalAmount,
+    shippingCost: order.shippingCost,
+    replayed: order.replayed,
+    estimate,
+  })
+}
+
+/**
+ * 🔴 THE PAID TRANSITION, AND IT CAN NEVER FAIL THE REQUEST.
+ *
+ * ⚠️ `markOrderPaid` RETURNING `{ok:false}` WAS HANDLED AND THROWING WAS NOT —
+ * and it can throw: a connection reset, a P2028 transaction timeout, a
+ * deadlock. The order is committed, the stock decremented and the cart emptied
+ * by the time this runs, so an exception here produced a 500 for an order that
+ * exists. That is the same lie the unreachable replay told, and the third time
+ * this shape has appeared in this checkpoint: a route that creates state in
+ * steps needs ONE answer for "a later step failed", not one per step.
+ *
+ * A status that lags is a support problem. A phantom failure is a lost order.
+ */
+async function settleAsPaid(
+  deps: CheckoutRouterDeps,
+  orderId: string,
+  orderNumber: string,
+): Promise<void> {
+  try {
+    const paid = await (deps.markPaid ?? markOrderPaid)(deps.prisma, orderId)
+    if (!paid.ok) {
+      console.error(
+        `[checkout] order ${orderNumber} could not move to paid: ${paid.reason} (${paid.status})`,
+      )
+    }
+  } catch (error) {
+    console.error(`[checkout] the paid transition threw for order ${orderNumber}`, error)
+  }
 }
 
 /**
