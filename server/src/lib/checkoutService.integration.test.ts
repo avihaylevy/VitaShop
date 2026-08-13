@@ -4,7 +4,6 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { quoteCheckout } from './checkoutService.js'
 import { createOrder } from './orderService.js'
-import { markOrderPaid } from './orderPaid.js'
 import { checkoutFingerprint } from './checkoutFingerprint.js'
 import { TEST_FIXTURE_SLUG_PREFIX } from './testFixturePrefix.js'
 
@@ -397,51 +396,11 @@ describe('🔴 DEC-060 — the fingerprint describes THESE figures and no others
     expect(order.ok).toBe(true)
   })
 
-  it('🔴 markOrderPaid is IDEMPOTENT — a second call appends no second row', async () => {
-    // 🔴 TESTED HERE BECAUSE THE ROUTE CANNOT REACH IT TWICE. `/pay`'s retry is
-    // answered at step 0 and never calls the transition, so the end-to-end test
-    // stayed green with the status guard deleted — mutation is what showed that.
-    // The guard's real job is concurrency and any future caller, and only a
-    // direct call can put it under the case it exists for.
-    await cartWith(SLUG_A, 1)
-    const order = await createOrder(prisma, {
-      userId, idempotencyKey: 'paid-idem', deliveryMethod: 'courier', address: ADDRESS,
-    })
-    expect(order.ok).toBe(true)
-    if (!order.ok) return
-
-    expect(await markOrderPaid(prisma, order.orderId)).toEqual({ ok: true, moved: true })
-    // 🔴 The second call MOVES NOTHING and is NOT an error. Answering an error
-    // would turn a correct replay into a failed checkout.
-    expect(await markOrderPaid(prisma, order.orderId)).toEqual({ ok: true, moved: false })
-
-    const paidRows = await prisma.orderStatusHistory.count({
-      where: { orderId: order.orderId, status: 'paid' },
-    })
-    // DEC-050's log is append-only and is the audit trail. Two rows would claim
-    // the order was paid twice.
-    expect(paidRows).toBe(1)
-  })
-
-  it('markOrderPaid refuses an order that is somewhere else entirely', async () => {
-    // ⚠️ THE CONTROL. A function that answered `moved: false` for everything
-    // would satisfy the idempotency test above and silently skip real
-    // transitions. It must distinguish "already paid" from "not mine to touch".
-    await cartWith(SLUG_A, 1)
-    const order = await createOrder(prisma, {
-      userId, idempotencyKey: 'paid-wrong-status', deliveryMethod: 'courier', address: ADDRESS,
-    })
-    expect(order.ok).toBe(true)
-    if (!order.ok) return
-
-    await prisma.order.update({ where: { id: order.orderId }, data: { status: 'shipped' } })
-    expect(await markOrderPaid(prisma, order.orderId)).toEqual({
-      ok: false, reason: 'UNEXPECTED_STATUS', status: 'shipped',
-    })
-    expect(
-      await prisma.orderStatusHistory.count({ where: { orderId: order.orderId, status: 'paid' } }),
-    ).toBe(0)
-  })
+  // 🔴 THE TWO `markOrderPaid` TESTS THAT LIVED HERE MOVED, WITH THE CODE.
+  // Checkpoint E2 replaced `lib/orderPaid.ts` with `applyTransition`, which
+  // reads §8.9's table — so the idempotency guard and the wrong-status control
+  // are now in `orderTransitionService.integration.test.ts`, alongside the
+  // mid-flight race test that D3's version had no way to reach.
 
   it('🔴 the fingerprint is REPRODUCIBLE from the quote it describes', async () => {
     // ⚠️ THE CONTROL THAT MAKES THE OTHERS MEAN SOMETHING. Every test above

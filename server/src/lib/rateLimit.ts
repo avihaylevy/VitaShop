@@ -271,6 +271,31 @@ function shopperKey(req: Request, _res: Response): string {
  * shopper who re-quotes a few times exhaust the budget they need to actually
  * pay, and the mount site would look correct either way.
  */
+/**
+ * DEC-061 extended at Checkpoint E3 — the shopper's own order actions.
+ *
+ * 🔴 LIMITED BECAUSE "EVERY ROUTE IS LIMITED" IS A PROPERTY THAT CAN BE
+ * CHECKED, and "every route except the ones judged cheap" is not — this
+ * module's header records that reasoning, and §8.4 records the cart routes
+ * shipping with no limiter at all as the cost of not applying it.
+ *
+ * ⚠️ `login`'s ceiling, and cancelling is the same shape as paying: an
+ * infrequent, authenticated write that restores stock. A shopper cancels once.
+ */
+export const ORDER_RATE_LIMITS = {
+  cancel: { windowMs: 15 * MINUTE, limit: 10 },
+} as const
+
+export interface OrderRateLimiters {
+  cancel: RequestHandler
+}
+
+export function createOrderRateLimiters(): OrderRateLimiters {
+  return {
+    cancel: rateLimit({ ...SHARED, ...ORDER_RATE_LIMITS.cancel, keyGenerator: shopperKey }),
+  }
+}
+
 export function createCheckoutRateLimiters(): CheckoutRateLimiters {
   return {
     validate: rateLimit({ ...SHARED, ...CHECKOUT_RATE_LIMITS.validate, keyGenerator: shopperKey }),

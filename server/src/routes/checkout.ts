@@ -4,10 +4,11 @@ import { quoteCheckout } from '../lib/checkoutService.js'
 import { deliveryEstimate, type DeliveryEstimate } from '../lib/deliveryEstimate.js'
 import { addressProblem, createOrder, findOrderByIdempotencyKey, idempotencyKeyProblem } from '../lib/orderService.js'
 import { createCheckoutRateLimiters, type CheckoutRateLimiters } from '../lib/rateLimit.js'
-import { markOrderPaid } from '../lib/orderPaid.js'
+import { applyTransition, type ApplyTransitionResult } from '../lib/orderTransitionService.js'
 import { emailStrings, deliveryPromiseHe } from '../lib/emailStrings.js'
 import type { EmailService } from '../lib/emailService.js'
 import type { DeliveryMethodName } from '../lib/shipping.js'
+import { requireShopper } from './requireShopper.js'
 
 /**
  * MILESTONE-008 Checkpoint D2 — `POST /api/checkout/validate` and
@@ -31,11 +32,11 @@ export type CheckoutRouterDeps = {
   emailService: EmailService
   /**
    * 🔴 INJECTABLE FOR ONE REASON: so a test can make the paid transition THROW
-   * and prove the response is still 201. `markOrderPaid` returning `{ok:false}`
-   * was covered; throwing was not, and a thrown database error was the case
-   * that produced a 500 for an order that already existed.
+   * and prove the response is still 201. A `{ok:false}` answer was covered;
+   * throwing was not, and a thrown database error was the case that produced a
+   * 500 for an order that already existed.
    */
-  markPaid?: typeof markOrderPaid
+  markPaid?: (prisma: PrismaClient, orderId: string) => Promise<ApplyTransitionResult>
   /**
    * 🔴 INJECTABLE SO THE COVERAGE TEST CAN IDENTIFY THEM, not merely count
    * them. Same shape `createAuthRouter` already uses.
@@ -47,26 +48,6 @@ export type CheckoutRouterDeps = {
    * first, which is the thing that actually matters.
    */
   rateLimiters?: CheckoutRateLimiters
-}
-
-/**
- * 🔴 THE LIMITER RUNS BEFORE THE AUTH GUARD, and the order is deliberate.
- * Guarding first would leave an unauthenticated flood hitting the session store
- * with no ceiling at all — 401s are cheap only until there are enough of them.
- * See `shopperKey`: anonymous requests bucket by IP, authenticated ones by the
- * shopper.
- */
-const requireShopper: RequestHandler = (req, res, next) => {
-  const userId = req.session?.userId
-  if (typeof userId !== 'string' || userId === '') {
-    // ⚠️ The same shape every other refusal in this project uses, and it says
-    // nothing about carts, orders or whether any exist.
-    res.status(401).json({
-      error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in to continue to checkout.' },
-    })
-    return
-  }
-  next()
 }
 
 /** Reads the delivery method without trusting it — the service checks it. */
@@ -141,21 +122,42 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
     const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : ''
     const replay = await findOrderByIdempotencyKey(prisma, userId, idempotencyKey)
     if (replay) {
-      // 🔴 THE RETRY ALSO REPAIRS A TRANSITION THAT NEVER RAN. The order is
-      // created and marked paid in two separate transactions, so a connection
-      // drop between them leaves an order committed at `pending_payment` with
-      // nothing to move it — and §8.9 allows only `paid` or `cancelled` from
-      // there, so not even an admin can push it to `processing`.
-      // ⚠️ Safe to call unconditionally: `markOrderPaid` is idempotent and
-      // answers `moved: false` for an order that is already paid.
-      //
-      // 🔴 IT REPAIRS ONE CAUSE, NOT THE CONDITION — ISSUE-082. This only helps
-      // when a retry actually arrives, which means the DROPPED-RESPONSE case.
-      // When `settleAsPaid` swallows a real failure on the ordinary path the
-      // shopper receives a 201, so no retry is ever sent and the order is just
-      // as stuck. Closing that needs a reconciliation sweep, which is
-      // Checkpoint E's. Do not read this call as sealing the hole.
-      await settleAsPaid(deps, replay.orderId, replay.orderNumber)
+      // 🔴 A REPLAY IS NOT ALWAYS A CONFIRMATION, and Checkpoint E3 is what made
+      // that reachable. The shopper pays with key K, CANCELS the order, then
+      // their client retries /pay with K — a double submit, an offline retry, a
+      // back button. The order is found, and answering with the ordinary
+      // confirmation payload presents an order that is cancelled and whose
+      // stock has already gone back as though it were live. Before a shopper
+      // could cancel, this shape did not exist.
+      if (replay.status === 'cancelled') {
+        res.status(409).json({
+          error: {
+            code: 'ORDER_CANCELLED',
+            message: 'This order was cancelled. Start a new checkout to order again.',
+          },
+          orderNumber: replay.orderNumber,
+        })
+        return
+      }
+
+      // 🔴 THE REPAIR ONLY APPLIES TO AN ORDER STILL AWAITING IT. Calling it for
+      // an order already `paid`, `shipped` or `delivered` is a no-op that logs a
+      // TERMINAL refusal as if something were wrong — noise that would train a
+      // reader to ignore the one line that matters.
+      if (replay.status === 'pending_payment') {
+        // The order and the transition are two transactions, so a connection
+        // drop between them leaves an order committed at `pending_payment` with
+        // nothing to move it — §8.9 allows only `paid` or `cancelled` from
+        // there, so not even an admin can push it to `processing`.
+        // ⚠️ Safe to call: the transition is idempotent.
+        //
+        // 🔴 IT REPAIRS ONE CAUSE, NOT THE CONDITION — ISSUE-082. This only
+        // helps when a retry actually arrives. When `settleAsPaid` swallows a
+        // real failure the shopper receives a 201, so no retry is ever sent and
+        // the order is just as stuck. Closing that needs the reconciliation
+        // sweep, which is `lib/orderReconciliation.ts`.
+        await settleAsPaid(deps, replay.orderId, replay.orderNumber)
+      }
 
       res.status(200).json({
         orderId: replay.orderId,
@@ -163,12 +165,12 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
         totalAmount: replay.totalAmount,
         shippingCost: replay.shippingCost,
         replayed: true,
+        // 🔴 REPORTED, so a client can tell a live order from one that moved on.
+        // Its absence is what let a cancelled order render as a confirmation.
+        status: replay.status,
         // 🔴 FROM THE STORED ORDER, not from a quote. This path deliberately
         // never re-quotes — the cart is empty once an order exists — so the
-        // estimate has to come from the method the order FROZE. It was omitted
-        // entirely at first, which rendered the confirmation screen's delivery
-        // promise from `undefined` for every shopper whose first response was
-        // dropped.
+        // estimate has to come from the method the order FROZE.
         estimate: deliveryEstimate(replay.deliveryMethod),
       })
       return
@@ -520,27 +522,35 @@ function respondWithOrder(
 /**
  * 🔴 THE PAID TRANSITION, AND IT CAN NEVER FAIL THE REQUEST.
  *
- * ⚠️ `markOrderPaid` RETURNING `{ok:false}` WAS HANDLED AND THROWING WAS NOT —
- * and it can throw: a connection reset, a P2028 transaction timeout, a
- * deadlock. The order is committed, the stock decremented and the cart emptied
- * by the time this runs, so an exception here produced a 500 for an order that
- * exists. That is the same lie the unreachable replay told, and the third time
- * this shape has appeared in this checkpoint: a route that creates state in
- * steps needs ONE answer for "a later step failed", not one per step.
+ * ⚠️ A `{ok:false}` ANSWER WAS HANDLED AND A THROW WAS NOT — and it can throw:
+ * a connection reset, a P2028 transaction timeout, a deadlock. The order is
+ * committed, the stock decremented and the cart emptied by the time this runs,
+ * so an exception here produced a 500 for an order that exists. That is the
+ * same lie the unreachable replay told, and the third of four times that shape
+ * appeared in Checkpoint D: a route that creates state in steps needs ONE
+ * answer for "a later step failed", not one per step.
  *
  * A status that lags is a support problem. A phantom failure is a lost order.
+ *
+ * 🔴 IT GOES THROUGH §8.9's TABLE NOW. Checkpoint D3 called a one-transition
+ * module of its own (`lib/orderPaid.ts`), written narrow so E2 could absorb it
+ * by DELETION rather than leave two implementations to agree. `system` is the
+ * actor, which §8.9 permits for exactly this move and no other, and the history
+ * row's null actor means "no human moved this".
  */
 async function settleAsPaid(
   deps: CheckoutRouterDeps,
   orderId: string,
   orderNumber: string,
 ): Promise<void> {
+  const markPaid =
+    deps.markPaid ??
+    ((prisma: PrismaClient, id: string) =>
+      applyTransition(prisma, { orderId: id, to: 'paid', actor: 'system' }))
   try {
-    const paid = await (deps.markPaid ?? markOrderPaid)(deps.prisma, orderId)
+    const paid = await markPaid(deps.prisma, orderId)
     if (!paid.ok) {
-      console.error(
-        `[checkout] order ${orderNumber} could not move to paid: ${paid.reason} (${paid.status})`,
-      )
+      console.error(`[checkout] order ${orderNumber} could not move to paid: ${paid.reason}`)
     }
   } catch (error) {
     console.error(`[checkout] the paid transition threw for order ${orderNumber}`, error)

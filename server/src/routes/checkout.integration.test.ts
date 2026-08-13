@@ -650,6 +650,55 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
     expect(await stockOf()).toBe(98)
   })
 
+  it('🔴 a retry AFTER THE ORDER WAS CANCELLED does not render a confirmation', async () => {
+    // 🔴 A STATE CHECKPOINT E3 MADE REACHABLE. Before a shopper could cancel,
+    // an order found by its key was always live. Now: pay with key K, cancel,
+    // then the client retries /pay with K — a double submit, an offline retry, a
+    // back button. The order is found, and the ordinary replay payload would
+    // present an order that is CANCELLED, whose stock has already gone back, as
+    // an order confirmation. The response carried no status, so nothing in it
+    // let the client tell.
+    const cookie = await signIn()
+    await cartWith(2)
+    const quote = await validate(cookie)
+    const payload = {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-cancelled-replay', simulatedOutcome: 'success',
+    }
+    const placed = await post('/api/checkout/pay', payload, cookie)
+    expect(placed.status).toBe(201)
+    const order = await prisma.order.findFirstOrThrow({
+      where: { user: { email: EMAIL } }, select: { id: true },
+    })
+
+    // The shopper cancels it — the stock goes back.
+    await prisma.order.update({ where: { id: order.id }, data: { status: 'cancelled' } })
+
+    const retry = await post('/api/checkout/pay', payload, cookie)
+
+    expect(retry.status).toBe(409)
+    const body = (await retry.json()) as { error: { code: string } }
+    expect(body.error.code).toBe('ORDER_CANCELLED')
+  })
+
+  it('a LIVE replay reports its status, so a client can tell the two apart', async () => {
+    // ⚠️ THE CONTROL on the test above: refusing every replay would satisfy it
+    // and break the ordinary retry, which is the case the replay exists for.
+    const cookie = await signIn()
+    await cartWith(1)
+    const quote = await validate(cookie)
+    const payload = {
+      fingerprint: quote.fingerprint, deliveryMethod: 'courier', address: ADDRESS,
+      idempotencyKey: 'route-live-replay', simulatedOutcome: 'success',
+    }
+    await post('/api/checkout/pay', payload, cookie)
+
+    const retry = await post('/api/checkout/pay', payload, cookie)
+
+    expect(retry.status).toBe(200)
+    expect(await retry.json()).toMatchObject({ replayed: true, status: 'paid' })
+  })
+
   it('🔴 the replay carries the delivery ESTIMATE, from the order’s frozen method', async () => {
     // It was omitted, so a shopper whose first response was dropped retried,
     // got 200, and the confirmation screen rendered the delivery promise from
@@ -774,8 +823,9 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
     // guard: the retry is answered at step 0 and never reaches the transition at
     // all. Dropping the guard from the WHERE left this test green.
     //
-    // The guard is proved directly in `checkoutService.integration.test.ts`
-    // ("markOrderPaid is idempotent"). What THIS test still proves end to end is
+    // The guard is proved directly in `orderTransitionService.integration.test.ts`
+    // ("markOrderPaid is IDEMPOTENT" moved there with the code when Checkpoint E2
+    // replaced `lib/orderPaid.ts` with `applyTransition`). What THIS test proves is
     // worth keeping: a retried checkout does not produce a second paid row by
     // any route.
     const cookie = await signIn()

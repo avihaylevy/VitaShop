@@ -4,6 +4,7 @@ import { availableToBuy, unpurchasableReason, type UnpurchasableReason } from '.
 import { generateOrderNumber } from './orderNumber.js'
 import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 import { checkoutFingerprint } from './checkoutFingerprint.js'
+import type { OrderStatusName } from './orderTransitions.js'
 
 /**
  * MILESTONE-008 Checkpoint C — order creation. §8, DEC-059.
@@ -210,6 +211,12 @@ export async function findOrderByIdempotencyKey(
       // order itself recorded. Omitting it rendered the confirmation screen's
       // delivery promise from `undefined` on every retried checkout.
       deliveryMethod: true,
+      // 🔴 THE STATUS, because a replay is not always a confirmation. Once a
+      // shopper can CANCEL (Checkpoint E3), an order found by its key may be
+      // cancelled — and answering a retry with an order confirmation for an
+      // order that no longer exists, whose stock has already gone back, is a
+      // lie the caller cannot detect without this field.
+      status: true,
     },
   })
   if (!existing) return null
@@ -219,6 +226,7 @@ export async function findOrderByIdempotencyKey(
     totalAmount: existing.totalAmount.toFixed(2),
     shippingCost: existing.shippingCost.toFixed(2),
     deliveryMethod: existing.deliveryMethod as DeliveryMethodName,
+    status: existing.status as OrderStatusName,
   }
 }
 
@@ -233,6 +241,8 @@ export type ExistingOrder = {
   totalAmount: string
   shippingCost: string
   deliveryMethod: DeliveryMethodName
+  /** 🔴 So a replay can tell a live order from a cancelled one. */
+  status: OrderStatusName
 }
 
 /**

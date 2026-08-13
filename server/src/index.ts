@@ -10,6 +10,7 @@ import { createAuthRouter } from './routes/auth.js'
 import { catalogRouter } from './routes/catalog.js'
 import { cartRouter } from './routes/cart.js'
 import { createCheckoutRouter } from './routes/checkout.js'
+import { createOrderRouter } from './routes/orders.js'
 
 export const app = express()
 
@@ -67,6 +68,12 @@ app.use('/api/cart', cartRouter)
 // authenticated-only (§8.2) and their limiters key on the shopper (DEC-061),
 // so `req.session` must already be populated when they run.
 app.use('/api/checkout', createCheckoutRouter({ prisma, emailService: new ConsoleEmailProvider() }))
+
+// MILESTONE-008 Checkpoint E3 — POST /api/orders/:id/cancel.
+// 🔴 Shopper-only. §8.9's four ADMIN transitions are enforced at the service
+// but have no route, because this server has no admin authorization yet — see
+// routes/orders.ts and the issue it names.
+app.use('/api/orders', createOrderRouter({ prisma }))
 
 // A2 — compute the constant dummy hash once at startup, so the first
 // unknown-email login is not measurably slower than every later one.
