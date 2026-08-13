@@ -3,6 +3,7 @@ import { DELIVERY_METHODS, computeShipping, toAgorot, type DeliveryMethodName } 
 import { availableToBuy, unpurchasableReason, type UnpurchasableReason } from './purchasability.js'
 import { generateOrderNumber } from './orderNumber.js'
 import { isUniqueViolationOn } from './prismaUniqueViolation.js'
+import { checkoutFingerprint } from './checkoutFingerprint.js'
 
 /**
  * MILESTONE-008 Checkpoint C — order creation. §8, DEC-059.
@@ -43,6 +44,34 @@ export type CreateOrderInput = {
   deliveryMethod: DeliveryMethodName
   /** 🔴 Required for courier and pickup point, forbidden for self pickup. */
   address: { line1: string; city: string; zipCode?: string | null } | null
+  /**
+   * 🔴 DEC-060's gate, CLOSED INSIDE THE TRANSACTION — optional, and supplying
+   * it is what makes the guarantee real.
+   *
+   * ⚠️ `/checkout/pay` compares a fingerprint BEFORE calling this function, and
+   * that comparison is advisory on its own: `quoteCheckout` is a lock-free read,
+   * this transaction takes its own locks later, and a price change or a cart
+   * edit landing in between produces an order at figures the shopper never
+   * confirmed. `checkoutFingerprint.ts`'s header claims *you cannot pay for a
+   * state that is not the current one* — that claim was FALSE for the window
+   * between the two, and this parameter is what makes it true.
+   *
+   * When supplied, the digest is recomputed from the LOCKED rows and compared;
+   * a mismatch reports CHECKOUT_CHANGED.
+   *
+   * 🔴 IT RETURNS BEFORE ANY WRITE — it does NOT roll a transaction back, and
+   * the distinction matters to whoever moves code next. Returning from the
+   * `$transaction` callback COMMITS; the gate is safe only because it sits
+   * above the first write, so there is nothing to undo. ⚠️ Move a write above
+   * it, or move the gate below one, and this stops being true silently — a
+   * committed partial order with no error anywhere. If that ever happens the
+   * gate must THROW, like `InsufficientStockError`, and be translated in the
+   * catch.
+   *
+   * Omitted, nothing changes — the service keeps working for callers that never
+   * quoted (its own tests, and any future internal caller).
+   */
+  expectedFingerprint?: string
 }
 
 export type CreateOrderResult =
@@ -66,6 +95,12 @@ export type CreateOrderResult =
   /** 🔴 Names the line, like UNPURCHASABLE_LINE does — see the catch. */
   | { ok: false; reason: 'INSUFFICIENT_STOCK'; slug: string }
   | { ok: false; reason: 'UNPURCHASABLE_LINE'; lines: UnpurchasableLine[] }
+  /**
+   * 🔴 The figures moved between the shopper's confirmation and this
+   * transaction. Only possible when `expectedFingerprint` was supplied — see it.
+   * The order is rolled back and the shopper re-confirms.
+   */
+  | { ok: false; reason: 'CHECKOUT_CHANGED' }
 
 /** Shapes a cart line for the shared rule. See `lib/purchasability.ts`. */
 function asPurchasabilityInput(line: {
@@ -141,9 +176,108 @@ async function readExisting(
   }
 }
 
+/**
+ * 🔴 THE REPLAY LOOKUP, EXPOSED — because the CHECKOUT ROUTE must ask it BEFORE
+ * it re-quotes, and could not.
+ *
+ * ⚠️ THE DEFECT THIS CLOSES, and it made every idempotency guarantee below
+ * unreachable from the outside. `/checkout/pay` re-quotes first, and a
+ * successful order EMPTIES THE CART inside this module's transaction. So a
+ * client retrying a dropped response with the same key hit `quoteCheckout`,
+ * found an empty cart, and was answered EMPTY_CART — "this order cannot be
+ * placed" — while the order existed, with the order number nowhere in the
+ * reply. `readExisting` never ran. Thirty tests covered the replay at this
+ * layer and none of them crossed the wire.
+ *
+ * 🔴 A RETRY IS ANSWERED BEFORE ANYTHING ELSE IS EVALUATED. The cart, the
+ * prices and the stock are all irrelevant to "did my order go through" — the
+ * order either exists or it does not.
+ */
+export async function findOrderByIdempotencyKey(
+  prisma: PrismaClient,
+  userId: string,
+  idempotencyKey: string,
+): Promise<ExistingOrder | null> {
+  const key = typeof idempotencyKey === 'string' ? idempotencyKey.trim() : ''
+  if (key === '') return null
+  const existing = await prisma.order.findUnique({
+    where: { userId_idempotencyKey: { userId, idempotencyKey: key } },
+    select: {
+      id: true, orderNumber: true, totalAmount: true, shippingCost: true,
+      // 🔴 THE FROZEN METHOD, and the replay needs it. A retry must be answered
+      // WITHOUT re-quoting — the cart is empty by then — so the delivery
+      // estimate cannot come from a quote and has to be derived from what the
+      // order itself recorded. Omitting it rendered the confirmation screen's
+      // delivery promise from `undefined` on every retried checkout.
+      deliveryMethod: true,
+    },
+  })
+  if (!existing) return null
+  return {
+    orderId: existing.id,
+    orderNumber: existing.orderNumber,
+    totalAmount: existing.totalAmount.toFixed(2),
+    shippingCost: existing.shippingCost.toFixed(2),
+    deliveryMethod: existing.deliveryMethod as DeliveryMethodName,
+  }
+}
+
+/**
+ * ⚠️ ITS OWN TYPE, not `CreateOrderResult`. The replay needs `deliveryMethod`
+ * and `CreateOrderResult` does not carry it; widening that union would change
+ * the shape every existing caller and test asserts against, to serve one path.
+ */
+export type ExistingOrder = {
+  orderId: string
+  orderNumber: string
+  totalAmount: string
+  shippingCost: string
+  deliveryMethod: DeliveryMethodName
+}
+
+/**
+ * 🔴 EXPORTED FOR THE SAME REASON `addressProblem` IS — the checkout route must
+ * refuse a blank key BEFORE it accepts a payment.
+ *
+ * ⚠️ It was checked only inside `createOrder`, which runs after the simulated
+ * payment: a shopper on a browser with no `crypto.randomUUID` (an insecure
+ * origin — the trigger this module's own header names) was told the payment
+ * went through and then that "the order could not be placed". Exactly the
+ * defect the address check was moved forward to fix, in the same handler.
+ */
+export function idempotencyKeyProblem(key: unknown): 'INVALID_IDEMPOTENCY_KEY' | null {
+  return usableIdempotencyKey(key as string) ? null : 'INVALID_IDEMPOTENCY_KEY'
+}
+
 /** True when the address is present AND actually says something. */
 function usableAddress(address: CreateOrderInput['address']): boolean {
   return Boolean(address && address.line1.trim() && address.city.trim())
+}
+
+/**
+ * 🔴 THE ADDRESS RULE, AS ONE EXPORTED FUNCTION — and it is exported because
+ * the CHECKOUT ROUTE needs the same answer BEFORE it simulates a payment.
+ *
+ * ⚠️ It was enforced here only, deep inside the transaction, which put it AFTER
+ * `/checkout/pay` had already accepted the payment: a courier order with a blank
+ * `line1` was told "the order could not be placed" once the shopper believed
+ * they had paid. The route must be able to ask the question first, and it must
+ * ask THIS function rather than re-deriving `line1 && city` — the second copy is
+ * the drift `purchasability.ts` exists to prevent.
+ *
+ * `null` when the address suits the method.
+ */
+export function addressProblem(
+  deliveryMethod: DeliveryMethodName,
+  address: CreateOrderInput['address'],
+): 'ADDRESS_REQUIRED' | 'ADDRESS_NOT_ALLOWED' | null {
+  // ⚠️ `usableAddress` on BOTH sides, not truthiness on one — see the callers'
+  // notes. `{ line1: '', city: '' }` is an object, and a presence check would
+  // both accept it for courier and reject it for pickup.
+  if (deliveryMethod === 'self_pickup') {
+    return usableAddress(address) ? 'ADDRESS_NOT_ALLOWED' : null
+  }
+  return usableAddress(address) ? null : 'ADDRESS_REQUIRED'
 }
 
 /**
@@ -449,17 +583,10 @@ async function attemptCreateOrder(
       // fail.
       if (!cart || cart.items.length === 0) return { ok: false as const, reason: 'EMPTY_CART' as const }
 
-      // ⚠️ `usableAddress` on BOTH sides, not truthiness on one. A checkout form
-      // that keeps `{ line1: '', city: '' }` in state and switches to self
-      // pickup would otherwise be told ADDRESS_NOT_ALLOWED for an object
-      // containing no address — refusing an order over a blank the shopper
-      // cannot see.
-      if (deliveryMethod === 'self_pickup' && usableAddress(address)) {
-        return { ok: false as const, reason: 'ADDRESS_NOT_ALLOWED' as const }
-      }
-      if (deliveryMethod !== 'self_pickup' && !usableAddress(address)) {
-        return { ok: false as const, reason: 'ADDRESS_REQUIRED' as const }
-      }
+      // 🔴 THE SHARED RULE, not a second copy — `/checkout/pay` asks the same
+      // function before it simulates a payment, so the two cannot disagree.
+      const addressFault = addressProblem(deliveryMethod, address)
+      if (addressFault) return { ok: false as const, reason: addressFault }
 
       const blocked = cart.items
         .map((line) => {
@@ -489,6 +616,39 @@ async function attemptCreateOrder(
       const shipping = computeShipping(subtotalAgorot, true, deliveryMethod)
       const shippingAgorot = toAgorot(shipping.cost)
       const totalAgorot = subtotalAgorot + shippingAgorot
+
+      // ── DEC-060's GATE, CLOSED WHERE IT CAN ACTUALLY HOLD ──────────────────
+      // 🔴 THE ROUTE'S COMPARISON IS ADVISORY; THIS ONE IS NOT. `/checkout/pay`
+      // compares a fingerprint against a LOCK-FREE quote, then calls this
+      // function, which takes its own locks afterwards. Everything in between —
+      // an admin editing a price, another tab editing the cart — lands in a
+      // window the route cannot see, and the shopper is charged figures they
+      // never confirmed.
+      //
+      // Recomputed here from the LOCKED rows, so there is no window left: these
+      // lines cannot move until this transaction ends.
+      //
+      // ⚠️ Only when the caller supplied one. `createOrder` is still usable
+      // without a quote — its own tests place orders directly — and inventing a
+      // fingerprint for callers that never confirmed anything would refuse them
+      // for failing a check they never took.
+      if (input.expectedFingerprint !== undefined) {
+        const actual = checkoutFingerprint({
+          userId,
+          deliveryMethod,
+          shippingCost: shipping.cost,
+          totalAmount: (totalAgorot / 100).toFixed(2),
+          lines: cart.items.map((line) => ({
+            lineId: line.id,
+            productId: line.product.id,
+            quantity: line.quantity,
+            unitPrice: line.product.price.toFixed(2),
+          })),
+        })
+        if (actual !== input.expectedFingerprint) {
+          return { ok: false as const, reason: 'CHECKOUT_CHANGED' as const }
+        }
+      }
 
       // The seam. Empty in production; see CreateOrderHooks for why it exists.
       if (hooks.afterPrecheck) await hooks.afterPrecheck()

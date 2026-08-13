@@ -209,3 +209,71 @@ export function createAuthRateLimiters(): AuthRateLimiters {
 }
 
 export const RATE_LIMIT_RESPONSE = TOO_MANY_REQUESTS
+
+/**
+ * ── DEC-061 — the checkout limiters ────────────────────────────────────────
+ *
+ * 🔴 §8.4 assigned these thresholds to MILESTONE-008 Checkpoint A and §8.6's
+ * eight answers never covered them, so until 2026-08-13 they did not exist.
+ * The cart routes still carry no limiter at all, and checkout is a better abuse
+ * target than login by §8.4's own words: it creates orders and decrements
+ * stock.
+ *
+ * 🔴 KEYED ON THE SHOPPER, NOT THE IP — the one deliberate deviation from the
+ * auth numbers, and it is stated rather than absorbed. Checkout is
+ * authenticated-only (§8.2), so an identity always exists by the time the
+ * handler runs. This module's own header records what IP-keying costs when an
+ * identity is available: `/auth/password-reset` and its completion route shared
+ * a budget, and behind NAT or CGNAT one person's flood locked everyone else
+ * out. Auth already keys on the identity being protected wherever there is one.
+ */
+export const CHECKOUT_RATE_LIMITS = {
+  /**
+   * `session`'s ceiling. The client calls `/validate` on mount and again on
+   * every change of delivery method, and React StrictMode double-mounts in
+   * development — a tight limit here would break the app rather than protect
+   * it. It is a READ: it creates nothing and decrements nothing.
+   */
+  validate: { windowMs: 15 * MINUTE, limit: 240 },
+  /**
+   * `login`'s ceiling, and the tighter of the two on purpose. This is the write
+   * — it places an order and decrements stock. A shopper pays once; ten in
+   * fifteen minutes leaves room for genuine retries after a halt or a simulated
+   * failure without leaving the route open.
+   */
+  pay: { windowMs: 15 * MINUTE, limit: 10 },
+} as const
+
+export interface CheckoutRateLimiters {
+  validate: RequestHandler
+  pay: RequestHandler
+}
+
+/**
+ * 🔴 The shopper's id when there is one, the IP otherwise.
+ *
+ * ⚠️ THE FALLBACK IS NOT DEAD CODE. The limiter runs BEFORE the authentication
+ * guard, deliberately: guarding first would mean an unauthenticated flood
+ * reached the session store unlimited, and 401s are cheap only until there are
+ * enough of them. So anonymous requests do arrive here, and they are bucketed
+ * by IP — never by a constant, which would throttle unrelated callers together
+ * and still look like a working limiter.
+ */
+function shopperKey(req: Request, _res: Response): string {
+  const userId = req.session?.userId
+  if (typeof userId === 'string' && userId !== '') return `user:${userId}`
+  return `ip:${ipKeyGenerator(req.ip ?? '')}`
+}
+
+/**
+ * ⚠️ TWO SEPARATE `rateLimit()` CALLS, therefore two stores — contract clause 4
+ * above. Sharing one instance between `/validate` and `/pay` would let a
+ * shopper who re-quotes a few times exhaust the budget they need to actually
+ * pay, and the mount site would look correct either way.
+ */
+export function createCheckoutRateLimiters(): CheckoutRateLimiters {
+  return {
+    validate: rateLimit({ ...SHARED, ...CHECKOUT_RATE_LIMITS.validate, keyGenerator: shopperKey }),
+    pay: rateLimit({ ...SHARED, ...CHECKOUT_RATE_LIMITS.pay, keyGenerator: shopperKey }),
+  }
+}

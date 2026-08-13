@@ -9,6 +9,7 @@ import { createSessionMiddleware } from './lib/session.js'
 import { createAuthRouter } from './routes/auth.js'
 import { catalogRouter } from './routes/catalog.js'
 import { cartRouter } from './routes/cart.js'
+import { createCheckoutRouter } from './routes/checkout.js'
 
 export const app = express()
 
@@ -60,6 +61,12 @@ app.use('/api', catalogRouter)
 // MILESTONE-007 Checkpoint C — GET /api/cart and POST /api/cart/items.
 // Mounted AFTER the session middleware: the cart's identity comes from it.
 app.use('/api/cart', cartRouter)
+
+// MILESTONE-008 Checkpoint D2 — POST /api/checkout/validate and /pay.
+// 🔴 Mounted AFTER the session middleware, like the cart: both routes are
+// authenticated-only (§8.2) and their limiters key on the shopper (DEC-061),
+// so `req.session` must already be populated when they run.
+app.use('/api/checkout', createCheckoutRouter({ prisma }))
 
 // A2 — compute the constant dummy hash once at startup, so the first
 // unknown-email login is not measurably slower than every later one.
