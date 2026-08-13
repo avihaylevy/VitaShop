@@ -358,7 +358,17 @@ model Order {
   // ⚠️ NOT NULL deliberately. A nullable key would let an order exist with no
   // anchor, which is INV-05 made optional. Safe to require: 0 orders existed
   // when this migration ran.
-  idempotencyKey String @unique @map("idempotency_key")
+  //
+  // 🔴 SCOPED TO THE USER, not globally unique — corrected 2026-08-13 after
+  // review. A GLOBAL unique makes the natural retry lookup
+  // `findUnique({ where: { idempotencyKey } })`, with no user filter, because
+  // the constraint never asked for one — so a key belonging to ANOTHER SHOPPER
+  // matches and the retry hands back THEIR ORDER. The key is client-supplied,
+  // so its value is attacker-controlled. Global uniqueness also lets one
+  // account claim a key and block it for every other account, permanently.
+  // The composite gives identical replay protection and makes the scoping
+  // STRUCTURAL rather than something the service has to remember.
+  idempotencyKey String @map("idempotency_key")
 
   // ── The frozen delivery details — ISSUE-077 gaps 2 and 3 ─────────────────
   // 🔴 COPIED, never a foreign key to `Address`. Address hangs off User and is
@@ -385,6 +395,9 @@ model Order {
   statusHistory OrderStatusHistory[]
   funnelEvents  FunnelEvent[]
 
+  // INV-05's database layer. See the note on `idempotencyKey` for why this is
+  // composite rather than a bare `@unique` on the key.
+  @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
   @@map("orders")
 }
@@ -412,6 +425,12 @@ model OrderItem {
   productNameHeAtPurchase String @map("product_name_he_at_purchase")
   productNameEnAtPurchase String @map("product_name_en_at_purchase")
 
+  // 🔴 ONE PRODUCT, ONE LINE — DEC-055's cart-side rule applied to the order
+  // side, added 2026-08-13 after review. The cart already guarantees one line
+  // per product, so nothing legitimate needs two; without this, a partial retry
+  // or a loop bug writes two lines for one product and then `totalAmount` and
+  // the sum of the items disagree with no way to tell which is right.
+  @@unique([orderId, productId])
   @@index([productId])
   @@map("order_items")
 }
@@ -441,6 +460,13 @@ model OrderStatusHistory {
   changedBy       User?   @relation(fields: [changedByUserId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
+  // 🔴 Postgres does NOT index a foreign-key column automatically and Prisma
+  // does not add one. Without this, every `onDelete: Restrict` check on a user
+  // delete is a sequential scan, and "which transitions did admin X make?" —
+  // the MILESTONE-010 audit query this column exists for — is a full scan.
+  // Every other relation in this file carries an explicit index; this was
+  // breaking the file's own convention. Added 2026-08-13 after review.
+  @@index([changedByUserId])
   @@map("order_status_history")
 }
 
