@@ -52,6 +52,19 @@ enum OrderStatus {
   cancelled
 }
 
+// 🔴 MILESTONE-008 Checkpoint B. The THREE methods REQ-F-040 §4.5.1 mandates —
+// values taken from the specification, not invented here. DEC-058 as amended
+// prices them: self pickup ₪0 always (nothing is shipped, so there is nothing
+// to charge for), courier and pickup point ₪30, free when the qualifying total
+// reaches ₪249.
+// ⚠️ A pickup POINT is still a delivery — goods are transported to a locker or
+// shop. Only SELF pickup is free.
+enum DeliveryMethod {
+  self_pickup
+  courier
+  pickup_point
+}
+
 // The four spec-mandated events (§4.7.5). Additional proposed events
 // (favorite_added, ai_agent_opened, ...) are not yet approved — KPI_ANALYTICS.md.
 enum FunnelEventType {
@@ -84,6 +97,9 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
   funnelEvents            FunnelEvent[]
+  // The back-reference for OrderStatusHistory.changedBy — who moved an order's
+  // status. See that model; null there means a SYSTEM transition.
+  orderStatusChanges      OrderStatusHistory[]
 
   @@map("users")
 }
@@ -320,6 +336,10 @@ model CartItem {
 
 // ── Orders ────────────────────────────────────────────
 
+// 🔴 MILESTONE-008 Checkpoint B (DEC-059). Everything added below exists for
+// ONE reason: an order must FREEZE what was agreed, not point at a row that can
+// change afterwards. That is INV-02's reasoning applied past the two columns it
+// already covered — see MILESTONE_PLANS §8.3 and ISSUE-077.
 model Order {
   id          String      @id @default(uuid())
   orderNumber String      @unique @map("order_number") // §2.6 — unique order number
@@ -328,6 +348,38 @@ model Order {
   status      OrderStatus @default(pending_payment)
   totalAmount Decimal     @map("total_amount") @db.Decimal(10, 2)
   createdAt   DateTime    @default(now()) @map("created_at")
+
+  // ── INV-05, DEC-059 answer 1 ─────────────────────────────────────────────
+  // 🔴 CLIENT-SUPPLIED and NOT NULL. `orderNumber` is unique but generated per
+  // ATTEMPT, so it could never anchor idempotency (ISSUE-028). The client
+  // generates one key per checkout attempt and resends the SAME one on retry;
+  // the unique constraint is what makes the second attempt a no-op instead of
+  // a second order.
+  // ⚠️ NOT NULL deliberately. A nullable key would let an order exist with no
+  // anchor, which is INV-05 made optional. Safe to require: 0 orders existed
+  // when this migration ran.
+  idempotencyKey String @unique @map("idempotency_key")
+
+  // ── The frozen delivery details — ISSUE-077 gaps 2 and 3 ─────────────────
+  // 🔴 COPIED, never a foreign key to `Address`. Address hangs off User and is
+  // mutable: editing one would rewrite where a PAST order shipped, and
+  // deleting one would leave the order pointing at nothing, because Address
+  // has no soft-delete flag.
+  // ⚠️ NULLABLE because SELF PICKUP HAS NO DELIVERY ADDRESS. The columns mirror
+  // Address's own fields exactly — no field is invented here.
+  shippingLine1   String? @map("shipping_line1")
+  shippingCity    String? @map("shipping_city")
+  shippingZipCode String? @map("shipping_zip_code")
+
+  // 🔴 DEC-058 as amended: self pickup ₪0, courier and pickup point ₪30 free
+  // over ₪249. FROZEN onto the order, because the day those numbers change an
+  // old order's total must stay explainable.
+  deliveryMethod DeliveryMethod @map("delivery_method")
+  shippingCost   Decimal        @map("shipping_cost") @db.Decimal(10, 2)
+
+  // REQ-F-047 requires a tracking number "where one exists". Nullable: most
+  // orders have none for most of their life.
+  trackingNumber String? @map("tracking_number")
 
   items         OrderItem[]
   statusHistory OrderStatusHistory[]
@@ -346,7 +398,19 @@ model OrderItem {
   product                Product @relation(fields: [productId], references: [id])
   quantity               Int
   unitPriceAtPurchase    Decimal @map("unit_price_at_purchase") @db.Decimal(10, 2)
-  productNameAtPurchase  String  @map("product_name_at_purchase")
+
+  // 🔴 THE FREEZE IS BILINGUAL — MILESTONE-008 Checkpoint B, ISSUE-077 gap 5.
+  // There was ONE `productNameAtPurchase` column in a store that sells in two
+  // languages. Every product carries `nameHe` AND `nameEn`, so a single column
+  // froze whichever the code happened to pick, and an English shopper's order
+  // history would have shown a Hebrew name forever.
+  // INV-02 says the order records what was AGREED — and for someone shopping in
+  // English, what was agreed is the English name.
+  // ⚠️ The old column was RENAMED rather than kept alongside a new one: its
+  // name no longer said which language it held. Safe — 0 order_items existed.
+  // Both NOT NULL, because Product.nameHe and Product.nameEn both are.
+  productNameHeAtPurchase String @map("product_name_he_at_purchase")
+  productNameEnAtPurchase String @map("product_name_en_at_purchase")
 
   @@index([productId])
   @@map("order_items")
@@ -358,6 +422,23 @@ model OrderStatusHistory {
   order     Order       @relation(fields: [orderId], references: [id])
   status    OrderStatus
   createdAt DateTime    @default(now()) @map("created_at")
+
+  // 🔴 WHO DID IT — MILESTONE-008 Checkpoint B, ISSUE-077 gap 6.
+  // DEC-050's framework says transitions are PERMISSION-CHECKED, but the record
+  // that survived them could not say by whom: a shopper cancelling and an admin
+  // cancelling were indistinguishable.
+  // ⚠️ NULLABLE, and null MEANS SOMETHING: a SYSTEM transition with no human
+  // actor — the simulated payment moving pending_payment -> paid. It is not
+  // "unknown". See §8.9's table, where every row names its actor.
+  // 🔴 `onDelete: Restrict`, NOT Prisma's default `SetNull` for an optional
+  // relation. SetNull would turn a deleted user's transitions into NULLs —
+  // indistinguishable from the SYSTEM transitions null already means. The
+  // column would then answer "who did this?" with the same value for "nobody"
+  // and "someone we removed". Restrict keeps null meaning exactly one thing.
+  // ⚠️ It also blocks hard-deleting a user who has moved an order's status,
+  // which is consistent: INV-03 makes this project soft-delete-only anyway.
+  changedByUserId String? @map("changed_by_user_id")
+  changedBy       User?   @relation(fields: [changedByUserId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@map("order_status_history")
