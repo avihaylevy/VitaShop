@@ -26,7 +26,28 @@ import {
  */
 const PRICE_INPUT_MIN = '0'
 const PRICE_INPUT_MAX = '99999.99'
-const PRICE_INPUT_STEP = '0.01'
+
+/*
+ * ISSUE-086 — 🔴 `step` IS NO LONGER A MIRROR OF THE SERVER, AND THAT IS A
+ * DELIBERATE, APPROVED NARROWING (user, 2026-08-13).
+ *
+ * At `0.01` the spinner moved the price one agora per click, so reaching a
+ * useful bound took hundreds of clicks — and no seeded product is priced in
+ * single agorot, so the control was finer than the data it filters.
+ *
+ * ⚠️ ONE ATTRIBUTE CONTROLS TWO THINGS. `step` sets the arrow increment AND
+ * `stepMismatch` validation, so raising it makes the browser refuse a
+ * hand-typed `95.55` that the server's `DECIMAL_PATTERN` still accepts. This
+ * is the client being STRICTER than the server, which the note above warns
+ * about in the opposite direction — it blocks input rather than letting a
+ * doomed request leave.
+ *
+ * The trade was put to the user with all three options (this · `step="any"`,
+ * which removes the spinner ISSUE-048 added · explicit ±₪1 buttons beside a
+ * `0.01` input) and this one was chosen. 🔴 `min` and `max` still mirror the
+ * server exactly; only `step` diverges.
+ */
+const PRICE_INPUT_STEP = '0.1'
 
 type CatalogFilterPanelProps = {
   groups: readonly FilterGroupModel[]
