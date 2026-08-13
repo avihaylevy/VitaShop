@@ -324,12 +324,18 @@ describe('🔴 the cart stores no price — INV-02 belongs to checkout', () => {
         await prisma.product.update({ where: { slug }, data: { stockQuantity: 0 } })
         const after = await getCart(prisma, { guestCartId: GUEST_A })
 
-        // 🔴 The line still SHOWS — C3: the cart must not lie about what was put
-        // in it — so the subtotal is unchanged...
+        // 🔴 The line still SHOWS — C3: the cart must not lie about what was
+        // put in it...
         expect(after.items).toHaveLength(1)
-        expect(after.subtotal).toBe(before.subtotal)
 
-        // ...but it buys nothing.
+        // ...and as of Checkpoint F1 it COUNTS FOR NOTHING, which is DEC-059
+        // answer 3. This assertion previously read `toBe(before.subtotal)`,
+        // i.e. ₪100 of sold-out product still in the total; the decision says
+        // the subtotal and the basis are one number.
+        expect(before.subtotal).toBe('100.00')
+        expect(after.subtotal).toBe('0.00')
+
+        // ...and it buys nothing.
         expect(after.shipping.basis).toBe('0.00')
         expect(after.shipping.hasShippableLines).toBe(false)
         expect(after.hasBlockingLine).toBe(true)
@@ -356,13 +362,70 @@ describe('🔴 the cart stores no price — INV-02 belongs to checkout', () => {
         const after = await getCart(prisma, { guestCartId: GUEST_A })
 
         expect(after.items[0]?.stockQuantity).toBe(1)
-        expect(after.subtotal).toBe('300.00')
-        // 🔴 Not purchasable: 1 in stock cannot satisfy a line of 3.
+        // 🔴 Not purchasable: 1 in stock cannot satisfy a line of 3 — so as of
+        // Checkpoint F1 it leaves the subtotal too, not only the basis. This
+        // read `'300.00'` before DEC-059 answer 3 was applied to the DTO.
+        expect(after.subtotal).toBe('0.00')
         expect(after.shipping.basis).toBe('0.00')
         expect(after.hasBlockingLine).toBe(true)
       } finally {
         await prisma.cartItem.deleteMany({ where: { product: { slug } } })
         await prisma.product.deleteMany({ where: { slug } })
+      }
+    })
+
+    /**
+     * 🔴 THE CONTROL THE TWO TESTS ABOVE CANNOT BE. Both hold ONE line, so
+     * their `subtotal === '0.00'` is equally consistent with "excludes the
+     * unpurchasable line" and with "returns zero whenever anything is wrong".
+     * A mixed cart is the only shape that tells those two apart, and this
+     * milestone has already shipped six assertions that passed while
+     * distinguishing nothing.
+     */
+    it('a MIXED cart counts the purchasable line and ONLY that one', async () => {
+      await wipeTestCarts()
+      const goodSlug = await ownProduct(10)
+      const badSlug = `${TEST_FIXTURE_SLUG_PREFIX}cart-mixed-blocked`
+      const shape = await prisma.product.findFirst({
+        where: { isActive: true },
+        select: { categoryId: true, brandId: true },
+      })
+      if (!shape) throw new Error('fixture assumption failed: no product to copy shape from')
+      await prisma.product.upsert({
+        where: { slug: badSlug },
+        create: {
+          slug: badSlug, nameHe: 'בדיקה', nameEn: 'fixture', categoryId: shape.categoryId,
+          brandId: shape.brandId, dosageForm: 'CAPSULE', packageQuantity: 1,
+          usageInstructions: '', price: '70.00', stockQuantity: 5,
+          descriptionHe: 'בדיקה', descriptionEn: 'fixture', warningsAllergens: '',
+          isActive: true,
+        },
+        update: { stockQuantity: 5, isActive: true, price: '70.00' },
+        select: { id: true },
+      })
+
+      try {
+        await addItem(prisma, { guestCartId: GUEST_A }, goodSlug, 2) // 2 x ₪100
+        await addItem(prisma, { guestCartId: GUEST_A }, badSlug, 1) // 1 x ₪70
+
+        const before = await getCart(prisma, { guestCartId: GUEST_A })
+        expect(before.subtotal).toBe('270.00')
+        expect(before.hasBlockingLine).toBe(false)
+
+        // Only the ₪70 line is withdrawn. The ₪200 line is untouched.
+        await prisma.product.update({ where: { slug: badSlug }, data: { isActive: false } })
+        const after = await getCart(prisma, { guestCartId: GUEST_A })
+
+        expect(after.items).toHaveLength(2)
+        // 🔴 200, not 270 and not 0 — the number no "zero on any problem" bug
+        // and no "unchanged total" bug can produce.
+        expect(after.subtotal).toBe('200.00')
+        // DEC-059's "one number": the subtotal IS the basis now.
+        expect(after.subtotal).toBe(after.shipping.basis)
+        expect(after.hasBlockingLine).toBe(true)
+      } finally {
+        await prisma.cartItem.deleteMany({ where: { product: { slug: { in: [goodSlug, badSlug] } } } })
+        await prisma.product.deleteMany({ where: { slug: { in: [goodSlug, badSlug] } } })
       }
     })
   })

@@ -175,9 +175,26 @@ function toDto(
   return {
     items: lines,
     totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
-    // Summed in agorot for the same reason the basis is: a float sum of
-    // two-decimal strings can land a cent off, and this figure is money.
-    subtotal: (lines.reduce((sum, line) => sum + toAgorot(line.lineTotal), 0) / 100).toFixed(2),
+    /*
+     * 🔴 MILESTONE-008 CHECKPOINT F1 — DEC-059 ANSWER 3, FINALLY APPLIED HERE.
+     * "Such a line contributes to NOTHING — not the subtotal, not the shipping
+     * basis", and the decision says in as many words that this "collapses
+     * subtotal and basis into one number".
+     *
+     * Until now `subtotal` summed EVERY line and `basisAgorot` summed the
+     * purchasable ones, so the cart showed a total no order could ever be
+     * placed for and the checkout quote disagreed with the page that led to
+     * it. This is the same figure as the basis, deliberately — if they ever
+     * need to diverge again that is a new decision, not a refactor.
+     *
+     * ⚠️ THE LINE STILL RENDERS. C3 stands: the cart must not lie about what
+     * was put in it. What changes is what the line COUNTS toward, and the row
+     * is what has to say why — ISSUE-080.
+     *
+     * Summed in agorot because a float sum of two-decimal strings can land a
+     * cent off, and this figure is money.
+     */
+    subtotal: (basisAgorot / 100).toFixed(2),
     // 🔴 The same shared rule — otherwise the cart lets a shopper proceed into
     // a checkout that will refuse them.
     hasBlockingLine: lines.some((line) => !isPurchasable(line)),

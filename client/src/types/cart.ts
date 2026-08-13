@@ -67,7 +67,18 @@ export type Shipping = {
 export type Cart = {
   items: readonly CartLine[]
   totalQuantity: number
-  /** ⚠️ ALL lines, unpurchasable included (C3). NOT the shipping basis. */
+  /**
+   * 🔴 PURCHASABLE LINES ONLY, and therefore EQUAL to `shipping.basis` —
+   * DEC-059 answer 3, applied to the DTO at Checkpoint F1: an unpurchasable
+   * line "contributes to nothing", which the decision says collapses the
+   * subtotal and the basis into one number.
+   *
+   * ⚠️ This comment said the opposite until 2026-08-13 ("ALL lines,
+   * unpurchasable included. NOT the shipping basis") and it was accurate then.
+   * The line is STILL RENDERED — C3 stands, the cart does not hide what was
+   * put in it — it simply counts toward nothing, and the row is what has to
+   * say so (ISSUE-080).
+   */
   subtotal: string
   /**
    * 🔴 C3 / DEC-059 answer 3: true when any line cannot be bought — the product

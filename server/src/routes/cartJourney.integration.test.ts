@@ -507,7 +507,8 @@ describe('🔴 DEC-058 — the shipping basis excludes withdrawn lines, over the
         shipping: { basis: string; cost: string; isFree: boolean; hasShippableLines: boolean }
       }
 
-      // C3 is UNCHANGED: the line is still there, still counted in the subtotal.
+      // C3 is UNCHANGED: the line is still THERE. What changed at Checkpoint
+      // F1 is what it COUNTS toward — DEC-059 answer 3.
       expect(cart.items).toHaveLength(2)
       expect(cart.hasBlockingLine).toBe(true)
 
@@ -515,12 +516,22 @@ describe('🔴 DEC-058 — the shipping basis excludes withdrawn lines, over the
       const active = cart.items.find((i) => i.slug === SLUG)
       expect(withdrawn?.isActive).toBe(false)
 
-      // 🔴 THE CLAIM: basis is the ACTIVE line alone, and it is STRICTLY LESS
-      // than the displayed subtotal. Compared against the response's own
-      // figures, never against a literal — a hardcoded number here would pass
-      // with the filter deleted if the seed prices ever changed.
+      /*
+       * 🔴 THE CLAIM CHANGED AT CHECKPOINT F1, AND SO DID THIS ASSERTION.
+       *
+       * It used to read `basis < subtotal` — the withdrawn line was counted in
+       * the subtotal and excluded from the basis. DEC-059 answer 3 collapses
+       * the two, so the claim is now: BOTH equal the active line alone.
+       *
+       * ⚠️ Still compared against the response's own figures, never against a
+       * literal — a hardcoded number would keep passing with the filter
+       * deleted if the seed prices ever changed. And the withdrawn line's own
+       * total is asserted to be non-zero, so "they agree" cannot be satisfied
+       * by an empty cart or a zeroed line.
+       */
+      expect(Number(withdrawn?.lineTotal)).toBeGreaterThan(0)
       expect(cart.shipping.basis).toBe(active?.lineTotal)
-      expect(Number(cart.shipping.basis)).toBeLessThan(Number(cart.subtotal))
+      expect(cart.subtotal).toBe(active?.lineTotal)
       expect(cart.shipping.hasShippableLines).toBe(true)
     } finally {
       // 🔴 Restored even if an assertion throws, or the dev catalogue is left
@@ -554,9 +565,11 @@ describe('🔴 DEC-058 — the shipping basis excludes withdrawn lines, over the
         (r) => r.json(),
       )) as { subtotal: string; shipping: { cost: string; isFree: boolean; hasShippableLines: boolean } }
 
-      // The subtotal is NOT zero — the line is still displayed (C3).
-      expect(Number(cart.subtotal)).toBeGreaterThan(0)
-      // But there is nothing to ship, so there is no charge AND no promise.
+      // 🔴 The subtotal IS zero as of Checkpoint F1 — the line is still
+      // displayed (C3) but buys nothing (DEC-059 answer 3). This asserted
+      // `> 0` before, when the two figures were separate.
+      expect(cart.subtotal).toBe('0.00')
+      // And there is nothing to ship, so there is no charge AND no promise.
       expect(cart.shipping.hasShippableLines).toBe(false)
       expect(cart.shipping.cost).toBe('0.00')
       expect(cart.shipping.isFree).toBe(false)
