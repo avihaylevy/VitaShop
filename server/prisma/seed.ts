@@ -6,6 +6,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient, Prisma, type DosageForm } from '@prisma/client'
 import { validateAllergenFields } from '../src/lib/allergenInfo.js'
 import { parseCsvFile } from '../src/lib/productsCsv.js'
+import { assertLocalDevTarget } from './assertLocalDevTarget.js'
 import {
   syncProductHealthGoals,
   syncProductImages,
@@ -15,33 +16,8 @@ import {
 type Db = PrismaClient | Prisma.TransactionClient
 
 // ── Safety: never seed anything but the local dev database ──────────────
-// Credentials are parsed but never logged.
-function assertLocalDevTarget(): void {
-  const raw = process.env.DATABASE_URL
-  if (!raw) {
-    throw new Error('DATABASE_URL is not set. Refusing to seed.')
-  }
-  let url: URL
-  try {
-    url = new URL(raw)
-  } catch {
-    throw new Error('DATABASE_URL is not a valid connection URL. Refusing to seed.')
-  }
-  const host = url.hostname
-  const database = url.pathname.replace(/^\//, '')
-  const isLocalHost = host === 'localhost' || host === '127.0.0.1'
-  if (!isLocalHost) {
-    throw new Error(
-      `DATABASE_URL host is "${host}", not localhost/127.0.0.1. Refusing to seed a non-local target.`,
-    )
-  }
-  if (database !== 'vitashop_dev') {
-    throw new Error(
-      `DATABASE_URL database is "${database}", not "vitashop_dev". Refusing to seed an unexpected database.`,
-    )
-  }
-  console.log(`Target confirmed: ${host}:${url.port || '5432'}/${database} (credentials not shown)`)
-}
+// 🔴 SHARED with `seedAccounts.ts`. See `assertLocalDevTarget.ts` for why a
+// second copy would be worse than an import.
 
 assertLocalDevTarget()
 

@@ -11,6 +11,7 @@ import { catalogRouter } from './routes/catalog.js'
 import { cartRouter } from './routes/cart.js'
 import { createCheckoutRouter } from './routes/checkout.js'
 import { createOrderRouter } from './routes/orders.js'
+import { createAdminOrderRouter } from './routes/adminOrders.js'
 
 export const app = express()
 
@@ -74,6 +75,13 @@ app.use('/api/checkout', createCheckoutRouter({ prisma, emailService: new Consol
 // but have no route, because this server has no admin authorization yet — see
 // routes/orders.ts and the issue it names.
 app.use('/api/orders', createOrderRouter({ prisma }))
+
+// ISSUE-083 — §8.9's four ADMIN-ONLY transitions, finally reachable.
+// 🔴 Mounted after the session middleware. The role is read from the database
+// on EVERY request (DEC-065), so revoking an admin takes effect immediately.
+// ⚠️ NO SCREENS — the admin UI is MILESTONE-010's; a minimal orders screen
+// comes with Checkpoint F.
+app.use('/api/admin/orders', createAdminOrderRouter({ prisma }))
 
 // A2 — compute the constant dummy hash once at startup, so the first
 // unknown-email login is not measurably slower than every later one.

@@ -13,7 +13,8 @@
     "build": "tsc -b",
     "start": "node dist/src/index.js",
     "test": "vitest run",
-    "test:integration": "vitest run src/routes/catalog.integration.test.ts"
+    "test:integration": "vitest run src/routes/catalog.integration.test.ts",
+    "seed:accounts": "tsx prisma/seedAccounts.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {

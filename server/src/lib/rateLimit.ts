@@ -296,6 +296,32 @@ export function createOrderRateLimiters(): OrderRateLimiters {
   }
 }
 
+/**
+ * DEC-061 extended again at ISSUE-083 — the admin transition route.
+ *
+ * ⚠️ `logout`'s ceiling (60 / 15 min), not `login`'s. An admin working through
+ * a fulfilment queue legitimately moves many orders in a sitting, where a
+ * shopper cancels once — reusing the tighter number would throttle the normal
+ * case. It is still bounded, and still keyed on the person rather than the
+ * transport.
+ *
+ * 🔴 The limiter sits BEFORE the role check, so an unauthenticated flood is
+ * bounded rather than reaching the session store and a database lookup freely.
+ */
+export const ADMIN_RATE_LIMITS = {
+  status: { windowMs: 15 * MINUTE, limit: 60 },
+} as const
+
+export interface AdminRateLimiters {
+  status: RequestHandler
+}
+
+export function createAdminRateLimiters(): AdminRateLimiters {
+  return {
+    status: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.status, keyGenerator: shopperKey }),
+  }
+}
+
 export function createCheckoutRateLimiters(): CheckoutRateLimiters {
   return {
     validate: rateLimit({ ...SHARED, ...CHECKOUT_RATE_LIMITS.validate, keyGenerator: shopperKey }),
