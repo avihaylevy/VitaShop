@@ -10,6 +10,7 @@ import type { CatalogCategoryDto } from '../types/catalog'
 import type { ProductCardModel } from '../types/product'
 import type { UseCatalogDataResult } from '../hooks/useCatalogData'
 import { EMPTY_CATALOG_URL_STATE } from '../features/catalog/catalogUrlState'
+import { CatalogPage } from './CatalogPage'
 
 /**
  * Slice 9 Checkpoint F — durable responsive/directionality invariants for
@@ -96,13 +97,15 @@ function setCatalogData(result: Partial<UseCatalogDataResult>) {
   })
 }
 
-function renderCatalog(url = '/catalog') {
-  return import('./CatalogPage').then(({ CatalogPage }) =>
-    renderToStaticMarkup(
-      <MemoryRouter initialEntries={[url]}>
-        <CatalogPage />
-      </MemoryRouter>,
-    ),
+// 🔴 ISSUE-096 — static import, not `import()` inside the test: the dynamic
+// form billed the whole CatalogPage module-graph transform to the FIRST
+// test's 5s timeout, which is the under-load-only flake. See the fuller
+// note in CatalogPage.a11y.test.tsx.
+function renderCatalog(url = '/catalog'): string {
+  return renderToStaticMarkup(
+    <MemoryRouter initialEntries={[url]}>
+      <CatalogPage />
+    </MemoryRouter>,
   )
 }
 

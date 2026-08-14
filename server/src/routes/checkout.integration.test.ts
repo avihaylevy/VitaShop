@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import argon2 from 'argon2'
 import express from 'express'
 import type { Server } from 'node:http'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCheckoutRouter } from './checkout.js'
 import { createAuthRouter } from './auth.js'
 import { createAuthRateLimiters } from '../lib/rateLimit.js'
@@ -45,11 +45,21 @@ class TestMailbox implements EmailService {
   readonly sent: EmailMessage[] = []
   failNext = false
   /**
+   * 🔴 EVERY call, before the outcome is decided — successes, simulated
+   * outages, gated holds. Second review round: an absence assertion
+   * ("no email") read `sent` at a moment the send could not have landed yet,
+   * so it passed whether the guarantee held or not. `attempts` is what lets
+   * a test prove "the send was TRIED and did not land" instead of "nothing
+   * has happened yet".
+   */
+  attempts = 0
+  /**
    * 🔴 A HOLD, so a test can prove the RESPONSE does not wait on the send. The
    * send blocks until the test releases it; the 201 must already have arrived.
    */
   gate: Promise<void> | undefined
   async send(message: EmailMessage): Promise<void> {
+    this.attempts += 1
     if (this.failNext) {
       this.failNext = false
       throw new Error('simulated mail outage')
@@ -58,7 +68,16 @@ class TestMailbox implements EmailService {
     this.sent.push(message)
   }
 }
-const mailbox = new TestMailbox()
+/**
+ * 🔴 ISSUE-094 — ONE MAILBOX PER TEST, reassigned in beforeEach BEFORE the
+ * app is built. The route deliberately writes the response FIRST and sends the
+ * confirmation AFTER it (INV-04 / the phantom-failure fix), so the send — a DB
+ * read plus the transport call — is still in flight when `fetch` resolves. With
+ * one module-level mailbox, a late tail from the PREVIOUS test could land after
+ * `beforeEach` reset it; with a fresh instance, a late tail writes to an object
+ * no assertion will ever read again.
+ */
+let mailbox = new TestMailbox()
 
 const SLUG_A = `${TEST_FIXTURE_SLUG_PREFIX}route-checkout-a`
 /** 🔴 A SECOND LINE EXISTS ONLY SO THE EMAIL'S LINE ORDER CAN BE PROVED. With
@@ -216,13 +235,28 @@ beforeAll(async () => {
   await wipe()
 }, 60_000)
 
+/**
+ * 🔴 THE QUIESCENCE SIGNAL — counts completed `/pay` HANDLERS, via the
+ * route's own afterPayHandled seam. `/pay` answers before its send, so a test
+ * asserting an ABSENCE must first wait for the handler to be genuinely done;
+ * waiting on this counter is that wait. Reset per test with the mailbox.
+ */
+let payHandled = 0
+
 beforeEach(async () => {
+  // ISSUE-094: a FRESH mailbox per test — see the note at TestMailbox's
+  // instantiation. Must precede the app, which closes over it.
+  mailbox = new TestMailbox()
+  payHandled = 0
   // 🔴 THE REAL STACK, in index.ts's order — session middleware first, because
   // both routes read `req.session` and their limiters key on it.
   const app = express()
   app.use(express.json())
   app.use(createSessionMiddleware())
-  app.use('/api/checkout', createCheckoutRouter({ prisma, emailService: mailbox }))
+  app.use('/api/checkout', createCheckoutRouter({
+    prisma, emailService: mailbox,
+    hooks: { afterPayHandled: () => { payHandled += 1 } },
+  }))
   app.use('/api', createAuthRouter({
     prisma,
     emailService: new NullEmailProvider(),
@@ -237,9 +271,6 @@ beforeEach(async () => {
 
   await setStock(100)
   await setPrice('100.00')
-  mailbox.sent.length = 0
-  mailbox.failNext = false
-  mailbox.gate = undefined
 })
 
 afterEach(async () => {
@@ -857,7 +888,12 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
     }, cookie)
     const body = (await response.json()) as { orderNumber: string }
 
-    expect(mailbox.sent).toHaveLength(1)
+    // 🔴 ISSUE-094 — WAITED FOR, not read immediately. The response
+    // deliberately arrives BEFORE the send (INV-04), so at this point the
+    // confirmation is normally still in flight; an immediate read is the race
+    // that made this file flaky. A condition wait is not a sleep: it settles
+    // the moment the send lands and fails loudly if it never does.
+    await vi.waitFor(() => expect(mailbox.sent).toHaveLength(1), { timeout: 5_000 })
     const mail = mailbox.sent[0]!
     expect(mail.to).toBe(EMAIL)
     // 🔴 HEBREW ONLY — DEC-054 / A11-SERVER. There is no i18next on the server.
@@ -922,7 +958,8 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
       where: { user: { email: EMAIL } }, select: { status: true },
     })
     expect(order.status).toBe('pending_payment')
-    expect(mailbox.sent).toHaveLength(1)
+    // ISSUE-094: the send trails the response — wait for it, never read it raw.
+    await vi.waitFor(() => expect(mailbox.sent).toHaveLength(1), { timeout: 5_000 })
   })
 
   it('🔴 a RETRY REPAIRS an order left at pending_payment', async () => {
@@ -981,9 +1018,18 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
       idempotencyKey: 'route-no-second-mail', simulatedOutcome: 'success',
     }
     await post('/api/checkout/pay', payload, cookie)
-    expect(mailbox.sent).toHaveLength(1)
+    // ISSUE-094: wait for the FIRST confirmation to land before the retry, or
+    // this test races the send it is counting.
+    await vi.waitFor(() => expect(mailbox.sent).toHaveLength(1), { timeout: 5_000 })
 
     await post('/api/checkout/pay', payload, cookie)
+    // 🔴 SECOND REVIEW ROUND: the immediate read here assumed the very
+    // property under test (a regressed replay path that DID send would push
+    // after the response and still read 1). Waiting for the retry's handler
+    // to be fully done makes a duplicate attempt visible: a replay that
+    // sends is awaited by the handler, so it lands before payHandled hits 2.
+    await vi.waitFor(() => expect(payHandled).toBe(2), { timeout: 5_000 })
+    expect(mailbox.attempts).toBe(1)
     expect(mailbox.sent).toHaveLength(1)
   })
 
@@ -998,6 +1044,8 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
       idempotencyKey: 'route-email-pickup', simulatedOutcome: 'success',
     }, cookie)
 
+    // ISSUE-094: the send trails the response — wait for it to land first.
+    await vi.waitFor(() => expect(mailbox.sent).toHaveLength(1), { timeout: 5_000 })
     expect(mailbox.sent[0]!.body).toContain('מוכנה לאיסוף עצמי תוך 2 ימי עסקים')
   })
 
@@ -1018,6 +1066,13 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
 
     // 🔴 The shopper is told the truth: the order was placed.
     expect(response.status).toBe(201)
+    // 🔴 SECOND REVIEW ROUND: `sent 0` read immediately was VACUOUS — the
+    // successful push would land after it anyway, so deleting the failNext
+    // throw left this green. Now: wait for the handler (send included) to be
+    // DONE, then prove the send was ATTEMPTED and did not land. Deleting the
+    // throw turns `sent` into 1 here and goes red.
+    await vi.waitFor(() => expect(payHandled).toBe(1), { timeout: 5_000 })
+    expect(mailbox.attempts).toBe(1)
     expect(mailbox.sent).toHaveLength(0)
 
     const order = await prisma.order.findFirstOrThrow({
@@ -1051,11 +1106,22 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
       idempotencyKey: 'route-mail-slow', simulatedOutcome: 'success',
     }, cookie)
 
-    // 🔴 The 201 arrived while the send is STILL BLOCKED.
+    // 🔴 The 201 arrived while the send is STILL BLOCKED — and "still
+    // blocked" is PROVEN, not assumed. SECOND REVIEW ROUND: the bare `sent 0`
+    // was vacuous (an ungated push would land after the response and read 0
+    // just the same). Waiting for the ATTEMPT first pins the order of events:
+    // the send has started, the response is already here, and nothing has
+    // landed. Without the gate, the push is synchronous with the attempt, so
+    // observing attempts=1 with sent=0 is impossible and this goes red.
     expect(response.status).toBe(201)
+    await vi.waitFor(() => expect(mailbox.attempts).toBe(1), { timeout: 5_000 })
     expect(mailbox.sent).toHaveLength(0)
 
     release()
+    // Drain: the released send lands and the handler closes, so nothing from
+    // this test is still in flight when the next one starts.
+    await vi.waitFor(() => expect(mailbox.sent).toHaveLength(1), { timeout: 5_000 })
+    await vi.waitFor(() => expect(payHandled).toBe(1), { timeout: 5_000 })
   })
 
   it('🔴 the email lists its lines in a STABLE order', async () => {
@@ -1083,7 +1149,8 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
       idempotencyKey: 'route-line-order', simulatedOutcome: 'success',
     }, cookie)
 
-    expect(mailbox.sent).toHaveLength(1)
+    // ISSUE-094: the send trails the response — wait for it to land first.
+    await vi.waitFor(() => expect(mailbox.sent).toHaveLength(1), { timeout: 5_000 })
     const body = mailbox.sent[0]!.body
 
     // The order the transaction writes them in: ascending productId.

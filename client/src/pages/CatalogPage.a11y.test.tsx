@@ -4,6 +4,7 @@ import { initReactI18next } from 'react-i18next'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CatalogApiError } from '../lib/catalogApi'
+import { CatalogPage } from './CatalogPage'
 import catalogHe from '../locales/he/catalog.json'
 import layoutHe from '../locales/he/layout.json'
 import type { CatalogCategoryDto, CatalogFacetsDto } from '../types/catalog'
@@ -117,13 +118,28 @@ function setFacets(facets: Partial<CatalogFacetsDto> = {}) {
   })
 }
 
-function renderCatalog(url = '/catalog') {
-  return import('./CatalogPage').then(({ CatalogPage }) =>
-    renderToStaticMarkup(
-      <MemoryRouter initialEntries={[url]}>
-        <CatalogPage />
-      </MemoryRouter>,
-    ),
+/**
+ * 🔴 ISSUE-096 — STATIC IMPORT, NOT `import('./CatalogPage')` IN THE TEST.
+ * The dynamic form made the FIRST test in this file pay the entire
+ * CatalogPage module-graph transform+evaluation INSIDE its own 5s timeout —
+ * free in isolation, seconds under a contended full-suite worker pool, which
+ * is exactly the "times out under load, passes alone" flake. `vi.mock` is
+ * hoisted above static imports, so the mocks bind either way; the graph now
+ * loads at file-collection time, outside any test's budget.
+ *
+ * ⚠️ THE WRAPPER SHAPE OF THE FACTORIES IS NOW LOAD-BEARING, not stylistic
+ * (second review round). Each factory returns `() => mockUseX()` — a closure
+ * over the module-level `const` — rather than the mock itself. Hoisted
+ * factories run during GRAPH LOAD, before this module body initializes those
+ * consts, so the "simpler" `{ useCatalogData: mockUseCatalogData }` form —
+ * which happened to work under the old dynamic import — would now throw a
+ * TDZ ReferenceError at collection. Keep the wrappers.
+ */
+function renderCatalog(url = '/catalog'): string {
+  return renderToStaticMarkup(
+    <MemoryRouter initialEntries={[url]}>
+      <CatalogPage />
+    </MemoryRouter>,
   )
 }
 

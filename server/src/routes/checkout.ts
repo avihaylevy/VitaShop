@@ -1,4 +1,4 @@
-import { Router, type RequestHandler } from 'express'
+import { Router, type Request, type RequestHandler, type Response } from 'express'
 import type { PrismaClient } from '@prisma/client'
 import { quoteCheckout } from '../lib/checkoutService.js'
 import { deliveryEstimate, type DeliveryEstimate } from '../lib/deliveryEstimate.js'
@@ -50,6 +50,18 @@ export type CheckoutRouterDeps = {
    * first, which is the thing that actually matters.
    */
   rateLimiters?: CheckoutRateLimiters
+  /**
+   * 🔴 A DELIBERATE TEST SEAM, empty in production — same reasoning as
+   * `ApplyTransitionHooks.afterRead`. `/pay` deliberately writes the RESPONSE
+   * before awaiting the confirmation send (INV-04), so `await fetch` resolves
+   * while the handler's tail is still running. A test asserting an ABSENCE
+   * ("no email was sent") therefore has nothing to wait on: the assertion
+   * passes whether the guarantee holds or the send simply has not landed yet
+   * — the review round on ISSUE-094's fix found exactly three such vacuous
+   * assertions. This hook fires when the `/pay` handler has FULLY finished,
+   * every path, success or refusal — the quiescence signal an absence needs.
+   */
+  hooks?: { afterPayHandled?: () => void }
 }
 
 /** Reads the delivery method without trusting it — the service checks it. */
@@ -118,6 +130,17 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
    *   3. simulate the payment, and only then create the order
    */
   router.post('/pay', limiters.pay, requireShopper, requireVerifiedShopper, async (req, res) => {
+    // The quiescence seam — see `hooks` on the deps. `finally`, so every
+    // return path (refusals, replays, the post-response send, throws) fires
+    // it exactly once when the handler is genuinely done.
+    try {
+      await handlePay(req, res)
+    } finally {
+      deps.hooks?.afterPayHandled?.()
+    }
+  })
+
+  async function handlePay(req: Request, res: Response): Promise<void> {
     const body = (req.body ?? {}) as Record<string, unknown>
     const userId = req.session!.userId!
 
@@ -431,7 +454,7 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
       estimate: requote.quote.estimate,
     })
 
-  })
+  }
 
   return router
 }

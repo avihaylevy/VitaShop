@@ -8,6 +8,7 @@ import catalogHe from '../locales/he/catalog.json'
 import layoutHe from '../locales/he/layout.json'
 import type { ProductDetailModel } from '../types/product'
 import type { UseProductDetailResult } from '../hooks/useProductDetail'
+import { ProductDetailsPage } from './ProductDetailsPage'
 
 /**
  * MILESTONE-005 Checkpoint J — the Product Details accessibility and
@@ -82,15 +83,17 @@ function setDetail(result: Partial<UseProductDetailResult>) {
   })
 }
 
-function renderPage(slug = 'solgar-omega-3') {
-  return import('./ProductDetailsPage').then(({ ProductDetailsPage }) =>
-    renderToStaticMarkup(
-      <MemoryRouter initialEntries={[`/product/${slug}`]}>
-        <Routes>
-          <Route path="/product/:slug" element={<ProductDetailsPage />} />
-        </Routes>
-      </MemoryRouter>,
-    ),
+// 🔴 ISSUE-096 — static import, not `import()` inside the test: the
+// dynamic form billed the whole ProductDetailsPage module-graph transform to
+// the FIRST test's 5s timeout — the under-load-only flake. See the fuller
+// note in CatalogPage.a11y.test.tsx.
+function renderPage(slug = 'solgar-omega-3'): string {
+  return renderToStaticMarkup(
+    <MemoryRouter initialEntries={[`/product/${slug}`]}>
+      <Routes>
+        <Route path="/product/:slug" element={<ProductDetailsPage />} />
+      </Routes>
+    </MemoryRouter>,
   )
 }
 
