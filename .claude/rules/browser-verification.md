@@ -106,6 +106,57 @@ Instances 2, 4 and 5 were caught exactly that way, and instance 6 by checking
 an exit code that had been assumed. Assume any new guarantee is in this family
 until it has been seen to fail.
 
+## 🔴 A SECOND FAMILY — the check whose ENVIRONMENT cannot represent the failure
+
+> Added 2026-08-14, after MILESTONE-008 Checkpoint G, where it appeared four
+> times in one milestone and the same defect was reintroduced TWICE after being
+> fixed.
+
+The family above is about assertions that verify nothing. This one is different
+and it is worse, because the assertion is correct: **jsdom is not a browser, and
+a green test can sit over code that is broken in Chromium.**
+
+```
+· `disabled` on a focused element makes a browser BLUR it. jsdom does not,
+  so a test asserting "focus survives" passed against code that dropped it
+· a class present in `classList` can still LOSE the cascade. jsdom sees the
+  class; only a browser computes which rule wins
+· `:focus-visible` does not match after a pointer interaction. jsdom models
+  neither the pseudo-class nor the interaction that decides it
+```
+
+🔴 **THE COUNTER-MOVE IS NOT A BETTER ASSERTION — IT IS OPENING A BROWSER.**
+Where jsdom cannot represent the failure, assert the *attribute* (which it can
+see) and verify the *behaviour* in the matrix. Say so in the test, so the next
+reader knows which half is covered where.
+
+### 🔴 THE SPECIFIC SHAPE THIS PROJECT KEEPS SHIPPING
+
+**A control that unmounts itself on success takes the user's focus with it.**
+
+```
+· a Retry button rendered only for `failed`      — pressing it unmounts it
+· a confirm button inside a block that closes    — confirming unmounts it
+· a panel gated on the condition its own action
+  clears (count > 0, cleared by the repair)      — succeeding unmounts it
+```
+
+Every focus defect in MILESTONE-008 was this one shape. It is invisible to the
+suite, and it was caught three times by a human reading the diff.
+
+⚠️ **A PARTIAL SUCCESS OFTEN SURVIVES IT, WHICH IS WHY IT LOOKS FINE.** The
+reconcile panel kept its report after a partial repair — the count stayed above
+zero — and erased it only when the sweep fully succeeded. **The healthiest path
+was the broken one.**
+
+```
+🔴 BEFORE SHIPPING ANY ASYNC CONTROL, ASK: after this succeeds, does the thing
+   I just pressed still exist? If not, where does focus go, and who says so
+   out loud? Keep it mounted (`aria-disabled`, never `disabled`), or move
+   focus somewhere deliberate — and announce the outcome from a region that
+   was ALREADY mounted.
+```
+
 ## Screenshots are supporting evidence, not the test
 
 A screenshot documents what was seen. It does not substitute for the ARIA
