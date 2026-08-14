@@ -160,6 +160,22 @@ describe('ISSUE-112 — the signed-in NAME is visible on the trigger itself', ()
     await waitFor(() => expect(trigger.textContent).toContain('Hi Avihay'))
   })
 
+  it('🔴 the greeting label is BOUNDED — firstName has no server-side length cap', async () => {
+    // registrationForm.ts caps nothing beyond min(1), so a 120-char name is
+    // legal. jsdom asserts the truncate+max-width classes (it computes no
+    // layout); the visual ellipsis is the signed-in browser pass's half.
+    respondSession({ authenticated: true, role: 'customer', firstName: 'x'.repeat(120), email: 'a@b.c' })
+    renderMenu()
+
+    const trigger = await screen.findByRole('button', { name: /account menu/i })
+    await waitFor(() => expect(trigger.textContent).toContain('x'.repeat(120)))
+    const label = [...trigger.querySelectorAll('span')].find(
+      (s) => s.childElementCount === 0 && s.textContent?.includes('xxx'),
+    )
+    expect(label?.className).toContain('truncate')
+    expect(label?.className).toContain('max-w-40')
+  })
+
   it('falls back to "My account" when the server omitted the identity (fail-closed)', async () => {
     respondSession({ authenticated: true, role: 'customer' })
     renderMenu()

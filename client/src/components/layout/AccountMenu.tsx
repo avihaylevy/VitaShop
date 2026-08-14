@@ -139,7 +139,15 @@ export function AccountMenu() {
           <Icon size={18}>
             <UserIcon />
           </Icon>
-          <span className="hidden lg:inline">{triggerLabel}</span>
+          {/*
+           * Review finding (fifty-third pass): firstName has NO server-side
+           * length cap (registrationForm.ts caps nothing beyond min(1)), so
+           * the greeting must bound itself — truncate + max-width, the same
+           * treatment the menu's identity block already applies. 10rem holds
+           * every realistic name; a hostile one ellipsizes instead of
+           * stretching the header row.
+           */}
+          <span className="hidden max-w-40 truncate lg:inline">{triggerLabel}</span>
           <span className="hidden lg:inline-flex">
             <Icon size={14} className={`transition-transform duration-150 ease-standard ${open ? 'rotate-180' : ''}`}>
               <ChevronDownIcon />
