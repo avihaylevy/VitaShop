@@ -6,5 +6,49 @@
     "shipped": "Shipped",
     "delivered": "Delivered",
     "cancelled": "Cancelled"
+  },
+  "history": {
+    "title": "My orders",
+    "loading": "Loading your orders…",
+    "empty": "You have not placed any orders yet.",
+    "emptyCta": "Browse the catalogue",
+    "retry": "Try again",
+    "placed": "Placed on {{date}}",
+    "quantity_one": "1 unit",
+    "quantity_other": "{{count}} units",
+    "cancel": "Cancel order",
+    "cancelAsk": "Cancel this order? This cannot be undone.",
+    "cancelConfirm": "Yes, cancel it",
+    "cancelAbort": "Keep the order",
+    "failure": {
+      "offline": "No connection to the server. Check it and try again.",
+      "unauthenticated": "Sign in to see your orders.",
+      "rateLimited": "Too many requests. Wait a moment and refresh.",
+      "unavailable": "Your orders could not be loaded right now."
+    },
+    "outcome": {
+      "cancelled": "The order was cancelled.",
+      "alreadyCancelled": "That order was already cancelled.",
+      "offline": "No connection to the server. The order was not cancelled.",
+      "unauthenticated": "Please sign in again.",
+      "rateLimited": "Too many requests. Wait a moment and try again.",
+      "notFound": "That order could not be found.",
+      "forbidden": "This order is already being prepared and can no longer be cancelled here. Please contact us.",
+      "terminal": "This order is already complete.",
+      "concurrent": "The order changed while you were looking. Refresh and try again.",
+      "server": "The cancellation failed. Please try again."
+    },
+    "signIn": "Sign in"
+  },
+  "detail": {
+    "title": "Order {{orderNumber}}",
+    "back": "Back to orders",
+    "loading": "Loading the order…",
+    "notFound": "That order could not be found.",
+    "shippingTo": "Shipping to",
+    "selfPickup": "Self pickup — no delivery address",
+    "shippingCost": "Shipping",
+    "tracking": "Tracking number",
+    "noTracking": "No tracking number yet"
   }
 }

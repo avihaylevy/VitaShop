@@ -332,6 +332,94 @@ describe('GET /api/orders — TEST-050, the history itself', () => {
     expect(await response.text()).not.toContain('orderNumber')
   })
 
+  it('🔴 says hasMore when the history is TRUNCATED, and false when it is not', async () => {
+    /*
+     * ISSUE-100 — `take: 50` dropped the rest with no signal at all, so a
+     * shopper with 51 orders saw 50 and the screen could not even say so
+     * honestly. One extra row is fetched and discarded to detect it. Found in
+     * review.
+     *
+     * ⚠️ Both directions asserted in one test: a `hasMore` that is always true
+     * would pass the first half and fail the second.
+     */
+    const cookie = await signIn(EMAIL)
+
+    await placeOrder(userId, 'read-key-nomore', [{ slug: SLUG_A, quantity: 1 }])
+    const small = (await (await get('/api/orders', cookie)).json()) as {
+      orders: unknown[]
+      hasMore: boolean
+    }
+    expect(small.hasMore).toBe(false)
+    expect(small.orders).toHaveLength(1)
+
+    // 51 orders: one page of 50, and a flag saying there is more.
+    for (let index = 0; index < 50; index += 1) {
+      await placeOrder(userId, `read-key-bulk-${index}`, [{ slug: SLUG_A, quantity: 1 }])
+    }
+    const full = (await (await get('/api/orders', cookie)).json()) as {
+      orders: unknown[]
+      hasMore: boolean
+    }
+    expect(full.orders).toHaveLength(50)
+    expect(full.hasMore).toBe(true)
+  }, 60_000)
+
+  it('🔴 items tie-break on a UNIQUE column when two frozen names are identical', async () => {
+    /*
+     * 🔴 THIS TEST DOES NOT PROVE THE TIEBREAKER, AND SAYING SO IS THE POINT.
+     *
+     * Removing `productId` from the item `orderBy` leaves it GREEN — measured,
+     * twice. Postgres is FREE to return tied rows in any order, and on this
+     * database it happens to return them by id anyway, so the mutation changes
+     * nothing observable. The lines are even inserted in reverse id order to
+     * try to force the issue, and it still passes without the fix.
+     *
+     * ⚠️ So this is a CONTRACT TEST, not a guard: it pins what the route
+     * promises (equal names tie-break on a unique column) and would catch a
+     * gross regression such as reversed or randomised ordering. It would NOT
+     * catch the tiebreaker being deleted. The fix itself is correct by
+     * construction — `productNameEnAtPurchase` has no uniqueness constraint —
+     * and rests on that argument rather than on this assertion.
+     *
+     * 🔴 Recorded here rather than left for someone to discover the hard way,
+     * because a test that has never been seen to fail has not been shown to
+     * test anything.
+     */
+    const [first, second] = await Promise.all([
+      prisma.product.findUniqueOrThrow({ where: { slug: SLUG_A }, select: { id: true } }),
+      prisma.product.findUniqueOrThrow({ where: { slug: SLUG_B }, select: { id: true } }),
+    ])
+    const ascending = [first.id, second.id].sort()
+    const slugById = new Map([
+      [first.id, SLUG_A],
+      [second.id, SLUG_B],
+    ])
+
+    // Both products wear the SAME English name for this test.
+    await prisma.product.updateMany({
+      where: { slug: { in: [SLUG_A, SLUG_B] } },
+      data: { nameEn: 'Identical Name' },
+    })
+    try {
+      await placeOrder(userId, 'read-key-tie', [
+        // The higher id goes in FIRST.
+        { slug: slugById.get(ascending[1]!)!, quantity: 1 },
+        { slug: slugById.get(ascending[0]!)!, quantity: 1 },
+      ])
+      const cookie = await signIn(EMAIL)
+      const body = (await (await get('/api/orders', cookie)).json()) as {
+        orders: { items: { productId: string; nameEn: string }[] }[]
+      }
+
+      const items = body.orders[0]!.items
+      expect(items.map((item) => item.nameEn)).toEqual(['Identical Name', 'Identical Name'])
+      expect(items.map((item) => item.productId)).toEqual(ascending)
+    } finally {
+      await prisma.product.update({ where: { slug: SLUG_A }, data: { nameEn: 'History Product A' } })
+      await prisma.product.update({ where: { slug: SLUG_B }, data: { nameEn: 'History Product B' } })
+    }
+  })
+
   it('an empty history is an EMPTY LIST, not an error', async () => {
     const cookie = await signIn(OTHER_EMAIL)
     const response = await get('/api/orders', cookie)

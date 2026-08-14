@@ -55,9 +55,17 @@ const ORDER_SUMMARY_SELECT = {
   shippingCost: true,
   deliveryMethod: true,
   items: {
-    // Stable within an order, for the same reason the list is ordered at all:
-    // an unordered read can hand back two renderings of one order.
-    orderBy: { productNameEnAtPurchase: 'asc' },
+    /*
+     * Stable within an order, for the same reason the list is ordered at all:
+     * an unordered read can hand back two renderings of one order.
+     *
+     * ⚠️ WITH A UNIQUE TIEBREAKER, because the name is not one. NOTHING
+     * constrains `productNameEnAtPurchase` to be distinct — two products can
+     * ship under the same English name, and the frozen copies then tie and
+     * order arbitrarily between requests. The order list below argues exactly
+     * this and adds `id`; this select said it and did not. Found in review.
+     */
+    orderBy: [{ productNameEnAtPurchase: 'asc' as const }, { productId: 'asc' as const }],
     select: {
       productId: true,
       productNameHeAtPurchase: true,
@@ -67,7 +75,14 @@ const ORDER_SUMMARY_SELECT = {
       product: { select: { slug: true } },
     },
   },
-} as const
+  /*
+   * ⚠️ NO `as const` HERE, and the omission is deliberate. It froze the nested
+   * `orderBy` ARRAY as readonly, which Prisma's generated types reject — the
+   * server BUILD failed while the whole suite stayed green, because vitest does
+   * not typecheck. The two sort directions carry their own `as const`, which is
+   * all Prisma actually needs.
+   */
+}
 
 type OrderSummaryRow = {
   id: string
@@ -176,11 +191,25 @@ export function createOrderRouter(deps: OrderRouterDeps): ReturnType<typeof Rout
         // TRANSACTION-START time, so orders written in one transaction share a
         // byte-identical createdAt and would otherwise order arbitrarily.
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: HISTORY_PAGE_SIZE,
+        /*
+         * 🔴 ONE MORE THAN THE PAGE, so truncation is DETECTABLE rather than
+         * silent — ISSUE-100, raised in review. Taking exactly 50 makes a
+         * shopper with 51 orders see 50 and receive no way to know the rest
+         * exist; the screen cannot even say so honestly, because the response
+         * carries no signal at all. The extra row is fetched and dropped.
+         */
+        take: HISTORY_PAGE_SIZE + 1,
         select: ORDER_SUMMARY_SELECT,
       })
 
-      res.json({ orders: orders.map(toOrderSummary) })
+      const hasMore = orders.length > HISTORY_PAGE_SIZE
+      res.json({
+        orders: orders.slice(0, HISTORY_PAGE_SIZE).map(toOrderSummary),
+        // ⚠️ Not pagination — a flag. Full paging follows the admin route's
+        // shape when a real shopper needs it; until then the client can say
+        // "these are your most recent" instead of implying it is everything.
+        hasMore,
+      })
     } catch (error) {
       console.error(`[orders] listing history for ${userId} failed`, error)
       res.status(503).json({

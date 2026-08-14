@@ -95,11 +95,22 @@ export function AccountMenu() {
             <>
               <Link
                 role="menuitem"
-                to="/account"
+                /*
+                 * 🔴 ISSUE-102 — THIS POINTED AT `/account`, WHICH HAS NO
+                 * ROUTE. Every signed-in shopper who opened this menu and
+                 * clicked landed on the 404 page, and had done since the menu
+                 * shipped. Checkpoint G2 built `/account/orders`, so the link
+                 * now goes somewhere and the label says what it does.
+                 *
+                 * ⚠️ The personal area REQ-F-051 describes — profile,
+                 * addresses, favourites — is still unbuilt. Naming this "my
+                 * orders" is the honest description of what exists.
+                 */
+                to="/account/orders"
                 onClick={() => setOpen(false)}
                 className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
               >
-                {t('account.myAccount')}
+                {t('account.myOrders')}
               </Link>
               <button
                 role="menuitem"

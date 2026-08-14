@@ -23,7 +23,8 @@
     "menuLabel": "תפריט חשבון",
     "signOut": "התנתקות",
     "guestGreeting": "לא מחוברים",
-    "signedInGreeting": "מחוברים"
+    "signedInGreeting": "מחוברים",
+    "myOrders": "ההזמנות שלי"
   },
   "favourites": {
     "label": "מועדפים",

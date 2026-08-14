@@ -6,5 +6,51 @@
     "shipped": "נשלחה",
     "delivered": "סופקה",
     "cancelled": "בוטלה"
+  },
+  "history": {
+    "title": "ההזמנות שלי",
+    "loading": "טוען את ההזמנות…",
+    "empty": "עדיין לא ביצעת הזמנות.",
+    "emptyCta": "למעבר לקטלוג",
+    "retry": "נסה שוב",
+    "placed": "בוצעה ב-{{date}}",
+    "quantity_one": "יחידה אחת",
+    "quantity_two": "שתי יחידות",
+    "quantity_many": "{{count}} יחידות",
+    "quantity_other": "{{count}} יחידות",
+    "cancel": "ביטול הזמנה",
+    "cancelAsk": "לבטל את ההזמנה? הפעולה אינה הפיכה.",
+    "cancelConfirm": "כן, בטל",
+    "cancelAbort": "השאר את ההזמנה",
+    "failure": {
+      "offline": "אין חיבור לשרת. בדוק את החיבור ונסה שוב.",
+      "unauthenticated": "יש להתחבר כדי לראות את ההזמנות.",
+      "rateLimited": "יותר מדי בקשות. המתן רגע ורענן.",
+      "unavailable": "לא ניתן לטעון כעת את ההזמנות."
+    },
+    "outcome": {
+      "cancelled": "ההזמנה בוטלה.",
+      "alreadyCancelled": "ההזמנה כבר בוטלה.",
+      "offline": "אין חיבור לשרת. ההזמנה לא בוטלה.",
+      "unauthenticated": "יש להתחבר מחדש.",
+      "rateLimited": "יותר מדי בקשות. המתן רגע ונסה שוב.",
+      "notFound": "ההזמנה לא נמצאה.",
+      "forbidden": "ההזמנה כבר בהכנה ולא ניתן לבטל אותה כאן. פנה אלינו.",
+      "terminal": "ההזמנה כבר הושלמה.",
+      "concurrent": "ההזמנה השתנתה בינתיים. רענן ונסה שוב.",
+      "server": "הביטול נכשל. נסה שוב."
+    },
+    "signIn": "להתחברות"
+  },
+  "detail": {
+    "title": "הזמנה {{orderNumber}}",
+    "back": "חזרה להזמנות",
+    "loading": "טוען את ההזמנה…",
+    "notFound": "ההזמנה לא נמצאה.",
+    "shippingTo": "נשלחת אל",
+    "selfPickup": "איסוף עצמי — אין כתובת משלוח",
+    "shippingCost": "דמי משלוח",
+    "tracking": "מספר מעקב",
+    "noTracking": "טרם הונפק מספר מעקב"
   }
 }

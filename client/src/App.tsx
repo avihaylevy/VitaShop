@@ -8,6 +8,8 @@ import { ProductDetailsPage } from './pages/ProductDetailsPage'
 import { CartPage } from './components/cart'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { AdminOrdersPage } from './pages/AdminOrdersPage'
+import { OrderHistoryPage } from './pages/OrderHistoryPage'
+import { OrderDetailPage } from './pages/OrderDetailPage'
 import { RequireAuth } from './components/auth/RequireAuth'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -64,6 +66,34 @@ function App() {
           element={
             <RequireAuth>
               <AdminOrdersPage />
+            </RequireAuth>
+          }
+        />
+        {/*
+          MILESTONE-008 Checkpoint G2 — REQ-F-050, the shopper's own orders.
+
+          🔴 LINKED FROM THE ACCOUNT MENU, and that is not a detail. The menu's
+          "My account" entry pointed at `/account`, which HAS NO ROUTE and fell
+          through to the 404 page for every signed-in shopper — ISSUE-102, the
+          mirror of ISSUE-097's unlinked admin screen. It now points here, at a
+          page that exists, with a label that is true.
+
+          ⚠️ `RequireAuth` is UX, not security: the routes answer 401 on their
+          own, and ownership is scoped server-side in the query (DEC-070).
+        */}
+        <Route
+          path="/account/orders"
+          element={
+            <RequireAuth>
+              <OrderHistoryPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/account/orders/:id"
+          element={
+            <RequireAuth>
+              <OrderDetailPage />
             </RequireAuth>
           }
         />

@@ -23,7 +23,8 @@
     "menuLabel": "Account menu",
     "signOut": "Sign out",
     "guestGreeting": "Not signed in",
-    "signedInGreeting": "Signed in"
+    "signedInGreeting": "Signed in",
+    "myOrders": "My orders"
   },
   "favourites": {
     "label": "Favourites",
