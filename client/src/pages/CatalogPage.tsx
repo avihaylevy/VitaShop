@@ -7,7 +7,6 @@ import { useCatalogFacets } from '../hooks/useCatalogFacets'
 import { useCloseAboveBreakpoint } from '../hooks/useCloseAboveBreakpoint'
 import { CategoryShelf, CatalogLoadingState, CatalogErrorState, CatalogEmptyState } from '../components/catalog'
 import { ProductGrid } from '../components/catalog/ProductGrid'
-import { CatalogSearchField } from '../components/catalog/CatalogSearchField'
 import { CatalogSortSelect } from '../components/catalog/CatalogSortSelect'
 import { CatalogFilterPanel } from '../components/catalog/CatalogFilterPanel'
 import { CatalogPagination } from '../components/catalog/CatalogPagination'
@@ -116,12 +115,10 @@ export function CatalogPage() {
     [setSearchParams, urlState],
   )
 
-  const handleSearchSubmit = useCallback(
-    // An emptied field clears `q` rather than sending `?q=` — the same
-    // presence rule `buildCatalogSearchParams`/`hasNarrowingQuery` use.
-    (query: string) => applyQueryChange({ q: query.length > 0 ? query : undefined }),
-    [applyQueryChange],
-  )
+  // ISSUE-110 — the page-local search field is GONE: the header's SearchBox
+  // is THE field everywhere and carries the /catalog q-binding itself
+  // (components/ui/SearchBox.tsx). Its submit still routes through the same
+  // frozen nextCatalogUrlState, so §5's page-reset rule is unchanged.
 
   const handleSortChange = useCallback((sort: string) => applyQueryChange({ sort }), [applyQueryChange])
 
@@ -285,9 +282,10 @@ export function CatalogPage() {
         <body> — the exact defect §10 forbids. Keeping them mounted keeps
         focus where the user left it.
       */}
-      <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <CatalogSearchField value={urlState.q ?? ''} onSubmit={handleSearchSubmit} />
-
+      {/* ISSUE-110: the search field left this row for the header, so the
+          chrome row is just the filter trigger(s) + sort, packed to the
+          inline end where they have always sat. */}
+      <div className="mt-6 flex justify-end">
         <div className="flex items-center gap-3">
           <Button
             type="button"

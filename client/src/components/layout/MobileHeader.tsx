@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Logo } from '../brand/Logo'
 import { SearchBox } from '../ui/SearchBox'
@@ -10,7 +10,6 @@ import { AccountMenu } from './AccountMenu'
 import { FavouritesControl, CartControl } from './UtilityCluster'
 import { MobileMenu } from './MobileMenu'
 import { NAV_ITEMS } from './navItems'
-import { shouldRenderHeaderSearch } from './headerSearch'
 import { useCloseAboveBreakpoint } from '../../hooks/useCloseAboveBreakpoint'
 
 /**
@@ -22,9 +21,8 @@ export function MobileHeader() {
   const { t } = useTranslation('layout')
   const [menuOpen, setMenuOpen] = useState(false)
   const hamburgerRef = useRef<HTMLButtonElement>(null)
-  // ISSUE-085 — see `headerSearch.ts`. The same rule as the desktop header:
-  // a desktop-only fix would leave the duplicate at every width below `md`.
-  const showSearch = shouldRenderHeaderSearch(useLocation().pathname)
+  // ISSUE-110 — one search on every page; see Header.tsx. The old
+  // ISSUE-085 stand-down rule is deleted with the page-local field.
 
   // Close the mobile-only disclosure if the desktop header takes over.
   useCloseAboveBreakpoint(menuOpen, () => setMenuOpen(false))
@@ -60,13 +58,11 @@ export function MobileHeader() {
         <FavouritesControl />
         <CartControl />
       </div>
-      {showSearch ? (
-        <div className="px-4 pb-2">
-          <div className="mx-auto w-full max-w-[320px]">
-            <SearchBox />
-          </div>
+      <div className="px-4 pb-2">
+        <div className="mx-auto w-full max-w-[320px]">
+          <SearchBox />
         </div>
-      ) : null}
+      </div>
     </header>
   )
 }

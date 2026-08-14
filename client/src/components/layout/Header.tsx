@@ -1,11 +1,10 @@
-import { Link, NavLink, useLocation } from 'react-router'
+import { Link, NavLink } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Logo } from '../brand/Logo'
 import { SearchBox } from '../ui/SearchBox'
 import { UtilityCluster } from './UtilityCluster'
 import { FOCUS_RING } from '../ui/focusRing'
 import { NAV_ITEMS } from './navItems'
-import { shouldRenderHeaderSearch } from './headerSearch'
 
 /**
  * Desktop header — two rows (DESIGN_SYSTEM.md §5): brand row (logo,
@@ -20,9 +19,9 @@ import { shouldRenderHeaderSearch } from './headerSearch'
  */
 export function Header() {
   const { t } = useTranslation('layout')
-  // ISSUE-085 — on /catalog the page owns the search field; the header's
-  // would be a second, identically-named `role="search"` on the same page.
-  const showSearch = shouldRenderHeaderSearch(useLocation().pathname)
+  // ISSUE-110 — ONE search, beside the logo, on every page (the user's
+  // call, superseding ISSUE-085's stand-down rule): SearchBox itself now
+  // carries the /catalog q-state binding, so it renders unconditionally.
 
   return (
     <header className="hidden border-b border-border-hairline bg-surface-header md:block">
@@ -30,7 +29,7 @@ export function Header() {
         <Link to="/" className={`${FOCUS_RING} shrink-0 rounded-card`}>
           <Logo variant="full" />
         </Link>
-        {showSearch ? <SearchBox className="mx-auto" /> : <div className="flex-1" />}
+        <SearchBox className="mx-auto" />
         <UtilityCluster className="shrink-0" />
       </div>
       <nav aria-label={t('nav.mainLabel')} className="border-t border-border-hairline px-7">

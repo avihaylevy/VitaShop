@@ -324,11 +324,13 @@ describe('CatalogPage accessibility — ready', () => {
  * pass, not here (no jsdom in this file).
  */
 describe('CatalogPage accessibility — query controls (Checkpoint I)', () => {
-  it('renders one search landmark, a labelled native sort select with exactly the four frozen values', async () => {
+  it('renders NO search landmark of its own (ISSUE-110 — the header owns THE field), and a labelled native sort select with exactly the four frozen values', async () => {
     setCatalogData({ products: [product()], totalItems: 1 })
     const html = await renderCatalog()
 
-    expect(count(html, 'role="search"')).toBe(1)
+    // ISSUE-110: the page-local field is gone; the header's SearchBox is
+    // the one search landmark, and it is not part of this page's render.
+    expect(count(html, 'role="search"')).toBe(0)
     // A real <select> with a real <label for>, not a custom listbox (§10).
     expect(html).toMatch(/<label for="[^"]+"[^>]*>מיון<\/label>/)
     expect(count(html, '<select')).toBe(1)
@@ -338,7 +340,7 @@ describe('CatalogPage accessibility — query controls (Checkpoint I)', () => {
     }
   })
 
-  it('reflects the current q in the search field rather than starting empty (§10)', async () => {
+  it('renders no search input at all — the §10 q-reflection contract moved to SearchBox (ISSUE-110)', async () => {
     setCatalogData({
       products: [product()],
       totalItems: 1,
@@ -347,7 +349,9 @@ describe('CatalogPage accessibility — query controls (Checkpoint I)', () => {
     })
     const html = await renderCatalog('/catalog?q=' + encodeURIComponent('ויטמין'))
 
-    expect(html).toMatch(/<input[^>]*type="search"[^>]*value="ויטמין"/)
+    // The reflection contract itself is pinned in SearchBox.catalog.test.tsx,
+    // where the field now lives.
+    expect(html).not.toMatch(/<input[^>]*type="search"/)
   })
 
   it('conveys filter grouping semantically — fieldset/legend, ID-valued checkboxes, facet labels', async () => {
