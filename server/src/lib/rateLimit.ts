@@ -310,6 +310,8 @@ export function createOrderRateLimiters(): OrderRateLimiters {
  */
 export const ADMIN_RATE_LIMITS = {
   status: { windowMs: 15 * MINUTE, limit: 60 },
+  /** A READ an admin refreshes while working through a queue. */
+  list: { windowMs: 15 * MINUTE, limit: 240 },
 } as const
 
 /**
@@ -336,11 +338,13 @@ export function createAccountRateLimiters(): AccountRateLimiters {
 
 export interface AdminRateLimiters {
   status: RequestHandler
+  list: RequestHandler
 }
 
 export function createAdminRateLimiters(): AdminRateLimiters {
   return {
     status: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.status, keyGenerator: shopperKey }),
+    list: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.list, keyGenerator: shopperKey }),
   }
 }
 

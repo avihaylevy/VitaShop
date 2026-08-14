@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  adminTransitionsFrom,
   ORDER_STATUSES,
   ORDER_ACTORS,
   transitionProblem,
@@ -157,5 +158,48 @@ describe('🔴 WHICH TRANSITIONS RESTORE STOCK — INV-01 in reverse', () => {
     // for goods that are already out of the door.
     expect(restoresStock('shipped', 'cancelled')).toBe(false)
     expect(restoresStock('delivered', 'cancelled')).toBe(false)
+  })
+})
+
+/**
+ * MILESTONE-008 Checkpoint F3 — what the admin screen is allowed to OFFER.
+ *
+ * 🔴 DERIVED FROM §8.9's TABLE, NEVER LISTED AGAIN. The screen renders one
+ * button per legal move; the alternative is the browser holding its own copy
+ * of the table, which is the drift that blanked the blocked-order screen
+ * earlier in this milestone.
+ */
+describe('adminTransitionsFrom', () => {
+  it('gives a PAID order the two moves an admin has', () => {
+    expect([...adminTransitionsFrom('paid')].sort()).toEqual(['cancelled', 'processing'])
+  })
+
+  it('gives a PROCESSING order shipped and cancelled', () => {
+    expect([...adminTransitionsFrom('processing')].sort()).toEqual(['cancelled', 'shipped'])
+  })
+
+  it('🔴 gives a SHIPPED order only `delivered` — there is no cancel after dispatch', () => {
+    // The table's deliberate omission: once goods are dispatched the operation
+    // is a RETURN, a flow nothing in the specification asks for.
+    expect(adminTransitionsFrom('shipped')).toEqual(['delivered'])
+  })
+
+  it('gives a PENDING_PAYMENT order only `cancelled` — `paid` belongs to the SYSTEM', () => {
+    expect(adminTransitionsFrom('pending_payment')).toEqual(['cancelled'])
+  })
+
+  it.each(['delivered', 'cancelled'] as const)('gives a TERMINAL %s order nothing', (status) => {
+    expect(adminTransitionsFrom(status)).toEqual([])
+  })
+
+  it('🔴 never offers a move the ADMIN ROUTE would refuse', () => {
+    // `ADMIN_TARGETS` in adminOrders.ts is narrower than the enum on purpose:
+    // `paid` and `pending_payment` are the system's and the shopper's. A list
+    // that offered either would render a button that always 403s.
+    for (const status of ORDER_STATUSES) {
+      for (const target of adminTransitionsFrom(status)) {
+        expect(['processing', 'shipped', 'delivered', 'cancelled']).toContain(target)
+      }
+    }
   })
 })

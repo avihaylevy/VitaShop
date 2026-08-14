@@ -1,7 +1,11 @@
 import { Router } from 'express'
 import type { PrismaClient } from '@prisma/client'
 import { applyTransition } from '../lib/orderTransitionService.js'
-import { ORDER_STATUSES, type OrderStatusName } from '../lib/orderTransitions.js'
+import {
+  ORDER_STATUSES,
+  adminTransitionsFrom,
+  type OrderStatusName,
+} from '../lib/orderTransitions.js'
 import { createAdminRateLimiters, type AdminRateLimiters } from '../lib/rateLimit.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireAdmin } from './requireAdmin.js'
@@ -35,6 +39,9 @@ export type AdminOrderRouterDeps = {
 /** The four an admin may ask for. Quoted from §8.9, not invented here. */
 const ADMIN_TARGETS: readonly OrderStatusName[] = ['processing', 'shipped', 'delivered', 'cancelled']
 
+/** One screenful. The admin list is low-traffic and read by a human. */
+const ADMIN_ORDERS_PAGE_SIZE = 25
+
 export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<typeof Router> {
   const { prisma } = deps
   const limiters = deps.rateLimiters ?? createAdminRateLimiters()
@@ -48,6 +55,85 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
    *   requireShopper — 401 for anonymous
    *   requireAdmin   — 403 for a signed-in non-admin, role read PER REQUEST
    */
+  /**
+   * MILESTONE-008 Checkpoint F3 — the LIST the admin screen renders.
+   *
+   * 🔴 THE ROUTES THIS FILE ALREADY HAD COULD CHANGE AN ORDER AND NOT FIND
+   * ONE. `PATCH /:id/status` has existed since ISSUE-083's guard half, so an
+   * admin could move an order they already knew the id of — and there was no
+   * way to learn an id. The screen could not exist.
+   *
+   * 🔴 LIST ONLY, deliberately. A per-order detail route is MILESTONE-010's,
+   * and this returns exactly what a row renders: nothing about lines, nothing
+   * about the shopper beyond the email the order was placed under.
+   *
+   * ⚠️ `allowedTransitions` IS COMPUTED SERVER-SIDE, per row. The screen shows
+   * one button per legal move, and the alternative is the browser carrying its
+   * own copy of §8.9 — the drift this milestone already paid for once when the
+   * client's hand-written reason list blanked the blocked-order screen. It is
+   * what a UI should OFFER; the PATCH guard still decides.
+   */
+  router.get('/', limiters.list, requireShopper, requireAdmin, async (req, res) => {
+    const rawPage = Number.parseInt(String(req.query.page ?? '1'), 10)
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1
+
+    // An unknown status is ignored rather than refused: it filters nothing, and
+    // a 400 here would break a bookmarked URL after a status is ever renamed.
+    const rawStatus = req.query.status
+    const status =
+      typeof rawStatus === 'string' && ORDER_STATUSES.includes(rawStatus as OrderStatusName)
+        ? (rawStatus as OrderStatusName)
+        : undefined
+
+    const where = status ? { status } : {}
+
+    try {
+      const [totalItems, orders] = await Promise.all([
+        prisma.order.count({ where }),
+        prisma.order.findMany({
+          where,
+          // 🔴 NEWEST FIRST. An admin opens this to see what just arrived, and
+          // `id` is a uuid — ordering by it would be arbitrary, not stable.
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * ADMIN_ORDERS_PAGE_SIZE,
+          take: ADMIN_ORDERS_PAGE_SIZE,
+          select: {
+            id: true,
+            orderNumber: true,
+            createdAt: true,
+            status: true,
+            totalAmount: true,
+            user: { select: { email: true } },
+            _count: { select: { items: true } },
+          },
+        }),
+      ])
+
+      res.json({
+        // The same `totalPages` convention the catalogue froze at §4a: zero
+        // items is zero pages, not one empty page.
+        page,
+        totalItems,
+        totalPages: Math.ceil(totalItems / ADMIN_ORDERS_PAGE_SIZE),
+        orders: orders.map((order) => ({
+          id: order.id,
+          orderNumber: order.orderNumber,
+          createdAt: order.createdAt.toISOString(),
+          status: order.status,
+          totalAmount: order.totalAmount.toFixed(2),
+          customerEmail: order.user.email,
+          itemCount: order._count.items,
+          allowedTransitions: adminTransitionsFrom(order.status as OrderStatusName),
+        })),
+      })
+    } catch (error) {
+      console.error('[admin] listing orders failed', error)
+      res.status(503).json({
+        error: { code: 'ORDER_LIST_UNAVAILABLE', message: 'Try again shortly.' },
+      })
+    }
+  })
+
   router.patch(
     '/:id/status',
     limiters.status,

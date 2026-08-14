@@ -92,6 +92,29 @@ export const ORDER_TRANSITIONS: readonly OrderTransition[] = [
   // inventing one inside a transition table is how scope arrives unannounced.
 ] as const
 
+/**
+ * MILESTONE-008 Checkpoint F3 — every move an ADMIN may make from a status,
+ * derived from the table above rather than listed again.
+ *
+ * 🔴 THE ADMIN ORDERS PAGE NEEDS THIS, AND IT MUST NOT OWN A COPY OF §8.9.
+ * The page renders one button per legal move; the alternative is the browser
+ * holding its own copy of the transition table, which is the drift that
+ * `purchasability.ts` exists to make unrepresentable — and which this
+ * milestone already paid for once, when the client's hand-written
+ * unpurchasable-reason list disagreed with the server's and blanked the
+ * blocked-order screen.
+ *
+ * ⚠️ `adminOrders.ts`'s `ADMIN_TARGETS` answers a DIFFERENT question — which
+ * targets an admin may ever ask for, regardless of the order. This answers
+ * which are legal FROM a given status. The route still checks both: this list
+ * is what a UI should offer, never a substitute for the guard.
+ */
+export function adminTransitionsFrom(from: OrderStatusName): readonly OrderStatusName[] {
+  return ORDER_TRANSITIONS.filter(
+    (row) => row.from === from && row.actors.includes('admin'),
+  ).map((row) => row.to)
+}
+
 export type TransitionRejection =
   /** The order is finished. Nothing leaves `delivered` or `cancelled`. */
   | 'TERMINAL'

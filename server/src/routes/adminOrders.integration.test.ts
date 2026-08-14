@@ -327,3 +327,112 @@ describe('the transitions an admin may ask for', () => {
     expect(r.status).toBe(404)
   })
 })
+
+/**
+ * MILESTONE-008 Checkpoint F3 — `GET /api/admin/orders`, the list the screen
+ * renders.
+ *
+ * 🔴 UNTIL THIS ROUTE EXISTED THE SCREEN COULD NOT. `PATCH /:id/status` has
+ * shipped since ISSUE-083's guard half, so an admin could change an order they
+ * already knew the id of — and there was no way to learn an id.
+ */
+describe('GET /api/admin/orders', () => {
+  function list(query: string, cookie?: string) {
+    return fetch(`${baseUrl}/api/admin/orders${query}`, {
+      headers: { ...(cookie ? { cookie } : {}) },
+    })
+  }
+
+  it('refuses anonymous with 401 and a shopper with 403', async () => {
+    expect((await list('')).status).toBe(401)
+    expect((await list('', await signIn(SHOPPER))).status).toBe(403)
+  })
+
+  it('lists orders NEWEST FIRST', async () => {
+    const first = await placeOrder('adm-list-1', 1)
+    const second = await placeOrder('adm-list-2', 1)
+    const body = (await list('', await signIn(ADMIN)).then((r) => r.json())) as {
+      orders: { id: string }[]
+    }
+    const ids = body.orders.map((o) => o.id)
+    // Compared as positions, not as a whole array: the database holds other
+    // fixtures' orders too, and asserting the exact list would couple this
+    // test to every other test's leftovers.
+    expect(ids.indexOf(second)).toBeLessThan(ids.indexOf(first))
+  })
+
+  it('🔴 tells the screen which moves are legal, per row', async () => {
+    const orderId = await placeOrder('adm-list-allowed', 1)
+    await setStatus(orderId, 'paid')
+    const body = (await list('', await signIn(ADMIN)).then((r) => r.json())) as {
+      orders: { id: string; status: string; allowedTransitions: string[] }[]
+    }
+    const row = body.orders.find((o) => o.id === orderId)
+    expect(row?.status).toBe('paid')
+    // §8.9's table, derived — not a second copy of it in the browser.
+    expect([...(row?.allowedTransitions ?? [])].sort()).toEqual(['cancelled', 'processing'])
+  })
+
+  it('🔴 a SHIPPED order offers only `delivered` — no cancel after dispatch', async () => {
+    const orderId = await placeOrder('adm-list-shipped', 1)
+    await setStatus(orderId, 'shipped')
+    const body = (await list('', await signIn(ADMIN)).then((r) => r.json())) as {
+      orders: { id: string; allowedTransitions: string[] }[]
+    }
+    expect(body.orders.find((o) => o.id === orderId)?.allowedTransitions).toEqual(['delivered'])
+  })
+
+  it('filters by status, and an UNKNOWN status filters nothing rather than 400', async () => {
+    const orderId = await placeOrder('adm-list-filter', 1)
+    await setStatus(orderId, 'processing')
+    const cookie = await signIn(ADMIN)
+
+    const filtered = (await list('?status=processing', cookie).then((r) => r.json())) as {
+      orders: { status: string }[]
+    }
+    expect(filtered.orders.length).toBeGreaterThan(0)
+    expect(filtered.orders.every((o) => o.status === 'processing')).toBe(true)
+
+    // A bookmarked URL must not start 400-ing if a status is ever renamed.
+    const unknown = await list('?status=IN_TRANSIT', cookie)
+    expect(unknown.status).toBe(200)
+  })
+
+  it('carries the row fields the screen needs, and nothing about the shopper beyond the email', async () => {
+    const orderId = await placeOrder('adm-list-shape', 2)
+    const raw = await list('', await signIn(ADMIN)).then((r) => r.text())
+    const body = JSON.parse(raw) as {
+      orders: { id: string; orderNumber: string; totalAmount: string; customerEmail: string; itemCount: number }[]
+    }
+    const row = body.orders.find((o) => o.id === orderId)!
+    expect(row.orderNumber).toMatch(/^VS-/)
+    expect(row.totalAmount).toMatch(/^\d+\.\d{2}$/)
+    expect(row.customerEmail).toBe(SHOPPER)
+    expect(row.itemCount).toBe(1)
+    // 🔴 A LIST, NOT A DETAIL VIEW. No lines, and no password hash ever.
+    expect(raw).not.toContain('$argon2')
+    expect(raw).not.toContain('unitPrice')
+  })
+
+  it('paginates, and zero items is ZERO pages — the catalogue convention', async () => {
+    const cookie = await signIn(ADMIN)
+    // `cancelled` exists as a status but no fixture here reaches it, so this
+    // is a real empty result rather than a page past the end.
+    const empty = (await list('?status=cancelled', cookie).then((r) => r.json())) as {
+      totalItems: number
+      totalPages: number
+      orders: unknown[]
+    }
+    expect(empty.totalItems).toBe(0)
+    // 🔴 Zero pages, not one empty page — §4a, frozen for the catalogue.
+    expect(empty.totalPages).toBe(0)
+    expect(empty.orders).toHaveLength(0)
+  })
+
+  it('a page past the end is an empty page, not an error', async () => {
+    await placeOrder('adm-list-page', 1)
+    const body = await list('?page=9999', await signIn(ADMIN))
+    expect(body.status).toBe(200)
+    expect(((await body.json()) as { orders: unknown[] }).orders).toHaveLength(0)
+  })
+})
