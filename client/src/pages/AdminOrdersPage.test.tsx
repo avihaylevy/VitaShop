@@ -258,9 +258,19 @@ describe('moving an order', () => {
     let listCalls = 0
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (_url: string, init?: RequestInit) => {
+      vi.fn(async (url: string, init?: RequestInit) => {
         if (init?.method === 'PATCH') {
           return { status: 200, json: async () => ({ orderId: 'o1', status: 'processing', changed: true, restoredStock: false }) } as unknown as Response
+        }
+        /*
+         * ⚠️ THE STUCK-ORDER COUNT IS NOT A LIST CALL. Checkpoint G3 added a
+         * second GET on mount (ISSUE-082's read half, DEC-069), and these
+         * fixtures counted EVERY non-PATCH request — so the counter meant
+         * something different from what its name said and both tests broke.
+         * Answered separately and left out of the count.
+         */
+        if (String(url).includes('/stuck')) {
+          return { status: 200, json: async () => ({ count: 0, orders: [] }) } as unknown as Response
         }
         listCalls += 1
         if (listCalls === 2) await slowList
@@ -336,9 +346,19 @@ describe('moving an order', () => {
     let listCalls = 0
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (_url: string, init?: RequestInit) => {
+      vi.fn(async (url: string, init?: RequestInit) => {
         if (init?.method === 'PATCH') {
           return { status: 200, json: async () => ({ orderId: 'o1', status: 'processing', changed: true, restoredStock: false }) } as unknown as Response
+        }
+        /*
+         * ⚠️ THE STUCK-ORDER COUNT IS NOT A LIST CALL. Checkpoint G3 added a
+         * second GET on mount (ISSUE-082's read half, DEC-069), and these
+         * fixtures counted EVERY non-PATCH request — so the counter meant
+         * something different from what its name said and both tests broke.
+         * Answered separately and left out of the count.
+         */
+        if (String(url).includes('/stuck')) {
+          return { status: 200, json: async () => ({ count: 0, orders: [] }) } as unknown as Response
         }
         listCalls += 1
         return { status: 200, json: async () => page([row()]) } as unknown as Response

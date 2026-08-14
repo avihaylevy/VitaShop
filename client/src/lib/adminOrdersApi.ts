@@ -1,8 +1,11 @@
 import { getApiBaseUrl } from './apiBaseUrl.js'
 import { isOrderStatusName, type OrderStatusName } from './orderStatus.js'
 import type {
+  AdminListFailure,
   AdminOrderRow,
   AdminOrdersResult,
+  ReconcileResult,
+  StuckOrdersResult,
   TransitionResult,
 } from '../types/adminOrders.js'
 
@@ -155,4 +158,70 @@ export async function transitionOrder(
   if (code === 'CONCURRENT_TRANSITION') return { ok: false, failure: { kind: 'concurrent' } }
 
   return { ok: false, failure: { kind: 'server' } }
+}
+
+/**
+ * The shared refusal mapping for both reconciliation calls.
+ *
+ * 🔴 401 AND 403 STAY APART. 401 means sign in; 403 means you are signed in and
+ * this is not yours — telling a signed-in shopper to sign in is the loop the
+ * profile route shipped once.
+ */
+function reconcileFailure(status: number): AdminListFailure {
+  if (status === 401) return { kind: 'unauthenticated' }
+  if (status === 403) return { kind: 'notAdmin' }
+  if (status === 429) return { kind: 'rateLimited' }
+  return { kind: 'unavailable' }
+}
+
+/**
+ * MILESTONE-008 Checkpoint G3 — the READ half of ISSUE-082's trigger.
+ * 🔴 Changes nothing, so the screen may call it on load.
+ */
+export async function requestStuckOrders(): Promise<StuckOrdersResult> {
+  const raw = await call('/api/admin/orders/stuck')
+  if (raw === null) return { ok: false, failure: { kind: 'offline' } }
+  if (raw.status !== 200) return { ok: false, failure: reconcileFailure(raw.status) }
+
+  const body = raw.body
+  if (!isPlainObject(body) || typeof body.count !== 'number' || !Array.isArray(body.orders)) {
+    return { ok: false, failure: { kind: 'unavailable' } }
+  }
+  return {
+    ok: true,
+    count: body.count,
+    orders: body.orders as { id: string; orderNumber: string; createdAt: string }[],
+  }
+}
+
+/**
+ * 🔴 THE REPAIR. IT MARKS ORDERS PAID — the screen asks first, and the server
+ * refuses anyone who is not an admin with the role read per request (DEC-065).
+ *
+ * ⚠️ A PARTIAL REPAIR IS A SUCCESS. `failed` carries the orders the table or
+ * the write refused, and reporting only the count would hide which ones are
+ * still stuck — the whole point of the sweep's report.
+ */
+export async function reconcileStuckOrders(): Promise<ReconcileResult> {
+  const raw = await call('/api/admin/orders/reconcile', { method: 'POST', body: {} })
+  if (raw === null) return { ok: false, failure: { kind: 'offline' } }
+  if (raw.status !== 200) return { ok: false, failure: reconcileFailure(raw.status) }
+
+  const body = raw.body
+  if (
+    !isPlainObject(body) ||
+    typeof body.examined !== 'number' ||
+    typeof body.repaired !== 'number' ||
+    !Array.isArray(body.failed)
+  ) {
+    return { ok: false, failure: { kind: 'unavailable' } }
+  }
+  return {
+    ok: true,
+    report: {
+      examined: body.examined,
+      repaired: body.repaired,
+      failed: body.failed as { orderNumber: string; reason: string }[],
+    },
+  }
 }

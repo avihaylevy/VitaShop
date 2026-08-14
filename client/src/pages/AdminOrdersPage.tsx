@@ -4,7 +4,12 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { PriceBlock } from '../components/catalog/PriceBlock'
-import { requestAdminOrders, transitionOrder } from '../lib/adminOrdersApi'
+import {
+  reconcileStuckOrders as reconcileApi,
+  requestAdminOrders,
+  requestStuckOrders,
+  transitionOrder,
+} from '../lib/adminOrdersApi'
 import { orderStatusLabelKey, type OrderStatusName } from '../lib/orderStatus'
 import type {
   AdminListFailure,
@@ -70,6 +75,62 @@ export function AdminOrdersPage() {
    */
   const [announcement, setAnnouncement] = useState({ text: '', nonce: 0 })
   const requestId = useRef(0)
+
+  /**
+   * ISSUE-082's trigger — DEC-069. The READ runs on load because it is safe;
+   * the REPAIR is a deliberate act behind a confirmation.
+   */
+  const [stuck, setStuck] = useState<{ status: 'idle' } | { status: 'ready'; count: number }>({
+    status: 'idle',
+  })
+  const [confirmingReconcile, setConfirmingReconcile] = useState(false)
+  const [reconciling, setReconciling] = useState(false)
+  const [reconcileOutcome, setReconcileOutcome] = useState<string | null>(null)
+
+  const countStuck = useCallback(async () => {
+    const result = await requestStuckOrders()
+    // ⚠️ A FAILED COUNT IS SILENT. This is a diagnostic beside the queue, not
+    // the page's purpose — an error banner for it would push the orders down
+    // and tell an admin nothing they can act on.
+    if (result.ok) setStuck({ status: 'ready', count: result.count })
+  }, [])
+
+  useEffect(() => {
+    void countStuck()
+  }, [countStuck])
+
+  async function runReconcile() {
+    setReconciling(true)
+    const result = await reconcileApi()
+    setReconciling(false)
+    setConfirmingReconcile(false)
+
+    const text = result.ok
+      ? result.report.failed.length > 0
+        ? t('reconcile.outcome.partial', {
+            repaired: result.report.repaired,
+            failed: result.report.failed.length,
+          })
+        : t('reconcile.outcome.repaired', { count: result.report.repaired })
+      /*
+       * ⚠️ `state.*`, NOT `failure.*` — the second holds the TRANSITION
+       * refusals (terminal, concurrent, …), which say nothing about a sweep
+       * being refused. The first version reached for the wrong namespace and
+       * rendered a raw key; the list failure notice uses these same strings.
+       */
+      : t(`state.${result.failure.kind}`)
+
+    setReconcileOutcome(text)
+    // The same nonce the row outcomes use: a live region announces a CHANGE,
+    // and two identical reports would otherwise be spoken once.
+    setAnnouncement((previous) => ({ text, nonce: previous.nonce + 1 }))
+
+    if (result.ok) {
+      await countStuck()
+      // Repaired orders have MOVED, so the queue below is now stale.
+      if (result.report.repaired > 0) void load(page, { quiet: true })
+    }
+  }
 
   const load = useCallback(async (next: number, options?: { quiet?: boolean }) => {
     // The same staleness rule the checkout screen settled: the last REQUEST
@@ -154,6 +215,58 @@ export function AdminOrdersPage() {
         {announcement.text}
         {announcement.nonce % 2 === 1 ? ' ' : ''}
       </p>
+
+      {/*
+        🔴 ISSUE-082'S TRIGGER — DEC-069, Checkpoint G3.
+
+        The sweep has existed since Checkpoint E and NOTHING HAS EVER CALLED
+        IT: a swallowed failure returns 201, so no retry is sent, and an order
+        can sit at `pending_payment` with its stock gone and no transition out
+        — not even an admin's, because §8.9 allows only `paid` or `cancelled`
+        from there.
+
+        ⚠️ THE COUNT IS SHOWN BEFORE THE REPAIR IS OFFERED. Counting changes
+        nothing; repairing MARKS ORDERS PAID. An admin should not be asked to
+        run a batch write to find out whether it was needed — and if the
+        payment ordering ever changes, this button starts inventing revenue,
+        which is the warning `orderReconciliation.ts` carries in its header.
+      */}
+      {stuck.status === 'ready' && stuck.count > 0 && (
+        <section className="flex flex-col gap-2 rounded-card border border-state-warning bg-well p-4">
+          <h2 className="text-base font-semibold text-text-ink">{t('reconcile.title')}</h2>
+          <p className="text-sm text-text-muted">{t('reconcile.found', { count: stuck.count })}</p>
+
+          {confirmingReconcile ? (
+            <div className="flex flex-col gap-2 rounded-card border border-state-error p-3">
+              {/* It marks orders PAID in a batch, with no per-order review. */}
+              <p className="text-sm text-state-error">{t('reconcile.ask')}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="danger"
+                  aria-disabled={reconciling || undefined}
+                  onClick={() => {
+                    if (reconciling) return
+                    void runReconcile()
+                  }}
+                >
+                  {t('reconcile.confirm')}
+                </Button>
+                <Button onClick={() => setConfirmingReconcile(false)}>{t('reconcile.abort')}</Button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <Button variant="secondary" onClick={() => setConfirmingReconcile(true)}>
+                {t('reconcile.action')}
+              </Button>
+            </div>
+          )}
+
+          {reconcileOutcome !== null && (
+            <p className="text-sm text-text-muted">{reconcileOutcome}</p>
+          )}
+        </section>
+      )}
 
       {state.status === 'loading' && <p className="text-sm text-text-muted">{t('state.loading')}</p>}
 

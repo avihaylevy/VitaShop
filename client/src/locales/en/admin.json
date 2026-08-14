@@ -42,5 +42,19 @@
     "previous": "Previous",
     "next": "Next",
     "position": "Page {{page}} of {{total}}"
+  },
+  "reconcile": {
+    "title": "Stuck orders",
+    "found_one": "1 order has been awaiting payment for an unusual length of time.",
+    "found_other": "{{count}} orders have been awaiting payment for an unusual length of time.",
+    "action": "Repair stuck orders",
+    "ask": "This marks the stuck orders as paid, in one batch and without reviewing them individually. Continue?",
+    "confirm": "Yes, repair them",
+    "abort": "Cancel",
+    "outcome": {
+      "repaired_one": "1 order repaired.",
+      "repaired_other": "{{count}} orders repaired.",
+      "partial": "{{repaired}} repaired, {{failed}} failed."
+    }
   }
 }

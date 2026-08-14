@@ -7,6 +7,7 @@ import {
   type OrderStatusName,
 } from '../lib/orderTransitions.js'
 import { createAdminRateLimiters, type AdminRateLimiters } from '../lib/rateLimit.js'
+import { findStuckPendingPayment, reconcileStuckOrders } from '../lib/orderReconciliation.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireAdmin } from './requireAdmin.js'
 
@@ -155,6 +156,78 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
       console.error('[admin] listing orders failed', error)
       res.status(503).json({
         error: { code: 'ORDER_LIST_UNAVAILABLE', message: 'Try again shortly.' },
+      })
+    }
+  })
+
+  /**
+   * MILESTONE-008 Checkpoint G3 — ISSUE-082's TRIGGER, read half. DEC-069.
+   *
+   * 🔴 SAFE TO CALL: it changes nothing. ISSUE-082 records this as the cheapest
+   * first step precisely because NOTHING COUNTS THESE TODAY — an admin cannot
+   * currently tell whether the hole has ever been hit.
+   *
+   * ⚠️ Mounted BEFORE `/:id/status` is irrelevant (different method), but it
+   * must stay above nothing that would treat `stuck` as an order id.
+   */
+  router.get('/stuck', limiters.list, requireShopper, requireAdmin, async (req, res) => {
+    /*
+     * ⚠️ `?userId=` SCOPES THE READ, and the repair below takes the same
+     * option. Reconciling ONE account is the natural shape of a support request
+     * ("this shopper's order is stuck"), and it is what keeps a test from
+     * asserting a global property of the database.
+     */
+    const userId = typeof req.query.userId === 'string' ? req.query.userId : undefined
+
+    try {
+      const stuck = await findStuckPendingPayment(prisma, userId ? { userId } : {})
+      res.json({
+        count: stuck.length,
+        orders: stuck.map((order) => ({
+          id: order.id,
+          orderNumber: order.orderNumber,
+          createdAt: order.createdAt.toISOString(),
+        })),
+      })
+    } catch (error) {
+      console.error('[admin] counting stuck orders failed', error)
+      res.status(503).json({
+        error: { code: 'RECONCILE_UNAVAILABLE', message: 'Try again shortly.' },
+      })
+    }
+  })
+
+  /**
+   * 🔴 THE REPAIR — and the reason DEC-069 chose an admin action over a
+   * schedule. Nothing in this project runs scheduled work; a job runner is its
+   * own dependency decision, and a bare `setInterval` would be a background
+   * writer firing in every dev and test process.
+   *
+   * 🔴 THIS ROUTE MARKS ORDERS PAID. That is why it sits behind `requireAdmin`
+   * with the tightest ceiling on this router, and why the integration tests
+   * assert the refusals against the DATABASE rather than against a status code:
+   * a shopper who could reach this could settle their own unpaid order.
+   *
+   * ⚠️ IT IS A TRIGGER AND NOTHING MORE. Whether a move is legal stays in
+   * `orderTransitions.ts`, performing it atomically stays in
+   * `orderTransitionService.ts`, and deciding what counts as stuck stays in
+   * `orderReconciliation.ts` — which carries the load-bearing assumption that
+   * orders are created only AFTER payment succeeds. If that ordering ever
+   * changes, this button starts inventing revenue.
+   */
+  router.post('/reconcile', limiters.reconcile, requireShopper, requireAdmin, async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const userId = typeof body.userId === 'string' ? body.userId : undefined
+
+    try {
+      const report = await reconcileStuckOrders(prisma, userId ? { userId } : {})
+      // The report IS the answer: a partial repair is the normal case, and
+      // reporting only success would hide which orders are still stuck.
+      res.json(report)
+    } catch (error) {
+      console.error('[admin] reconciliation failed', error)
+      res.status(503).json({
+        error: { code: 'RECONCILE_UNAVAILABLE', message: 'Try again shortly.' },
       })
     }
   })

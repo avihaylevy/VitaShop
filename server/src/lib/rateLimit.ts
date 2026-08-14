@@ -324,6 +324,16 @@ export const ADMIN_RATE_LIMITS = {
   status: { windowMs: 15 * MINUTE, limit: 60 },
   /** A READ an admin refreshes while working through a queue. */
   list: { windowMs: 15 * MINUTE, limit: 240 },
+  /**
+   * MILESTONE-008 Checkpoint G3, DEC-069 — the reconciliation sweep's trigger.
+   *
+   * 🔴 THE TIGHTEST CEILING ON THIS ROUTER, and deliberately so. A sweep is a
+   * BATCH WRITE that moves orders to `paid` with no human confirming each one,
+   * so it is the opposite shape from the transition route an admin drives
+   * through a queue. There is no legitimate reason to fire it repeatedly:
+   * running it twice in a minute repairs nothing the first run left.
+   */
+  reconcile: { windowMs: 15 * MINUTE, limit: 6 },
 } as const
 
 /**
@@ -351,12 +361,14 @@ export function createAccountRateLimiters(): AccountRateLimiters {
 export interface AdminRateLimiters {
   status: RequestHandler
   list: RequestHandler
+  reconcile: RequestHandler
 }
 
 export function createAdminRateLimiters(): AdminRateLimiters {
   return {
     status: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.status, keyGenerator: shopperKey }),
     list: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.list, keyGenerator: shopperKey }),
+    reconcile: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.reconcile, keyGenerator: shopperKey }),
   }
 }
 

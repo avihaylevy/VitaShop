@@ -69,3 +69,26 @@ export type TransitionFailure =
 export type TransitionResult =
   | { ok: true; status: OrderStatusName; changed: boolean; restoredStock: boolean }
   | { ok: false; failure: TransitionFailure }
+
+/**
+ * MILESTONE-008 Checkpoint G3 — ISSUE-082's trigger, DEC-069.
+ *
+ * 🔴 THE READ AND THE REPAIR ARE SEPARATE TYPES because they are separate acts.
+ * Counting stuck orders changes nothing and is safe to run on sight; the repair
+ * MARKS ORDERS PAID and is offered only after the count says there is something
+ * to repair.
+ */
+export type StuckOrdersResult =
+  | { ok: true; count: number; orders: { id: string; orderNumber: string; createdAt: string }[] }
+  | { ok: false; failure: AdminListFailure }
+
+/** What the sweep did — a partial repair is the normal case, not an error. */
+export type ReconcileReport = {
+  examined: number
+  repaired: number
+  failed: { orderNumber: string; reason: string }[]
+}
+
+export type ReconcileResult =
+  | { ok: true; report: ReconcileReport }
+  | { ok: false; failure: AdminListFailure }
