@@ -34,7 +34,11 @@ export function CategoryShelf({ categories, activeCategorySlug, className = '' }
 
   return (
     <nav aria-label={t('categoryShelf.navLabel')} className={className}>
-      <ul className="flex gap-2 overflow-x-auto pb-1">
+      {/* p-1/-m-1: the scroll container clips at its padding box and the
+          focus ring extends 4px (2px outline + 2px offset) beyond a chip —
+          the 4px padding keeps the ring visible on every side, and the
+          negative margin gives the 4px back to the layout. */}
+      <ul className="-m-1 flex gap-2 overflow-x-auto p-1">
         <li>
           <Link
             to="/catalog"

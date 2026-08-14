@@ -325,6 +325,11 @@ export function CatalogPage() {
             <Button
               type="button"
               variant="secondary"
+              // md:h-9 matches the compacted sort select beside it (review
+              // finding: 42px next to 34px read unfinished). Responsive
+              // utilities are emitted after base ones, so this wins over
+              // Button's own h-11 at md+.
+              className="md:h-9"
               aria-expanded={railOpen}
               onClick={() => setRailOpen((value) => !value)}
             >
