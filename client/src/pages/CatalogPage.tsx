@@ -282,11 +282,15 @@ export function CatalogPage() {
         <body> — the exact defect §10 forbids. Keeping them mounted keeps
         focus where the user left it.
       */}
-      {/* ISSUE-110: the search field left this row for the header, so the
-          chrome row is just the filter trigger(s) + sort, packed to the
-          inline end where they have always sat. */}
-      <div className="mt-6 flex justify-end">
-        <div className="flex items-center gap-3">
+      {/*
+        ISSUE-122 — ONE chrome row: the category shelf packs to the inline
+        start, the filter trigger(s) + sort to the inline end, on the same
+        line (wrapping below it when narrow). The shelf stays permanently
+        mounted (§10's focus rule) — it only moved rows, not mount points.
+      */}
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <CategoryShelf categories={categories} activeCategorySlug={categorySlug} className="min-w-0 flex-1" />
+        <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="secondary"
@@ -380,25 +384,8 @@ export function CatalogPage() {
           untouched.
         */}
         <div ref={gridRef} className="min-w-0 flex-1">
-          {/*
-            🔴 Checkpoint I correction, finding 1. `CategoryShelf` renders
-            PERSISTENTLY, for exactly the reason the toolbar above does:
-            `category` is a §4 filter parameter and this shelf is its
-            control (real <Link>s). While it sat inside the resolved-state
-            switch, every category click started a query, the page entered
-            the loading contract, the shelf unmounted, and focus fell from
-            the just-clicked link to <body> — precisely the defect §10
-            forbids ("applying a filter must not steal focus from the
-            control just used"), on the page's most-used filter.
-
-            §9a is still honoured: it governs PRODUCTS ("no stale products
-            render during loading or error"), and the results area below
-            still swaps wholesale into the unchanged Slice 9 loading/error
-            presentation. A navigation control is not a result. The shelf's
-            own props, markup and component are untouched — only where it
-            is mounted changed.
-          */}
-          <CategoryShelf categories={categories} activeCategorySlug={categorySlug} />
+          {/* The shelf moved to the chrome row above (ISSUE-122) — still
+              permanently mounted, per the Checkpoint I finding-1 rule. */}
 
           {/*
             §10 — the result count in a POLITE live region, one announcement
@@ -407,7 +394,10 @@ export function CatalogPage() {
             throughout, never rendering the past-the-end response) announces
             exactly ONCE, for the canonical page — not once per request.
           */}
-          <p role="status" className={hasResultCount ? 'mb-2 text-sm text-text-muted' : ''}>
+          {/* ISSUE-116 — the user does not want the count DRAWN. §10's
+              polite announcement stays, sr-only: screen readers still hear
+              how many results a settled query produced. */}
+          <p role="status" className="sr-only">
             {/*
               🔴 Checkpoint I correction, finding 4 — §10's "LTR numeric
               isolation for prices and counts". The numeral is interpolated

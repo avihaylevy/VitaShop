@@ -133,7 +133,8 @@ describe('catalog namespace — the shipped locale pair', () => {
     'productDetails.packageQuantity',
     'productDetails.targetAudience',
     'productDetails.createdAt',
-    'productDetails.serialNumber',
+    // productDetails.serialNumber left with its display — ISSUE-123, the
+    // user's decision (a knowing §7b deviation).
   ])('defines the required Product Details key "%s" in both locales, non-empty', (path) => {
     const heValue = valueAt(HE, path)
     const enValue = valueAt(EN, path)

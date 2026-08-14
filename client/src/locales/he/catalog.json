@@ -65,14 +65,13 @@
     "ingredientName": "רכיב",
     "ingredientAmount": "כמות",
     "healthGoals": "יעדי בריאות",
-    "specifications": "נתוני המוצר",
+    "specifications": "פרטים נוספים",
     "brand": "מותג",
     "category": "קטגוריה",
     "dosageForm": "צורת מתן",
     "packageQuantity": "יחידות באריזה",
     "targetAudience": "קהל יעד",
-    "createdAt": "תאריך הוספה",
-    "serialNumber": "מספר סידורי"
+    "createdAt": "תאריך הוספה"
   },
   "filters": {
     "heading": "סינון",

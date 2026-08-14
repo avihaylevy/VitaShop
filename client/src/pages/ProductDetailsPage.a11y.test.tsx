@@ -208,17 +208,14 @@ describe('ProductDetailsPage — §7a/§7b field surface', () => {
     expect(html).toContain('2026-01-01') // 16
   })
 
-  it('shows serialNumber as read-only text — never an input, a link or a form value (§7b)', async () => {
+  it('🔴 ISSUE-123 — the serial number is NOT displayed (a user decision deviating from §7b field 01)', async () => {
     setDetail({ product: product() })
     const html = await renderPage()
 
-    expect(html).toContain('b7c1e0a2-uuid')
-    // It appears exactly once, inside a <dd>, and nowhere that could send
-    // it back to the server.
-    expect(count(html, 'b7c1e0a2-uuid')).toBe(1)
-    expect(html).not.toMatch(/<input[^>]*b7c1e0a2-uuid/)
-    expect(html).not.toMatch(/<a[^>]*b7c1e0a2-uuid/)
-    expect(html).not.toMatch(/href="[^"]*b7c1e0a2-uuid/)
+    // The value stays in the DTO; only the display is gone — and it must
+    // stay gone everywhere on the page, not merely moved.
+    expect(html).not.toContain('b7c1e0a2-uuid')
+    expect(html).not.toContain('מספר סידורי')
     expect(html).not.toContain('<form')
   })
 
@@ -290,10 +287,11 @@ describe('ProductDetailsPage — accessibility structure', () => {
     setDetail({ product: product() })
     const html = await renderPage()
 
-    expect(html).toMatch(/<dd[^>]*dir="ltr"[^>]*>100<\/dd>/)
+    // ISSUE-123: the dd follows the page direction so the number hugs its
+    // label; only the numeral inside is LTR-isolated.
+    expect(html).toMatch(/<dd[^>]*><span dir="ltr"[^>]*>100<\/span><\/dd>/)
     expect(html).toMatch(/<time[^>]*dir="ltr"/)
     expect(html).toMatch(/<span dir="ltr">180\.00 mg<\/span>/)
-    expect(html).toMatch(/<dd[^>]*dir="ltr"[^>]*>b7c1e0a2-uuid<\/dd>/)
   })
 
   it('carries a machine-readable datetime on the date-added value', async () => {
@@ -324,7 +322,8 @@ describe('ProductDetailsPage — §7c i18n', () => {
     // A missing i18next key renders as the raw key path; none may appear.
     expect(html).not.toContain('productDetails.')
     expect(html).not.toContain('catalog:')
-    for (const label of ['מותג', 'קטגוריה', 'צורת מתן', 'יחידות באריזה', 'תאריך הוספה', 'מספר סידורי']) {
+    // מספר סידורי left the list with the display (ISSUE-123).
+    for (const label of ['מותג', 'קטגוריה', 'צורת מתן', 'יחידות באריזה', 'תאריך הוספה']) {
       expect(html).toContain(label)
     }
   })

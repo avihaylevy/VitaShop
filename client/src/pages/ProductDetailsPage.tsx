@@ -180,25 +180,8 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
         </section>
 
         <div className="flex min-w-0 flex-1 flex-col gap-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <PriceBlock price={product.price} />
-            <StockState stockQuantity={product.stockQuantity} lowStockThreshold={product.lowStockThreshold} />
-          </div>
-
-          {/* ISSUE-035 — the page's single product action. The slug-keyed
-              attribute is the shared hook's return-focus target, scoped by
-              the page's gridRef exactly as on the catalogue. */}
-          <div>
-            <Button
-              variant="primary"
-              disabled={isOut}
-              onClick={() => onAddToCart(product.slug)}
-              {...{ [ADD_TO_CART_ATTRIBUTE]: product.slug }}
-            >
-              {t('addToCart')}
-            </Button>
-          </div>
-
+          {/* ISSUE-123 — the user's ordering: the product DATA first, the
+              price + buy action BELOW it (moved from above). */}
           <section aria-labelledby="product-specifications">
             <h2 id="product-specifications" className="text-lg font-semibold text-text-ink">
               {t('productDetails.specifications')}
@@ -226,8 +209,15 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
               {product.packageQuantity !== undefined && (
                 <>
                   <dt className="text-text-muted">{t('productDetails.packageQuantity')}</dt>
-                  <dd className="text-text-ink" dir="ltr">
-                    {product.packageQuantity}
+                  {/* ISSUE-123 — the number hugs its label: the dd itself
+                      follows the page direction (start-aligned), only the
+                      numeral inside is LTR-isolated. dir on the dd made the
+                      whole cell left-aligned, stranding the number far from
+                      the Hebrew labels. */}
+                  <dd className="text-text-ink">
+                    <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                      {product.packageQuantity}
+                    </span>
                   </dd>
                 </>
               )}
@@ -242,18 +232,33 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
 
               <dt className="text-text-muted">{t('productDetails.createdAt')}</dt>
               <dd className="text-text-ink">
-                <time dateTime={product.createdAt} dir="ltr">
+                <time dateTime={product.createdAt} dir="ltr" style={{ unicodeBidi: 'isolate' }}>
                   {product.createdAt.slice(0, 10)}
                 </time>
               </dd>
 
-              {/* §7b field 01 — display only. Never an input, never a link. */}
-              <dt className="text-text-muted">{t('productDetails.serialNumber')}</dt>
-              <dd className="break-all text-text-muted" dir="ltr">
-                {product.serialNumber}
-              </dd>
+              {/* 🔴 ISSUE-123 — the serial number (§7b field 01) is NOT
+                  displayed, by the user's explicit decision (a knowing
+                  deviation, recorded): a UUID means nothing to a shopper.
+                  The field stays in the DTO and the DB untouched. */}
             </dl>
           </section>
+
+          {/* ISSUE-035's action + ISSUE-123's placement: below the data. */}
+          <div className="flex flex-wrap items-center gap-4">
+            <PriceBlock price={product.price} />
+            <StockState stockQuantity={product.stockQuantity} lowStockThreshold={product.lowStockThreshold} />
+          </div>
+          <div>
+            <Button
+              variant="primary"
+              disabled={isOut}
+              onClick={() => onAddToCart(product.slug)}
+              {...{ [ADD_TO_CART_ATTRIBUTE]: product.slug }}
+            >
+              {t('addToCart')}
+            </Button>
+          </div>
         </div>
       </div>
 

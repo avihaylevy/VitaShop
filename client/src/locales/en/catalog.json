@@ -63,14 +63,13 @@
     "ingredientName": "Ingredient",
     "ingredientAmount": "Amount",
     "healthGoals": "Health goals",
-    "specifications": "Product details",
+    "specifications": "More details",
     "brand": "Brand",
     "category": "Category",
     "dosageForm": "Dosage form",
     "packageQuantity": "Units per package",
     "targetAudience": "Target audience",
-    "createdAt": "Date added",
-    "serialNumber": "Serial number"
+    "createdAt": "Date added"
   },
   "filters": {
     "heading": "Filters",

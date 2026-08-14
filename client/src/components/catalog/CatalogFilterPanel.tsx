@@ -253,8 +253,16 @@ export function CatalogFilterPanel({
 
   return (
     <div className={`flex flex-col gap-6 ${className}`}>
+      {/*
+        🔴 DEC-078 — the active-ingredient group is NOT OFFERED, by the
+        user's decision (a knowing REQ-F-011 deviation, recorded). The API
+        still accepts the `ingredient` parameter; a URL carrying one still
+        filters and still counts on the trigger badge — the panel just no
+        longer renders the group. Its replacement (kosher · gluten-free ·
+        vegan) lands with the ISSUE-124 enrichment wave's sourced data.
+      */}
       {groups.map((group) =>
-        group.options.length === 0 ? null : (
+        group.key === 'ingredient' || group.options.length === 0 ? null : (
           <FilterGroup key={group.key} group={group} onToggleValue={onToggleValue} />
         ),
       )}

@@ -27,8 +27,11 @@ export function CatalogSortSelect({ value, onChange, className = '' }: CatalogSo
   const selectId = useId()
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <label htmlFor={selectId} className="whitespace-nowrap text-sm text-text-muted">
+    <div className={`flex items-center ${className}`}>
+      {/* ISSUE-122 — the label is for assistive tech; the control's own
+          displayed value says which sort is active, so the visible caption
+          was pure width. */}
+      <label htmlFor={selectId} className="sr-only">
         {t('sort.label')}
       </label>
       <select
@@ -36,11 +39,13 @@ export function CatalogSortSelect({ value, onChange, className = '' }: CatalogSo
         value={value}
         onChange={(event) => onChange(event.target.value)}
         /*
-         * ISSUE-055 (🔴 reconfirmed: "גדולה מידי") — compact from md up
-         * (h-9, text-sm); below md the full 44px touch target stays, since
-         * that is where fingers are. Same control, no custom listbox.
+         * ISSUE-122 (after ISSUE-055): the user wants the sort AS A BUTTON.
+         * It stays a NATIVE select — keyboard, screen-reader and mobile
+         * behaviour for free (§10's reason survives) — dressed in the
+         * secondary-button look. Compact h-9 from md up; full 44px touch
+         * target below.
          */
-        className={`${FOCUS_RING} h-11 rounded-compact border border-border-control bg-well px-3 text-base text-text-ink md:h-9 md:text-sm`}
+        className={`${FOCUS_RING} h-11 cursor-pointer rounded-card border border-border-control bg-well px-3 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:bg-surface-sunken md:h-9`}
       >
         {CATALOG_SORT_VALUES.map((sortValue) => (
           <option key={sortValue} value={sortValue}>

@@ -32,7 +32,16 @@ export function CatalogPagination({ page, totalPages, onPageChange, className = 
   const hasPrevious = page > 1
   const hasNext = page < totalPages
 
-  const controlClass = `${FOCUS_RING} inline-flex min-h-11 min-w-11 items-center justify-center rounded-compact border px-3 text-sm disabled:cursor-not-allowed disabled:text-text-muted`
+  /*
+   * ISSUE-117 — the controls respond: colour transition + hover tint on
+   * every enabled button, and a motion-safe press-down. Colour is not the
+   * only signal (the border darkens too), the transform vanishes under
+   * prefers-reduced-motion, and disabled buttons stay inert.
+   */
+  const controlClass = `${FOCUS_RING} inline-flex min-h-11 min-w-11 items-center justify-center rounded-compact border px-3 text-sm transition-[background-color,border-color,transform] duration-150 ease-standard motion-safe:enabled:active:scale-95 disabled:cursor-not-allowed disabled:text-text-muted`
+  // Hover tint for every button EXCEPT the current page (which keeps its
+  // solid teal) — applied via this shared string on the non-current styles.
+  const idleHover = 'enabled:hover:bg-surface-sunken'
 
   return (
     <nav aria-label={t('pagination.navLabel')} className={`mt-8 ${className}`}>
@@ -42,7 +51,7 @@ export function CatalogPagination({ page, totalPages, onPageChange, className = 
             type="button"
             onClick={() => onPageChange(page - 1)}
             disabled={!hasPrevious}
-            className={`${controlClass} border-border-control bg-well text-text-ink`}
+            className={`${controlClass} ${idleHover} border-border-control bg-well text-text-ink`}
           >
             {t('pagination.previous')}
           </button>
@@ -64,7 +73,7 @@ export function CatalogPagination({ page, totalPages, onPageChange, className = 
                 className={`${controlClass} ${
                   slot === page
                     ? 'border-brand-teal bg-brand-teal font-semibold text-white'
-                    : 'border-border-control bg-well text-text-ink'
+                    : `${idleHover} border-border-control bg-well text-text-ink`
                 }`}
               >
                 {/*
@@ -88,7 +97,7 @@ export function CatalogPagination({ page, totalPages, onPageChange, className = 
             type="button"
             onClick={() => onPageChange(page + 1)}
             disabled={!hasNext}
-            className={`${controlClass} border-border-control bg-well text-text-ink`}
+            className={`${controlClass} ${idleHover} border-border-control bg-well text-text-ink`}
           >
             {t('pagination.next')}
           </button>

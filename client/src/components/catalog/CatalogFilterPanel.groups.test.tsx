@@ -56,13 +56,22 @@ beforeEach(async () => {
 afterEach(cleanup)
 
 describe('ISSUE-050/051 — big filter groups are disclosures', () => {
-  it('🔴 a 53-option group renders COLLAPSED: no checkboxes until its button expands it', () => {
+  it('🔴 DEC-078 — the ingredient group is NOT OFFERED, whatever its size', () => {
     renderPanel([group('ingredient', 53)])
+
+    // Only the availability checkbox (always-visible fieldset) is present,
+    // and no disclosure button for the group exists either.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /active ingredient/i })).toBeNull()
+  })
+
+  it('🔴 a big group renders COLLAPSED: no checkboxes until its button expands it', () => {
+    renderPanel([group('healthGoal', 53)])
 
     // Only the availability checkbox (always-visible fieldset) is present.
     expect(screen.getAllByRole('checkbox')).toHaveLength(1)
 
-    const toggle = screen.getByRole('button', { name: /active ingredient/i })
+    const toggle = screen.getByRole('button', { name: /health goal/i })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
@@ -80,8 +89,8 @@ describe('ISSUE-050/051 — big filter groups are disclosures', () => {
   })
 
   it('the typeahead narrows the VISIBLE list only', () => {
-    renderPanel([group('ingredient', 20)])
-    fireEvent.click(screen.getByRole('button', { name: /active ingredient/i }))
+    renderPanel([group('healthGoal', 20)])
+    fireEvent.click(screen.getByRole('button', { name: /health goal/i }))
     expect(screen.getAllByRole('checkbox')).toHaveLength(21)
 
     fireEvent.change(screen.getByRole('searchbox', { name: /search this list/i }), {

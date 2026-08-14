@@ -186,7 +186,9 @@ beforeEach(() => {
  * No previous state's copy, heading structure, action or alert contract was
  * changed; every one of those assertions is preserved verbatim.
  */
-const EMPTY_COUNT_REGION = '<p role="status" class=""></p>'
+// ISSUE-116: the count region is sr-only in EVERY state now — the user does
+// not want the count drawn; the polite announcement stays.
+const EMPTY_COUNT_REGION = '<p role="status" class="sr-only"></p>'
 
 describe('CatalogPage accessibility — loading', () => {
   it('renders exactly one role="status", sr-only, and no role="alert"; no stale products leak through', async () => {
