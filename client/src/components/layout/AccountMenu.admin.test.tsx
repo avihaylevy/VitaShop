@@ -190,7 +190,7 @@ describe('ISSUE-039 — keyboard menu behaviour (review finding: it had no regre
     expect(document.activeElement).toBe(items[items.length - 1])
   })
 
-  it('Tab CLOSES the menu instead of leaving it open behind the focus (APG)', async () => {
+  it('Tab CLOSES the menu and moves focus to the TRIGGER first (APG + the unmount-takes-focus family)', async () => {
     respondSession({ authenticated: false })
     renderMenu()
     await waitFor(() => expect(screen.queryByRole('button', { name: /account menu/i })).toBeTruthy())
@@ -199,5 +199,10 @@ describe('ISSUE-039 — keyboard menu behaviour (review finding: it had no regre
 
     fireEvent.keyDown(items[0], { key: 'Tab' })
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+    // 🔴 The focused menuitem unmounts on close; without an explicit focus
+    // move the browser's default Tab restarts from the document top. jsdom
+    // can assert the explicit move only — the default-Tab continuation is
+    // browser-verified (jsdom has no sequential focus navigation).
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /account menu/i }))
   })
 })

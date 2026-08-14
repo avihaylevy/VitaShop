@@ -75,9 +75,22 @@ function diff(actual: Set<string>, expected: Set<string>) {
 
 const NO_DRIFT = { inDatabaseButNotInCsv: [], inCsvButNotInDatabase: [] }
 
+/**
+ * DEC-076: the rows the CSV states are ON SALE — verified AND not
+ * `is_active: no` (blank = yes). Every set below that compares against
+ * ACTIVE database state must use this, or a legitimate stated deactivation
+ * turns three unrelated assertions red.
+ */
+function readActiveStatedRows(): Record<string, string>[] {
+  return readVerifiedProductRows().filter((r) => (r.is_active ?? '').trim() !== 'no')
+}
+
 describe('seed convergence — the database equals the CSV, in both directions', () => {
-  it('ACTIVE PRODUCT SLUGS are exactly the verified rows — instance 3 of the family', async () => {
-    const expected = new Set(readVerifiedProductRows().map((r) => r.slug ?? ''))
+  it('ACTIVE PRODUCT SLUGS are exactly the verified rows the CSV STATES active — instance 3 + DEC-076', async () => {
+    // DEC-076 / ISSUE-064: `is_active` is the CSV's say-so (blank = yes), so
+    // a verified row marked `no` must be OFF sale — the seed no longer
+    // resurrects a stated deactivation.
+    const expected = new Set(readActiveStatedRows().map((r) => r.slug ?? ''))
     const actual = new Set(
       (await prisma.product.findMany({ where: { isActive: true }, select: { slug: true } })).map(
         (p) => p.slug,
@@ -121,8 +134,10 @@ describe('seed convergence — the database equals the CSV, in both directions',
   })
 
   it('IMAGE LINKS are exactly one per verified row, and the CSV names the file — instance 2', async () => {
+    // Active-stated rows only: the ACTUAL side filters product.isActive, so
+    // the expectation must apply the same DEC-076 rule.
     const expected = new Set(
-      readVerifiedProductRows().map((r) => `${r.slug ?? ''}::assets/products/${r.image_file ?? ''}`),
+      readActiveStatedRows().map((r) => `${r.slug ?? ''}::assets/products/${r.image_file ?? ''}`),
     )
     const actual = new Set(
       (
@@ -138,8 +153,9 @@ describe('seed convergence — the database equals the CSV, in both directions',
   })
 
   it('HEALTH-GOAL LINKS are exactly the pipe-separated CSV values — instance 2, second half', async () => {
+    // Same DEC-076 scoping as the image set above.
     const expected = new Set(
-      readVerifiedProductRows().flatMap((r) =>
+      readActiveStatedRows().flatMap((r) =>
         (r.health_goals ?? '')
           .split('|')
           .map((g) => g.trim())
@@ -201,9 +217,9 @@ describe('seed convergence — the database equals the CSV, in both directions',
     // Without this, an empty database and an empty CSV agree perfectly and
     // every assertion in this file passes while proving nothing. Same trap as
     // the vacuous checks in .claude/rules/browser-verification.md.
-    const verified = readVerifiedProductRows()
-    expect(verified.length).toBeGreaterThan(24) // at least a second page's worth
+    const stated = readActiveStatedRows()
+    expect(stated.length).toBeGreaterThan(24) // at least a second page's worth
     const active = await prisma.product.findMany({ where: { isActive: true }, select: { slug: true } })
-    expect(active.filter((p) => !isFixture(p.slug))).toHaveLength(verified.length)
+    expect(active.filter((p) => !isFixture(p.slug))).toHaveLength(stated.length)
   })
 })

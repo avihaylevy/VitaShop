@@ -42,7 +42,15 @@ export function AccountMenu() {
 
   function handleMenuKeyDown(event: React.KeyboardEvent) {
     // APG: Tab closes a menu rather than leaving it open behind the focus.
+    // 🔴 Focus the TRIGGER before closing — the unmount-takes-focus family
+    // (.claude/rules/browser-verification.md): closing first removes the
+    // focused menuitem, and the browser's default Tab then restarts from the
+    // document top instead of the element after the trigger. With focus moved
+    // first and the default NOT prevented, Tab/Shift+Tab continue naturally
+    // from the trigger. jsdom asserts the focus move; the default-Tab half is
+    // browser-verified (it has no default Tab navigation to test).
     if (event.key === 'Tab') {
+      triggerRef.current?.focus()
       setOpen(false)
       return
     }

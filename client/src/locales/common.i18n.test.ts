@@ -12,7 +12,7 @@ import { valueAt, validateNamespacePair, type LocaleTree } from './localeIntegri
  * full 9-rule contract). Generic rule-mechanism mutation proofs are owned
  * by `localeIntegrity.test.ts` — this file keeps only what is specific to
  * `common`: the real shipped pair is sound, its confirmed-live keys stay
- * present, and `common.nav.home` (ISSUE-030 — retained, NOT authorized for
+ * present, and `common.nav.home` (ISSUE-030 — deletion APPROVED by the user
  * deletion in this checkpoint) stays byte-present.
  *
  * `health.checking` / `health.connected` / `health.disconnected` were
@@ -42,9 +42,12 @@ describe('common namespace — the shipped locale pair', () => {
     }
   })
 
-  it('nav.home remains present and untouched (ISSUE-030 — retained, not authorized for deletion in Slice 10)', () => {
-    expect(valueAt(HE, 'nav.home')).toBe('בית')
-    expect(valueAt(EN, 'nav.home')).toBe('Home')
+  it('nav.home is GONE — ISSUE-030, deletion approved by the user 2026-08-15', () => {
+    // The key was unreferenced since Slice 10 and retained only because no
+    // deletion had been authorized. The user authorized it; the guard now
+    // pins the ABSENCE so a stray merge cannot resurrect a dead key.
+    expect(valueAt(HE, 'nav')).toBeUndefined()
+    expect(valueAt(EN, 'nav')).toBeUndefined()
   })
 
   it('the deleted HealthCheck keys are gone from both locales', () => {
@@ -64,7 +67,8 @@ describe('common namespace — the shipped locale pair', () => {
     //   notFound             ISSUE-066 — the `path="*"` page. A store that
     //                        renders blank chrome on an unknown URL is worse
     //                        than one that says "not found"
-    expect(Object.keys(HE).sort()).toEqual(['app', 'dialog', 'nav', 'notFound'])
-    expect(Object.keys(EN).sort()).toEqual(['app', 'dialog', 'nav', 'notFound'])
+    // `nav` left the list 2026-08-15 — ISSUE-030, user-approved deletion.
+    expect(Object.keys(HE).sort()).toEqual(['app', 'dialog', 'notFound'])
+    expect(Object.keys(EN).sort()).toEqual(['app', 'dialog', 'notFound'])
   })
 })

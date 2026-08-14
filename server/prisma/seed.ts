@@ -146,6 +146,14 @@ interface ValidatedProductRow {
   usageInstructions: string
   warningsAllergens: string
   allergenInfoIncomplete: boolean
+  /**
+   * DEC-076 / ISSUE-064 — the CSV's STATED activity, no longer inferred from
+   * `verified`. `verified=yes` says the DATA is sourced; `is_active` says
+   * whether the shop SELLS it. The file writes an explicit `yes` on every
+   * active row; blank is tolerated and also means yes (so a hand-added row
+   * cannot vanish by omission); anything else fails the seed loudly.
+   */
+  isActive: boolean
 }
 
 
@@ -230,10 +238,18 @@ function buildEnglishDescription(row: {
   return `Catalogue listing: ${row.nameEn} (${brandEn}), ${row.packageQuantity} ${DOSAGE_FORM_EN[row.dosageForm]} per package.`
 }
 
+function readIsActive(row: Record<string, string>, slug: string): boolean {
+  const raw = (row.is_active ?? '').trim()
+  if (raw === '' || raw === 'yes') return true
+  if (raw === 'no') return false
+  throw new Error(`Malformed verified row "${slug}": "is_active" must be yes/no/blank, got "${raw}".`)
+}
+
 function validateProductRow(row: Record<string, string>): ValidatedProductRow {
   const slug = requireNonEmpty(row.slug ?? '', 'slug', row.slug || '(missing slug)')
   return {
     slug,
+    isActive: readIsActive(row, slug),
     imageFile: requireNonEmpty(row.image_file ?? '', 'image_file', slug),
     nameHe: requireNonEmpty(row.name_he ?? '', 'name_he', slug),
     nameEn: requireNonEmpty(row.name_en ?? '', 'name_en', slug),
@@ -332,15 +348,17 @@ async function seedProduct(db: Db, row: ValidatedProductRow, ingredients: Valida
     warningsAllergens: row.warningsAllergens,
     allergenInfoIncomplete: row.allergenInfoIncomplete,
     targetAudience: row.targetAudience,
-    // 🔴 REACTIVATION. The seed already SOFT-DELETES rows that leave the
-    // verified set; it did not bring one back when it RETURNED, so the five
-    // Solgar rows demoted in 397f7e0 stayed isActive=false after 01b58bc
-    // re-verified them — 49 verified rows, 44 visible to shoppers.
-    //
-    // Third instance of the same convergence family: the seed grew but did
-    // not converge. Being in this row means the CSV says verified=yes, which
-    // is exactly the condition for being active.
-    isActive: true,
+    // 🔴 DEC-076 / ISSUE-064 — the CSV's STATED value, not `true`
+    // unconditionally. `7baac10` made this `isActive: true` for every
+    // verified row (correct for the reactivation bug it closed), which made
+    // the CSV the silent authority: any admin soft-delete was resurrected on
+    // the next seed with no trace. The `is_active` column makes the file's
+    // intent SAY-SO — deactivating a product in the dev catalogue is now a
+    // recorded CSV edit, and the seed converges on what the file states.
+    // ⚠️ The accepted semantics stand: the seed is a dev tool and the CSV is
+    // its authority; an admin deactivation still only survives a re-seed if
+    // the CSV row says `no`. That is the deal DEC-076 records.
+    isActive: row.isActive,
   }
 
   const product = await db.product.upsert({

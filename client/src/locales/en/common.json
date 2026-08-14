@@ -2,9 +2,6 @@
   "app": {
     "name": "VitaShop"
   },
-  "nav": {
-    "home": "Home"
-  },
   "dialog": {
     "close": "Close"
   },
