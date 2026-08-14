@@ -7,7 +7,11 @@ import {
   type OrderStatusName,
 } from '../lib/orderTransitions.js'
 import { createAdminRateLimiters, type AdminRateLimiters } from '../lib/rateLimit.js'
-import { findStuckPendingPayment, reconcileStuckOrders } from '../lib/orderReconciliation.js'
+import {
+  countStuckPendingPayment,
+  findStuckPendingPayment,
+  reconcileStuckOrders,
+} from '../lib/orderReconciliation.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireAdmin } from './requireAdmin.js'
 
@@ -42,6 +46,18 @@ const ADMIN_TARGETS: readonly OrderStatusName[] = ['processing', 'shipped', 'del
 
 /** One screenful. The admin list is low-traffic and read by a human. */
 const ADMIN_ORDERS_PAGE_SIZE = 25
+
+/**
+ * MILESTONE-008 Checkpoint G3 review — the sample and the batch, named.
+ *
+ * 🔴 THESE WERE BOTH AN IMPLICIT 100 inherited from
+ * `findStuckPendingPayment`'s default, which made two figures indistinguishable
+ * from each other: how many are stuck, and how many one request touches. Naming
+ * them is what lets `count` mean the total, `sampled` mean the listing, and
+ * `remaining` mean what a second run still has to do.
+ */
+const STUCK_SAMPLE_SIZE = 20
+const REPAIR_BATCH_SIZE = 20
 
 export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<typeof Router> {
   const { prisma } = deps
@@ -180,9 +196,24 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
     const userId = typeof req.query.userId === 'string' ? req.query.userId : undefined
 
     try {
-      const stuck = await findStuckPendingPayment(prisma, userId ? { userId } : {})
+      /*
+       * 🔴 THE COUNT IS A REAL COUNT, NOT THE SAMPLE'S LENGTH.
+       * `findStuckPendingPayment` takes 100 by default, so `stuck.length` is a
+       * PAGE SIZE — a screen reporting it says "100 stuck orders" when 400 are
+       * stuck, and an admin reads a cap as a total. The sample below is what a
+       * human can look at; the count is what is true. Found in review.
+       */
+      const [count, stuck] = await Promise.all([
+        countStuckPendingPayment(prisma, userId ? { userId } : {}),
+        findStuckPendingPayment(prisma, {
+          ...(userId ? { userId } : {}),
+          limit: STUCK_SAMPLE_SIZE,
+        }),
+      ])
       res.json({
-        count: stuck.length,
+        count,
+        /** ⚠️ NAMED so the client cannot mistake a capped sample for the lot. */
+        sampled: stuck.length,
         orders: stuck.map((order) => ({
           id: order.id,
           orderNumber: order.orderNumber,
@@ -220,10 +251,27 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
     const userId = typeof body.userId === 'string' ? body.userId : undefined
 
     try {
-      const report = await reconcileStuckOrders(prisma, userId ? { userId } : {})
+      /*
+       * ⚠️ A BOUNDED BATCH, and `remaining` is how the caller learns there is
+       * more. An unbounded sweep is a long-running write holding the request
+       * open; a bounded one that says nothing about the rest reads as complete.
+       */
+      const report = await reconcileStuckOrders(prisma, {
+        ...(userId ? { userId } : {}),
+        limit: REPAIR_BATCH_SIZE,
+      })
+      /*
+       * 🔴 HOW MANY ARE STILL STUCK AFTERWARDS, because one sweep repairs at
+       * most `findStuckPendingPayment`'s cap of 100. Without this a run that
+       * hit the cap looks complete: the report says "100 repaired" and says
+       * nothing about the 300 left behind. Found in review, which also caught
+       * that this router's rate-limit comment claimed a second run "repairs
+       * nothing the first left" — untrue at exactly this boundary.
+       */
+      const remaining = await countStuckPendingPayment(prisma, userId ? { userId } : {})
       // The report IS the answer: a partial repair is the normal case, and
       // reporting only success would hide which orders are still stuck.
-      res.json(report)
+      res.json({ ...report, remaining })
     } catch (error) {
       console.error('[admin] reconciliation failed', error)
       res.status(503).json({

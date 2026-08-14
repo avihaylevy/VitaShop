@@ -2,7 +2,7 @@ import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import argon2 from 'argon2'
-import express from 'express'
+import express, { type RequestHandler } from 'express'
 import type { Server } from 'node:http'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createAdminOrderRouter } from './adminOrders.js'
@@ -195,7 +195,26 @@ beforeAll(async () => {
       rateLimiters: createAuthRateLimiters(),
     }),
   )
-  app.use('/api/admin/orders', createAdminOrderRouter({ prisma }))
+  /*
+   * 🔴 PERMISSIVE LIMITERS, INJECTED. The real `reconcile` ceiling is 6 per 15
+   * minutes keyed on the admin's id, and this file already spends 4 of them —
+   * so the NEXT reconcile test anyone adds turns into a 429 that reads like a
+   * route bug, and express-rate-limit's MemoryStore does not reset between
+   * files in one process. The router accepts injectable limiters for exactly
+   * this. Found in review.
+   *
+   * ⚠️ The limiter's own coverage is proven elsewhere, by identity, in
+   * `adminRateLimit`-style tests — not by leaving a real ceiling in the way of
+   * behaviour tests.
+   */
+  const permissive: RequestHandler = (_req, _res, next) => next()
+  app.use(
+    '/api/admin/orders',
+    createAdminOrderRouter({
+      prisma,
+      rateLimiters: { status: permissive, list: permissive, reconcile: permissive },
+    }),
+  )
   server = app.listen(0)
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('no port')
@@ -261,6 +280,29 @@ describe('GET /api/admin/orders/stuck — the read half', () => {
     expect(await statusOf(fresh.orderId)).toBe('pending_payment')
   })
 
+  it('🔴 the count is a REAL COUNT while the listing is a CAPPED SAMPLE', async () => {
+    /*
+     * ⚠️ THE FIRST VERSION OF THIS TEST PROVED NOTHING. It created three stuck
+     * orders, where the count and the sample length are equal by construction —
+     * so replacing the count with `stuck.length` left it GREEN. Mutation caught
+     * it. Twenty-one orders put the two figures either side of the cap, which
+     * is the only arrangement that can tell them apart.
+     */
+    for (let index = 0; index < 21; index += 1) {
+      await stuckOrder(`rec-count-${index}`)
+    }
+    const cookie = await signIn(ADMIN)
+
+    const body = (await (await get(`/api/admin/orders/stuck?userId=${shopperId}`, cookie)).json()) as {
+      count: number
+      sampled: number
+      orders: unknown[]
+    }
+    expect(body.count).toBe(21) // the truth
+    expect(body.sampled).toBe(20) // what was listed
+    expect(body.orders).toHaveLength(20)
+  }, 120_000)
+
   it('🔴 refuses a non-admin, and refuses anonymous — differently', async () => {
     await stuckOrder('rec-read-guard')
 
@@ -323,8 +365,39 @@ describe('POST /api/admin/orders/reconcile — the repair', () => {
     const cookie = await signIn(ADMIN)
     const response = await post('/api/admin/orders/reconcile', cookie, { userId: shopperId })
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ examined: 0, repaired: 0, failed: [] })
+    // `remaining` joined the report at the G3 review — one sweep repairs at
+    // most 100, so a report without it reads as complete when it is not.
+    expect(await response.json()).toEqual({ examined: 0, repaired: 0, failed: [], remaining: 0 })
   })
+
+  it('🔴 reports how many REMAIN when the batch does not finish the job', async () => {
+    /*
+     * ⚠️ THE FIRST VERSION OF THIS TEST ALSO PROVED NOTHING: it repaired
+     * everything and asserted `remaining: 0`, which stayed green with
+     * `remaining` HARDCODED to zero. Mutation caught that too. The batch is
+     * twenty, so twenty-one stuck orders leave exactly one behind — a number
+     * that cannot come from a constant.
+     */
+    for (let index = 0; index < 21; index += 1) {
+      await stuckOrder(`rec-remaining-${index}`)
+    }
+    const cookie = await signIn(ADMIN)
+
+    const first = (await (await post('/api/admin/orders/reconcile', cookie, { userId: shopperId })).json()) as {
+      repaired: number
+      remaining: number
+    }
+    expect(first.repaired).toBe(20)
+    expect(first.remaining).toBe(1)
+
+    // The control: a second run finishes it, and NOW remaining is genuinely 0.
+    const second = (await (await post('/api/admin/orders/reconcile', cookie, { userId: shopperId })).json()) as {
+      repaired: number
+      remaining: number
+    }
+    expect(second.repaired).toBe(1)
+    expect(second.remaining).toBe(0)
+  }, 120_000)
 
   it('🔴 A SHOPPER CANNOT RUN IT — 403, and the order is untouched', async () => {
     /*

@@ -28,26 +28,40 @@ const ORDER = {
 
 const PAGE = { page: 1, totalItems: 1, totalPages: 1, orders: [ORDER] }
 
-/** Answers the list, the stuck count and the repair; records every POST. */
+/**
+ * Answers the list, the stuck count and the repair; records every POST.
+ *
+ * 🔴 THE COUNT DROPS TO ZERO ONCE THE REPAIR HAS RUN, and that is the whole
+ * reason this fixture was rewritten. The first version answered the SAME count
+ * forever, so the post-repair refresh could never change anything — which made
+ * the panel's disappearance UNREACHABLE in tests, and the one case that was
+ * broken in production (a fully successful sweep) was the one case no test
+ * covered. Found in review.
+ */
 function routed(stuckCount: number, repair?: () => Promise<Response>) {
   const posts: string[] = []
+  let repaired = false
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = String(url)
       if (init?.method === 'POST') {
         posts.push(path)
-        return (
+        const answer =
           (await repair?.()) ??
-          ({ status: 200, json: async () => ({ examined: 2, repaired: 2, failed: [] }) } as unknown as Response)
-        )
+          ({
+            status: 200,
+            json: async () => ({ examined: 2, repaired: 2, failed: [], remaining: 0 }),
+          } as unknown as Response)
+        repaired = true
+        return answer
       }
       if (path.includes('/stuck')) {
         return {
           status: 200,
           json: async () => ({
-            count: stuckCount,
-            orders: Array.from({ length: stuckCount }, (_, index) => ({
+            count: repaired ? 0 : stuckCount,
+            orders: Array.from({ length: repaired ? 0 : stuckCount }, (_, index) => ({
               id: `s${index}`,
               orderNumber: `VS-STUCK-${index}`,
               createdAt: '2026-08-14T09:00:00.000Z',
@@ -141,6 +155,7 @@ describe('the stuck-order trigger', () => {
             { orderNumber: 'VS-STUCK-1', reason: 'CONCURRENT_TRANSITION' },
             { orderNumber: 'VS-STUCK-2', reason: 'TERMINAL' },
           ],
+          remaining: 2,
         }),
       }) as unknown as Response,
     )
@@ -158,6 +173,89 @@ describe('the stuck-order trigger', () => {
     const spoken = await screen.findAllByText(/1 repaired, 2 failed/i)
     expect(spoken.length).toBe(2)
     expect(spoken.some((node) => node.className.includes('sr-only'))).toBe(true)
+  })
+
+  it('🔴 A FULLY SUCCESSFUL SWEEP STILL SHOWS ITS REPORT — the panel must not vanish', async () => {
+    /*
+     * 🔴 THE HIGH FINDING OF THE G3 REVIEW, and the case no test covered. The
+     * panel was gated on `count > 0`; a successful repair refreshed the count
+     * to ZERO, so the whole section unmounted — taking the "2 orders repaired"
+     * line with it, and the focused confirm button too, dropping focus to
+     * <body>. ISSUE-098 for the THIRD time, in the commit whose own test was
+     * written to prevent it.
+     *
+     * ⚠️ A PARTIAL repair survived, because the count stayed above zero. That
+     * is exactly why the defect looked fine in testing.
+     */
+    routed(2)
+    renderAdmin()
+
+    fireEvent.click(await screen.findByRole('button', { name: /repair stuck orders/i }))
+    fireEvent.click(screen.getByRole('button', { name: /yes, repair them/i }))
+
+    const reported = await screen.findAllByText(/2 orders repaired/i)
+    expect(reported.length).toBe(2) // visible, and spoken
+    expect(reported.some((node) => node.className.includes('sr-only'))).toBe(true)
+
+    // And the count has genuinely refreshed to zero underneath it.
+    await waitFor(() =>
+      expect(screen.queryByText(/have been awaiting payment/i)).toBeNull(),
+    )
+  })
+
+  it('🔴 focus lands on the panel heading, not on <body>', async () => {
+    // The confirm button unmounts the moment the confirmation closes, so
+    // without a deliberate landing the admin tabs from the top of the document.
+    routed(2)
+    renderAdmin()
+
+    fireEvent.click(await screen.findByRole('button', { name: /repair stuck orders/i }))
+    const confirm = screen.getByRole('button', { name: /yes, repair them/i })
+    confirm.focus()
+    fireEvent.click(confirm)
+
+    await screen.findAllByText(/2 orders repaired/i)
+    expect(document.activeElement).toBe(document.getElementById('reconcile-heading'))
+  })
+
+  it('🔴 a FAILED COUNT still offers the repair, and says the count is unknown', async () => {
+    // The panel was gated entirely on the count, so a 503 from the diagnostic
+    // hid a perfectly healthy repair with nothing on screen to explain it.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          return {
+            status: 200,
+            json: async () => ({ examined: 0, repaired: 0, failed: [], remaining: 0 }),
+          } as unknown as Response
+        }
+        if (String(url).includes('/stuck')) {
+          return { status: 503, json: async () => ({}) } as unknown as Response
+        }
+        return { status: 200, json: async () => PAGE } as unknown as Response
+      }),
+    )
+    renderAdmin()
+
+    expect(await screen.findByText(/count is unavailable/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /repair stuck orders/i })).toBeTruthy()
+  })
+
+  it('🔴 says how many REMAIN when a sweep hits its cap', async () => {
+    // One run repairs at most 100. Without this the report reads as complete.
+    routed(3, async () =>
+      ({
+        status: 200,
+        json: async () => ({ examined: 100, repaired: 100, failed: [], remaining: 300 }),
+      }) as unknown as Response,
+    )
+    renderAdmin()
+
+    fireEvent.click(await screen.findByRole('button', { name: /repair stuck orders/i }))
+    fireEvent.click(screen.getByRole('button', { name: /yes, repair them/i }))
+
+    expect((await screen.findAllByText(/300 orders are still stuck/i)).length).toBeGreaterThan(0)
   })
 
   it('🔴 the in-flight confirm button is aria-disabled, NEVER disabled', async () => {

@@ -78,6 +78,32 @@ export type StuckOrder = {
  * that answers "is this happening at all?", which ISSUE-082 records as the
  * cheapest first step because nothing counts these today.
  */
+/**
+ * MILESTONE-008 Checkpoint G3 review — the TRUE count, unaffected by the sample
+ * cap.
+ *
+ * 🔴 `findStuckPendingPayment` TAKES 100 BY DEFAULT, so its length is a page
+ * size, not a total. A screen reporting `stuck.length` as "how many are stuck"
+ * says 100 when 400 are — a number presented as a total that is really a cap,
+ * which is the label-asserting-what-the-data-cannot-support shape DEC-064
+ * describes.
+ */
+export async function countStuckPendingPayment(
+  prisma: PrismaClient,
+  options: ReconcileOptions = {},
+): Promise<number> {
+  const minutes = options.olderThanMinutes ?? STUCK_AFTER_MINUTES
+  const cutoff = new Date(Date.now() - minutes * 60_000)
+
+  return prisma.order.count({
+    where: {
+      status: 'pending_payment',
+      createdAt: { lt: cutoff },
+      ...(options.userId ? { userId: options.userId } : {}),
+    },
+  })
+}
+
 export async function findStuckPendingPayment(
   prisma: PrismaClient,
   options: ReconcileOptions = {},
@@ -140,10 +166,14 @@ export async function reconcileStuckOrders(
       // `moved: false` means another caller got there first — not a failure,
       // and not a repair either.
     } catch (error) {
-      report.failed.push({
-        orderNumber: order.orderNumber,
-        reason: error instanceof Error ? error.message : 'unknown error',
-      })
+      /*
+       * ⚠️ LOGGED IN FULL, REPORTED AS A CODE. A driver message carries table,
+       * column and constraint names, and this report is serialised straight to
+       * an admin screen — every other error path in these routers maps to a
+       * code, and this one echoed the raw text. Found in review.
+       */
+      console.error(`[reconcile] ${order.orderNumber} threw`, error)
+      report.failed.push({ orderNumber: order.orderNumber, reason: 'REPAIR_THREW' })
     }
   }
 

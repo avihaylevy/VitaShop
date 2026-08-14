@@ -212,6 +212,7 @@ export async function reconcileStuckOrders(): Promise<ReconcileResult> {
     !isPlainObject(body) ||
     typeof body.examined !== 'number' ||
     typeof body.repaired !== 'number' ||
+    typeof body.remaining !== 'number' ||
     !Array.isArray(body.failed)
   ) {
     return { ok: false, failure: { kind: 'unavailable' } }
@@ -222,6 +223,7 @@ export async function reconcileStuckOrders(): Promise<ReconcileResult> {
       examined: body.examined,
       repaired: body.repaired,
       failed: body.failed as { orderNumber: string; reason: string }[],
+      remaining: body.remaining,
     },
   }
 }

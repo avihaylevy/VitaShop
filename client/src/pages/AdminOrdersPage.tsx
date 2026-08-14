@@ -80,19 +80,24 @@ export function AdminOrdersPage() {
    * ISSUE-082's trigger — DEC-069. The READ runs on load because it is safe;
    * the REPAIR is a deliberate act behind a confirmation.
    */
-  const [stuck, setStuck] = useState<{ status: 'idle' } | { status: 'ready'; count: number }>({
-    status: 'idle',
-  })
+  const [stuck, setStuck] = useState<
+    { status: 'idle' } | { status: 'ready'; count: number } | { status: 'failed' }
+  >({ status: 'idle' })
+  const reconcileHeadingRef = useRef<HTMLHeadingElement>(null)
   const [confirmingReconcile, setConfirmingReconcile] = useState(false)
   const [reconciling, setReconciling] = useState(false)
   const [reconcileOutcome, setReconcileOutcome] = useState<string | null>(null)
 
   const countStuck = useCallback(async () => {
     const result = await requestStuckOrders()
-    // ⚠️ A FAILED COUNT IS SILENT. This is a diagnostic beside the queue, not
-    // the page's purpose — an error banner for it would push the orders down
-    // and tell an admin nothing they can act on.
-    if (result.ok) setStuck({ status: 'ready', count: result.count })
+    /*
+     * ⚠️ A FAILED COUNT IS QUIET, NOT INVISIBLE. It stays a diagnostic beside
+     * the queue rather than an error banner pushing the orders down — but it
+     * must not HIDE THE REPAIR, which is what the first version did: the panel
+     * was gated on `count > 0`, so a 503 from the count made a perfectly
+     * healthy sweep unreachable with nothing on screen to explain it.
+     */
+    setStuck(result.ok ? { status: 'ready', count: result.count } : { status: 'failed' })
   }, [])
 
   useEffect(() => {
@@ -106,24 +111,52 @@ export function AdminOrdersPage() {
     setConfirmingReconcile(false)
 
     const text = result.ok
-      ? result.report.failed.length > 0
-        ? t('reconcile.outcome.partial', {
-            repaired: result.report.repaired,
-            failed: result.report.failed.length,
-          })
-        : t('reconcile.outcome.repaired', { count: result.report.repaired })
+      ? [
+          result.report.failed.length > 0
+            ? t('reconcile.outcome.partial', {
+                repaired: result.report.repaired,
+                failed: result.report.failed.length,
+              })
+            : t('reconcile.outcome.repaired', { count: result.report.repaired }),
+          /*
+           * 🔴 AND HOW MANY REMAIN, because one sweep repairs at most 100. A
+           * run that hit the cap otherwise reads as complete — "100 repaired"
+           * with no hint of the 300 still stuck. Found in review.
+           */
+          result.report.remaining > 0
+            ? t('reconcile.failure.remaining', { count: result.report.remaining })
+            : '',
+        ]
+          .filter((part) => part !== '')
+          .join(' ')
       /*
-       * ⚠️ `state.*`, NOT `failure.*` — the second holds the TRANSITION
-       * refusals (terminal, concurrent, …), which say nothing about a sweep
-       * being refused. The first version reached for the wrong namespace and
-       * rendered a raw key; the list failure notice uses these same strings.
+       * ⚠️ NOT `failure.*` — that holds the TRANSITION refusals (terminal,
+       * concurrent, …), which say nothing about a sweep being refused; the
+       * first version reached for it and rendered a raw key.
+       *
+       * 🔴 AND NOT `state.unavailable` EITHER, which reads "The orders could
+       * not be loaded" — telling an admin the LIST failed while the list is
+       * visibly fine, and saying nothing about the repair they just ran. The
+       * generic failure gets its own sentence; the rest (`notAdmin`,
+       * `unauthenticated`, `offline`, `rateLimited`) describe the CALLER's
+       * situation and read correctly either way. Found in review.
        */
-      : t(`state.${result.failure.kind}`)
+      : result.failure.kind === 'unavailable'
+        ? t('reconcile.failure.unavailable')
+        : t(`state.${result.failure.kind}`)
 
     setReconcileOutcome(text)
     // The same nonce the row outcomes use: a live region announces a CHANGE,
     // and two identical reports would otherwise be spoken once.
     setAnnouncement((previous) => ({ text, nonce: previous.nonce + 1 }))
+
+    /*
+     * 🔴 FOCUS GOES SOMEWHERE DELIBERATE. The confirm button unmounts the
+     * moment the confirmation closes, so without this it falls to <body> and
+     * the admin tabs from the top of the document — on the screen whose whole
+     * job is working through a queue.
+     */
+    reconcileHeadingRef.current?.focus()
 
     if (result.ok) {
       await countStuck()
@@ -231,10 +264,47 @@ export function AdminOrdersPage() {
         payment ordering ever changes, this button starts inventing revenue,
         which is the warning `orderReconciliation.ts` carries in its header.
       */}
-      {stuck.status === 'ready' && stuck.count > 0 && (
+      {/*
+        🔴 SHOWN WHILE ANYTHING IS STUCK, WHILE AN OUTCOME IS UNREAD, OR WHEN
+        THE COUNT COULD NOT BE READ — and each of those three is a defect this
+        panel had.
+
+        A fully successful sweep set the outcome text and then refreshed the
+        count to ZERO, which unmounted this whole section: the "2 orders
+        repaired" line vanished with it, and the confirm button that still had
+        focus went with it too — ISSUE-098 for the THIRD time, in the very
+        commit whose own test was written to prevent it. A partial repair
+        survived, because the count stayed above zero, which is exactly why it
+        looked fine.
+
+        And gating solely on `count > 0` made the whole feature unreachable
+        whenever the COUNT read failed — a diagnostic that is allowed to fail
+        silently was standing in front of a repair that was perfectly healthy.
+      */}
+      {(stuck.status === 'failed' || (stuck.status === 'ready' && stuck.count > 0) || reconcileOutcome !== null) && (
         <section className="flex flex-col gap-2 rounded-card border border-state-warning bg-well p-4">
-          <h2 className="text-base font-semibold text-text-ink">{t('reconcile.title')}</h2>
-          <p className="text-sm text-text-muted">{t('reconcile.found', { count: stuck.count })}</p>
+          <h2
+            id="reconcile-heading"
+            // -1: a landing target for the focus move after a sweep, and NOT in
+            // anyone's tab order.
+            tabIndex={-1}
+            ref={reconcileHeadingRef}
+            className={`${FOCUS_RING} rounded-card text-base font-semibold text-text-ink`}
+          >
+            {t('reconcile.title')}
+          </h2>
+          {/*
+            ⚠️ THREE STATES, NOT TWO. A count of ZERO is not "0 orders are
+            stuck" — after a successful sweep the panel is open only to show
+            its report, and announcing a count of nothing beside it reads as a
+            broken template. Nothing is said in that case; the outcome speaks.
+          */}
+          {stuck.status === 'ready' && stuck.count > 0 && (
+            <p className="text-sm text-text-muted">{t('reconcile.found', { count: stuck.count })}</p>
+          )}
+          {stuck.status === 'failed' && (
+            <p className="text-sm text-text-muted">{t('reconcile.countUnavailable')}</p>
+          )}
 
           {confirmingReconcile ? (
             <div className="flex flex-col gap-2 rounded-card border border-state-error p-3">

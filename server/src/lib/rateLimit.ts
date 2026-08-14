@@ -330,8 +330,14 @@ export const ADMIN_RATE_LIMITS = {
    * 🔴 THE TIGHTEST CEILING ON THIS ROUTER, and deliberately so. A sweep is a
    * BATCH WRITE that moves orders to `paid` with no human confirming each one,
    * so it is the opposite shape from the transition route an admin drives
-   * through a queue. There is no legitimate reason to fire it repeatedly:
-   * running it twice in a minute repairs nothing the first run left.
+   * through a queue.
+   *
+   * ⚠️ AN EARLIER VERSION OF THIS COMMENT SAID "running it twice in a minute
+   * repairs nothing the first run left" — FALSE AT THE CAP. One sweep repairs
+   * at most 100 orders (`findStuckPendingPayment`'s default take), so a
+   * backlog above that legitimately needs several runs. The route reports how
+   * many REMAIN, and this ceiling is sized to allow a few consecutive sweeps
+   * rather than to forbid them. Found in review.
    */
   reconcile: { windowMs: 15 * MINUTE, limit: 6 },
 } as const

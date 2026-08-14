@@ -61,6 +61,14 @@
       "repaired_many": "{{count}} הזמנות תוקנו.",
       "repaired_other": "{{count}} הזמנות תוקנו.",
       "partial": "{{repaired}} תוקנו, {{failed}} נכשלו."
+    },
+    "countUnavailable": "לא ניתן לספור כעת את ההזמנות התקועות.",
+    "failure": {
+      "unavailable": "לא ניתן להריץ את התיקון כעת. נסה שוב בעוד רגע.",
+      "remaining_one": "הזמנה אחת עדיין תקועה.",
+      "remaining_other": "{{count}} הזמנות עדיין תקועות.",
+      "remaining_two": "שתי הזמנות עדיין תקועות.",
+      "remaining_many": "{{count}} הזמנות עדיין תקועות."
     }
   }
 }

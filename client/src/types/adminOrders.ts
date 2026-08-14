@@ -87,6 +87,11 @@ export type ReconcileReport = {
   examined: number
   repaired: number
   failed: { orderNumber: string; reason: string }[]
+  /**
+   * 🔴 HOW MANY ARE STILL STUCK AFTER THE SWEEP. One run repairs at most 100,
+   * so a report without this reads as complete when it is not.
+   */
+  remaining: number
 }
 
 export type ReconcileResult =

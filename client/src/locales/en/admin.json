@@ -55,6 +55,12 @@
       "repaired_one": "1 order repaired.",
       "repaired_other": "{{count}} orders repaired.",
       "partial": "{{repaired}} repaired, {{failed}} failed."
+    },
+    "countUnavailable": "The stuck-order count is unavailable right now.",
+    "failure": {
+      "unavailable": "The repair could not be run just now. Try again shortly.",
+      "remaining_one": "1 order is still stuck.",
+      "remaining_other": "{{count}} orders are still stuck."
     }
   }
 }
