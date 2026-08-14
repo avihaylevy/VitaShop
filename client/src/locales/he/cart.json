@@ -68,10 +68,11 @@
     "droppedUnavailable": "המוצרים האלה אזלו מהמלאי והוסרו: {{products}}."
   },
   "drawer": {
-    "title": "נוסף לעגלה",
-    "quantityLabel": "כמות בעגלה: {{quantity}}",
+    "title": "העגלה שלי",
     "goToCart": "מעבר לעגלה",
-    "continue": "המשך קנייה"
+    "continue": "המשך קנייה",
+    "empty": "העגלה ריקה.",
+    "removed": "{{product}} הוסר מהעגלה."
   },
   "empty": {
     "heading": "העגלה ריקה",

@@ -93,6 +93,41 @@ export function createRequireActiveShopper(prisma: PrismaClient): RequestHandler
 }
 
 /**
+ * DEC-074's guard for the two order READS — the account must EXIST, and
+ * nothing more.
+ *
+ * 🔴 WHY THIS EXISTS (review finding on DEC-074's first cut): swapping
+ * `requireActiveShopper` for the bare session guard also dropped the
+ * GONE-ACCOUNT teardown, so a session naming a DELETED user row answered
+ * `200 []` forever — a phantom session rendering "no orders" instead of
+ * sending its holder to sign in. DEC-074 loosened exactly one thing, the
+ * `disabled` status; existence was never part of that decision.
+ */
+export function createRequireShopperAccount(prisma: PrismaClient): RequestHandler {
+  return async (req, res, next) => {
+    const verdict = await readStatus(prisma, req.session?.userId)
+
+    if (!verdict.ok) {
+      if (verdict.kind === 'unavailable') {
+        res.status(503).json({
+          error: { code: 'STATUS_CHECK_UNAVAILABLE', message: 'Try again shortly.' },
+        })
+        return
+      }
+      if (verdict.kind === 'gone') req.session?.destroy(() => {})
+      res.status(401).json({
+        error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in to continue.' },
+      })
+      return
+    }
+
+    // Any EXISTING status passes — `disabled` included, per DEC-074: a
+    // suspension stops acting, not reading one's own purchase records.
+    next()
+  }
+}
+
+/**
  * REQ-F-031's gate — O3, finally enforced.
  *
  * 🔴 403, NOT 401, and the code NAMES the cause. A 401 tells the shopper to

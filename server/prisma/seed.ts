@@ -453,6 +453,38 @@ async function main() {
     console.log(`  🔴 deactivated ${deactivated.count} product(s) no longer verified=yes (soft delete, INV-03)`)
   }
 
+  /*
+   * 🔴 DEC-072 — BRAND ROWS CONVERGE TOO (ISSUE-078, the FIFTH instance of
+   * "the seed grows and never converges"). DEC-032's manufacturer rule moved
+   * a product between brands and the abandoned brand row stayed forever.
+   *
+   * ⚠️ A HARD delete, deliberately, and it does not touch INV-03: that
+   * invariant protects Product and Order. A brand row nothing references has
+   * no order history, no frozen names, no images — there is nothing to
+   * preserve. Two guards keep this narrow:
+   *   · only names the verified CSV no longer uses, AND
+   *   · only when NO product row still points at it — a soft-deleted
+   *     product keeps its brand row alive, because reactivating that
+   *     product must not resurrect its brand under a new id.
+   * Accepted trade-off (recorded in DEC-072): a brand that returns in a
+   * later catalogue pass is recreated with a NEW id.
+   */
+  const verifiedBrands = new Set(validatedProducts.map((p) => p.brand))
+  /*
+   * ⚠️ FLOORED AT A NON-EMPTY SET — review finding. `notIn: []` matches EVERY
+   * row, so a repair pass that demotes the whole CSV to Partial would have
+   * turned this into "delete every product-less brand". An empty verified
+   * set means the catalogue is in surgery, not that every brand retired.
+   */
+  if (verifiedBrands.size > 0) {
+    const retiredBrands = await prisma.brand.deleteMany({
+      where: { name: { notIn: [...verifiedBrands] }, products: { none: {} } },
+    })
+    if (retiredBrands.count > 0) {
+      console.log(`  🔴 retired ${retiredBrands.count} brand row(s) the CSV no longer references (DEC-072)`)
+    }
+  }
+
   console.log(`Done. ${validatedProducts.length} verified products processed.`)
 }
 

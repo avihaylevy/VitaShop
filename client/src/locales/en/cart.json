@@ -67,10 +67,11 @@
     "droppedUnavailable": "These products are out of stock and were removed: {{products}}."
   },
   "drawer": {
-    "title": "Added to cart",
-    "quantityLabel": "In cart: {{quantity}}",
+    "title": "Your cart",
     "goToCart": "Go to cart",
-    "continue": "Continue shopping"
+    "continue": "Continue shopping",
+    "empty": "Your cart is empty.",
+    "removed": "{{product}} was removed from the cart."
   },
   "empty": {
     "heading": "Your cart is empty",

@@ -125,6 +125,16 @@ a green test can sit over code that is broken in Chromium.**
   neither the pseudo-class nor the interaction that decides it
 ```
 
+```
+· an IMPURE setState UPDATER (a side effect inside the updater function) is
+  double-invoked by dev StrictMode — the running app breaks while every
+  jsdom test rendered WITHOUT StrictMode stays green. DEC-073's drawer
+  never opened in the app: the updater stamped a session flag, and the
+  second invocation read its own stamp and declined. Caught by the matrix,
+  2026-08-14. Counter-move: decide before setState, and render hook tests
+  under <StrictMode> like the real app
+```
+
 🔴 **THE COUNTER-MOVE IS NOT A BETTER ASSERTION — IT IS OPENING A BROWSER.**
 Where jsdom cannot represent the failure, assert the *attribute* (which it can
 see) and verify the *behaviour* in the matrix. Say so in the test, so the next

@@ -570,3 +570,68 @@ describe('how long these responses are allowed to live', () => {
     expect(missing.headers.get('cache-control')).toBe('no-store')
   })
 })
+
+/**
+ * DEC-074 — a DISABLED shopper may READ their own orders; writes stay blocked.
+ * ISSUE-101, answered by the user 2026-08-14: suspension stops ACTING, not
+ * seeing one's own purchase records.
+ */
+describe('DEC-074 — a disabled shopper and their own orders', () => {
+  it('🔴 reads their HISTORY and a DETAIL while disabled, and is still refused the WRITE', async () => {
+    const orderId = await placeOrder(userId, 'read-key-disabled', [{ slug: SLUG_A, quantity: 1 }])
+    const cookie = await signIn(EMAIL)
+    try {
+      await prisma.user.update({ where: { email: EMAIL }, data: { status: 'disabled' } })
+
+      // The two READS survive the suspension.
+      const list = await get('/api/orders', cookie)
+      expect(list.status).toBe(200)
+      const detail = await get(`/api/orders/${orderId}`, cookie)
+      expect(detail.status).toBe(200)
+
+      // 🔴 THE CONTROL, and the boundary: the WRITE is refused — and per
+      // requireActiveShopper's contract the refusal DESTROYS the session, so
+      // the same cookie is now signed out everywhere. DEC-074 loosened
+      // exactly two reads, nothing else.
+      const cancel = await fetch(`${baseUrl}/api/orders/${orderId}/cancel`, {
+        method: 'POST', headers: { cookie },
+      })
+      expect(cancel.status).toBe(401)
+      expect((await get('/api/orders', cookie)).status).toBe(401)
+    } finally {
+      await prisma.user.update({ where: { email: EMAIL }, data: { status: 'active' } })
+      // The write refusal destroyed this session — drop the cached cookie so
+      // any later test signs in fresh instead of inheriting a dead one.
+      cookies.delete(EMAIL)
+    }
+  })
+
+  it('🔴 a DELETED account cookie is 401 and torn down — DEC-074 loosened disabled, never existence', async () => {
+    // Review finding: the first cut used the bare session guard, so a phantom
+    // session answered `200 []` forever instead of sending its holder to sign
+    // in. This fixture user exists only for this test (INV-03 protects
+    // Product/Order, not User; the row is this test's own).
+    const GHOST = 'zz-ordersread-ghost@example.test'
+    const hash = await argon2.hash(PASSWORD, ARGON2_OPTIONS)
+    await prisma.user.create({
+      data: {
+        email: GHOST, firstName: 'Ghost', lastName: 'Fixture',
+        passwordHash: hash, termsAcceptedAt: new Date(), status: 'active',
+      },
+      select: { id: true },
+    })
+    const cookie = await signIn(GHOST)
+    try {
+      await prisma.user.delete({ where: { email: GHOST } })
+
+      const list = await get('/api/orders', cookie)
+      expect(list.status).toBe(401)
+      // And the session is DESTROYED, not merely refused: the same cookie
+      // must stay signed out even if the guard were later removed again.
+      expect((await get('/api/orders', cookie)).status).toBe(401)
+    } finally {
+      cookies.delete(GHOST)
+      await prisma.user.deleteMany({ where: { email: GHOST } })
+    }
+  })
+})

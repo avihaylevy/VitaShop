@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../i18n'
 import { CartProvider } from '../state/CartContext'
 import { CartDrawer } from '../components/cart/CartDrawer'
 import { ProductGrid } from '../components/catalog/ProductGrid'
-import { useAddToCart } from './useAddToCart'
+import { DRAWER_SHOWN_SESSION_KEY, useAddToCart } from './useAddToCart'
 import type { ProductCardModel } from '../types/product'
 
 /**
@@ -40,7 +41,7 @@ const PRODUCT: ProductCardModel = {
 
 /** A minimal surface that uses the hook exactly as both real pages do. */
 function Surface() {
-  const { handleAddToCart, drawerSlug, closeDrawer, returnFocusRef, gridRef, announced } =
+  const { handleAddToCart, drawerOpen, closeDrawer, returnFocusRef, gridRef, announced } =
     useAddToCart()
   return (
     <div>
@@ -50,22 +51,14 @@ function Surface() {
       <p role="status">{announced ? `announced ${announced.slug} ${announced.count}` : ''}</p>
       {/*
         🔴 THE HOOK'S OWN STATE, surfaced because the DRAWER'S DOM CANNOT
-        ANSWER THIS. `CartDrawer` renders nothing when the cart holds no
-        matching line, so after a REFUSED add "no dialog on screen" is true
-        whether the drawer opened or not — two mutations passed against that
-        assertion before this element existed. `drawerSlug` is the thing
-        DEC-047 D1 is actually about.
+        ANSWER THIS in jsdom. `drawerOpen` (DEC-073: a boolean — the panel
+        shows the whole cart) is the thing DEC-047 D1 is actually about.
       */}
-      <p data-testid="drawer-state">{drawerSlug ?? 'closed'}</p>
+      <p data-testid="drawer-state">{drawerOpen ? 'open' : 'closed'}</p>
       <button type="button" data-testid="close-drawer" onClick={closeDrawer}>
         close
       </button>
-      <CartDrawer
-        open={drawerSlug !== null}
-        slug={drawerSlug}
-        onClose={closeDrawer}
-        returnFocusRef={returnFocusRef}
-      />
+      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
     </div>
   )
 }
@@ -111,17 +104,27 @@ function cartBody(totalQuantity: number) {
  * alone made every add look like a refusal, which is how the first version of
  * this file "proved" the drawer never opens.
  */
-function mutation(totalQuantity: number) {
-  return { cart: cartBody(totalQuantity), quantity: totalQuantity }
+function mutation(totalQuantity: number, extras: Record<string, unknown> = {}) {
+  return { cart: cartBody(totalQuantity), quantity: totalQuantity, ...extras }
 }
 
 function renderSurface() {
   return render(
-    <MemoryRouter>
-      <CartProvider>
-        <Surface />
-      </CartProvider>
-    </MemoryRouter>,
+    /*
+     * 🔴 STRICTMODE, LIKE THE REAL APP — added after the browser matrix
+     * caught a defect every test here missed: the open decision lived inside
+     * a setState UPDATER with a side effect (stamping the session flag), and
+     * StrictMode's double-invoke made the second call read its own stamp and
+     * decline to open. Without StrictMode, jsdom stayed green while the
+     * running app never opened the drawer at all.
+     */
+    <StrictMode>
+      <MemoryRouter>
+        <CartProvider>
+          <Surface />
+        </CartProvider>
+      </MemoryRouter>
+    </StrictMode>,
   )
 }
 
@@ -144,6 +147,8 @@ beforeEach(async () => {
     dispatchEvent: () => false,
   }))
   await i18n.changeLanguage('en')
+  // DEC-073: the first-add-of-a-session flag must not leak between tests.
+  window.sessionStorage.clear()
 })
 
 afterEach(() => {
@@ -165,7 +170,7 @@ describe('the shared add-to-cart choreography', () => {
     renderSurface()
 
     fireEvent.click(await screen.findByRole('button', { name: /add to cart/i }))
-    await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('probiotic'))
+    await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
   })
 
   it('does NOT open the drawer when the add is REFUSED — ⚠️ NOT MUTATION-PROVEN', async () => {
@@ -254,9 +259,88 @@ describe('the shared add-to-cart choreography', () => {
     renderSurface()
 
     fireEvent.click(await screen.findByRole('button', { name: /add to cart/i }))
-    await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('probiotic'))
+    await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
 
     fireEvent.click(screen.getByTestId('close-drawer'))
     expect(screen.getByTestId('drawer-state').textContent).toBe('closed')
+  })
+
+  it('🔴 DEC-073 — the drawer auto-opens on the FIRST add of a session ONLY', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        init?.method === 'POST'
+          ? ({ ok: true, status: 200, json: async () => mutation(1) } as unknown as Response)
+          : ({ ok: true, status: 200, json: async () => ({ cart: cartBody(0) }) } as unknown as Response),
+      ),
+    )
+    renderSurface()
+
+    // First add: opens, and stamps the session.
+    fireEvent.click(await screen.findByRole('button', { name: /add to cart/i }))
+    await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
+    expect(window.sessionStorage.getItem(DRAWER_SHOWN_SESSION_KEY)).toBe('1')
+
+    // The shopper closes it and keeps shopping.
+    fireEvent.click(screen.getByTestId('close-drawer'))
+    expect(screen.getByTestId('drawer-state').textContent).toBe('closed')
+
+    // Second add: QUIET — announced (the region updates with the new count),
+    // never re-opened.
+    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('announced probiotic 1'))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60)) // same budget as the D1 test
+    })
+    expect(screen.getByTestId('drawer-state').textContent).toBe('closed')
+  })
+
+  it('🔴 review finding — a CLAMPED quiet re-add RE-OPENS the drawer instead of losing the clamp silently', async () => {
+    // The drawer is the only surface on these pages that renders the outcome.
+    // A quiet add that the server clamped (or refused at max) changed nothing
+    // and would otherwise say nothing — §7.16's silent loss. Quiet means not
+    // nagging about SUCCESSES.
+    let post = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          post += 1
+          return {
+            ok: true, status: 200,
+            json: async () => (post === 1 ? mutation(1) : mutation(1, { alreadyAtMaximum: true })),
+          } as unknown as Response
+        }
+        return { ok: true, status: 200, json: async () => ({ cart: cartBody(0) }) } as unknown as Response
+      }),
+    )
+    renderSurface()
+
+    fireEvent.click(await screen.findByRole('button', { name: /add to cart/i }))
+    await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
+    fireEvent.click(screen.getByTestId('close-drawer'))
+
+    // The clamped re-add must NOT stay quiet.
+    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
+  })
+
+  it('DEC-073 — an add while the drawer is ALREADY open keeps it open (D8: content only)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        init?.method === 'POST'
+          ? ({ ok: true, status: 200, json: async () => mutation(2) } as unknown as Response)
+          : ({ ok: true, status: 200, json: async () => ({ cart: cartBody(0) }) } as unknown as Response),
+      ),
+    )
+    renderSurface()
+
+    fireEvent.click(await screen.findByRole('button', { name: /add to cart/i }))
+    await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
+
+    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('announced probiotic 2'))
+    expect(screen.getByTestId('drawer-state').textContent).toBe('open')
   })
 })

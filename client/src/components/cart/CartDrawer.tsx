@@ -1,171 +1,231 @@
-import { useEffect, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useCart } from '../../state/CartContext'
-import { toCartLineDisplay } from '../../lib/cartDisplay'
+import { toCartLineDisplay, type CartLineDisplay } from '../../lib/cartDisplay'
 import type { SupportedLanguage } from '../../i18n'
 import { PriceBlock } from '../catalog/PriceBlock'
 import { Drawer } from '../ui/Drawer'
 import { FOCUS_RING } from '../ui/focusRing'
-import { CartDrawerLine } from './CartDrawerLine'
+import { CartItemRow } from './CartItemRow'
 import { useCartOutcomeMessage } from './CartOutcomeNotice'
 
 type CartDrawerProps = {
-  /** Owned by the caller. See the closed<->open invariant note below. */
+  /** Owned by the caller (useAddToCart). */
   open: boolean
-  /** Which cart line to show. The caller is expected to keep this in lock
-   * step with `open` (`drawerSlug === null` iff closed), but this component
-   * does not trust that from the outside — see the missing-line branch. */
-  slug: string | null
   onClose: () => void
   /**
-   * The exact control that should regain focus on close — Slice 8
-   * Checkpoint C's responsibility to populate and to keep pointed at the
-   * FIRST successful add that opened the drawer (DEC-047-A, R1). This
-   * component only accepts and forwards it; it never resolves or assigns a
-   * target itself.
+   * The exact control that should regain focus on close — populated by the
+   * caller at the FIRST successful add that opened the drawer (DEC-047-A,
+   * R1). This component only accepts and forwards it; it never resolves or
+   * assigns a target itself.
    */
   returnFocusRef: RefObject<HTMLElement | null>
 }
 
 /**
- * Add-to-cart confirmation — Slice 8 (technical/SLICE_8_PLAN.md, `Accepted`).
+ * DEC-073 — the drawer is now a compact EDITING PANEL, superseding DEC-047's
+ * confirmation-only contract (D3/D4 narrowed by the user's decision,
+ * ISSUE-087 + ISSUE-088 answered together).
  *
- * DESIGN_SYSTEM.md §8: confirmation only, never cart management. `/cart`
- * stays the only surface for quantity editing, removal, undo and checkout —
- * none of those exist here, structurally, not merely hidden.
+ * 🔴 WHAT CHANGED AND WHAT DID NOT:
+ *   · it shows THE WHOLE CART, not the one line just added, with the same
+ *     `CartItemRow` the cart page uses — DESIGN_SYSTEM.md §8's "one item-row
+ *     structure, used for every line", finally applied here too. Steppers
+ *     and removal call the same server endpoints; §3.4 stands, no client
+ *     quantity math.
+ *   · D1 STANDS: the caller opens it only on a server-confirmed add, never
+ *     optimistically — and per DEC-073 only on the FIRST add of a session.
+ *   · D5 STANDS: no live region in here. A focused dialog announces itself;
+ *     the outcome message renders as ordinary text (see
+ *     `useCartOutcomeMessage`'s own note).
+ *   · the ONLY money values are the SERVER's line totals and subtotal. No
+ *     shipping/threshold rows — those remain the page's (DEC-047 D3 kept
+ *     for everything but editing).
  *
- * 🔴 Renders the existing `Drawer` exactly as built. No focus trap, no
- * Escape handling, no scrim/inert/scroll-lock code and no focus-restoration
- * logic live in this file — all four §8 obligations are inherited from
- * `Modal` via `Drawer`, unchanged.
+ * ⚠️ NO UNDO ROW HERE, deliberately. Undo is the page's machinery
+ * (UndoRow + its focus-restoration choreography); a removal in the drawer is
+ * stated by the drawer's OWN removal notice (which also receives focus —
+ * `messageFor` deliberately says nothing for removals), and the page remains
+ * the place to recover it. Duplicating the undo would duplicate the exact
+ * choreography ISSUE-105 existed to stop being copied.
  *
- * 🔴 No live region anywhere in this component (DEC-047 D5). A focused
- * dialog announces itself through its role and accessible name; the
- * catalogue's existing `role="status"` confirmation is untouched and
- * unrelated to this component.
- *
- * ⚠️ MILESTONE-007 Checkpoint G added the server's clamp report here as
- * ORDINARY TEXT, not a region — see `useCartOutcomeMessage`. D5 is about the
- * REGION, not about withholding what the server changed; a drawer that says
- * "added to cart" over a quantity the server clamped is the silent loss §7.16
- * forbids, so both rules are honoured rather than one traded for the other.
+ * 🔴 AN EMPTY CART DOES NOT SLAM THE DOOR. Removing the last line keeps the
+ * panel open and says the cart is empty — closing a dialog the shopper is
+ * interacting with is the unmount-on-success family
+ * (.claude/rules/browser-verification.md), and the close button is mounted
+ * either way.
  */
-export function CartDrawer({ open, slug, onClose, returnFocusRef }: CartDrawerProps) {
+export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
   const { t, i18n } = useTranslation('cart')
   const language = i18n.language as SupportedLanguage
-  const { cart, outcome } = useCart()
+  const { cart, outcome, failure, pending, setLineQuantity, removeLine } = useCart()
 
-  // Read live from the SERVER's cart, never a copied/cached line — a
-  // replacement add (D8) or any cart change is reflected on the very next
-  // render, with no local state of its own to go stale.
-  const item = slug !== null ? cart.items.find((candidate) => candidate.slug === slug) : undefined
-  const line = item ? toCartLineDisplay(item, language) : undefined
+  // Read live from the SERVER's cart on every render — no copied lines, so a
+  // clamp, a removal or a concurrent change is reflected immediately.
+  const lines = cart.items.map((item) => toCartLineDisplay(item, language))
 
-  // 🔴 Registered here, unconditionally, BEFORE the missing-line early return
-  // below — the Rules of Hooks hold whichever branch the render takes.
-  const outcomeMessage = useCartOutcomeMessage(outcome, line?.name)
-
-  /**
-   * 🔴 Missing-line lifecycle (mandatory contract). Fires only post-commit,
-   * never during render. Closed guard (`!open`) keeps it silent for every
-   * ordinary closed render, including the very first one before any add has
-   * ever happened. The `line` guard keeps it silent whenever a genuine line
-   * exists. Once both conditions clear, it asks the caller to close — the
-   * caller's `onClose` is expected to have a stable identity (Checkpoint
-   * C), so this effect does not re-enter on every unrelated render, and a
-   * second call after the caller has already gone to `open === false` is a
-   * no-op the guard itself prevents from ever firing twice.
-   *
-   * No local copy of cart state is kept to detect this — `line` is derived
-   * fresh from `CartContext.items` on every render, exactly like everywhere
-   * else in this component. Registered unconditionally, before any early
-   * return below, so the Rules of Hooks hold regardless of which branch the
-   * render takes.
+  /*
+   * 🔴 THE SUBJECT IS RESOLVED TO A NAME (review finding). The catalogue's
+   * adds arrive with the SLUG as their subject (`useAddToCart` has only the
+   * slug), so the first clamp a shopper ever saw would have read "Only 2 of
+   * altman-probiotic-intense-30 are in stock" — the exact defect two other
+   * files record from a browser pass. The drawer has the lines in hand:
+   * a subject matching a line's slug renders that line's name; anything else
+   * (already a name, from this drawer's own steppers) passes through.
    */
+  const subjectName =
+    outcome !== null
+      ? (lines.find((line) => line.slug === outcome.subject)?.name ?? outcome.subject)
+      : undefined
+  const outcomeMessage = useCartOutcomeMessage(outcome, subjectName)
+
+  const handleIncrement = useCallback(
+    (line: CartLineDisplay) => {
+      void setLineQuantity(line.id, line.name, line.quantity + 1)
+    },
+    [setLineQuantity],
+  )
+  const handleDecrement = useCallback(
+    (line: CartLineDisplay) => {
+      void setLineQuantity(line.id, line.name, line.quantity - 1)
+    },
+    [setLineQuantity],
+  )
+  /*
+   * 🔴 REMOVAL SAYS SO AND FOCUS LANDS SOMEWHERE DELIBERATE (review
+   * finding — the unmount-on-success family, again). `messageFor` returns ''
+   * for removals by design (the PAGE's UndoRow owns that announcement), and
+   * D5 forbids a live region here — so the drawer keeps its own removal
+   * notice as ordinary text and moves focus onto it (tabIndex -1). Without
+   * this, pressing Remove destroyed the focused button and focus fell to
+   * <body>, OUTSIDE the dialog's focus trap, with nothing said.
+   * ⚠️ No undo here, deliberately: UndoRow and its focus choreography are the
+   * page's; the notice names the product and the cart page remains the place
+   * to recover it.
+   */
+  const [removedName, setRemovedName] = useState<string | null>(null)
+  const removalNoticeRef = useRef<HTMLParagraphElement>(null)
+  const handleRemove = useCallback(
+    (line: CartLineDisplay) => {
+      void removeLine(line.id, line.name).then((result) => {
+        if (!result) return
+        setRemovedName(line.name)
+      })
+    },
+    [removeLine],
+  )
   useEffect(() => {
-    if (!open) return
-    if (line !== undefined) return
-    onClose()
-  }, [open, line, onClose])
-
-  /**
-   * 🔴 Missing-line render guard — the correction this checkpoint adds.
-   *
-   * `Drawer` always hands `Modal` a LITERAL `open={true}` for as long as
-   * `Drawer` itself stays mounted (see Drawer.tsx: `<Modal {...modalProps}
-   * open ...>`) — that literal, not a derived "effective open", is what
-   * keeps the panel rendering through the exit slide. Folding the
-   * missing-line case into a derived `open` prop on `Drawer` therefore does
-   * NOT stop Modal's title and close button from rendering: only `children`
-   * was conditional, so the chrome would render — with `{line && (...)}`
-   * having gone empty — for the length of Drawer's exit transition. That is
-   * the exact defect this guard removes.
-   *
-   * Returning null OUTRIGHT here — after every hook above has already been
-   * registered — unmounts `Drawer` synchronously instead. `Drawer`/`Modal`
-   * therefore never render at all in this state: no title, no close button,
-   * no empty content for a single frame. This is deliberately NOT the
-   * normal exit transition; a missing line while `open` is still true is an
-   * invalid caller state being corrected, not an ordinary close, so
-   * skipping the slide here is correct. `Modal`'s own effect cleanups
-   * (scroll lock, inert, focus trap, return focus) still run on this
-   * unmount exactly as they do on any other Modal unmount — nothing here
-   * bypasses them.
-   */
-  if (open && line === undefined) {
-    return null
-  }
+    if (removedName !== null) removalNoticeRef.current?.focus()
+  }, [removedName])
 
   return (
     <Drawer open={open} onClose={onClose} title={t('drawer.title')} returnFocusRef={returnFocusRef}>
-      {line && (
-        <div className="flex flex-col gap-4 p-4">
-          <CartDrawerLine line={line} />
+      <div className="flex flex-col gap-4 p-4">
+        {lines.length === 0 ? (
+          <p className="text-sm text-text-muted">{t('drawer.empty')}</p>
+        ) : (
+          <div className="flex flex-col divide-y divide-border-hairline">
+            {lines.map((line) => (
+              <CartItemRow
+                key={line.id}
+                line={line}
+                busy={pending}
+                onIncrement={handleIncrement}
+                onDecrement={handleDecrement}
+                onRemove={handleRemove}
+              />
+            ))}
+          </div>
+        )}
 
-          {/*
-            🔴 THE DRAWER IS A CONFIRMATION, so it must confirm what actually
-            happened. If the server clamped the add — to stock or to the
-            per-line cap — or refused to move a line already at its maximum,
-            the drawer says so beside the quantity it is showing. Announcing
-            "added to cart" over a clamp the shopper cannot see is precisely
-            the silent loss §7.16 forbids.
-          */}
-          {outcomeMessage && <p className="text-sm text-text-muted">{outcomeMessage}</p>}
+        {/*
+          🔴 STILL A CONFIRMATION as well as an editor: if the server clamped
+          an add — to stock or the per-line cap — the panel says so. "Added to
+          cart" over a clamp the shopper cannot see is the silent loss §7.16
+          forbids.
+        */}
+        {outcomeMessage && <p className="text-sm text-text-muted">{outcomeMessage}</p>}
 
-          {/*
-            🔴 The ONLY money value in this drawer — the SERVER's subtotal,
-            read directly from CartContext, never re-derived. No shipping, tax,
-            discount, threshold or grand total (DEC-047 D3) — those rows are
-            absent, not hidden behind a placeholder.
-          */}
-          <p className="flex flex-wrap items-baseline gap-2 border-t border-border-hairline pt-4">
-            <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
-            <PriceBlock price={cart.subtotal} />
+        {/* The removal notice — ordinary text (D5), and the deliberate focus
+            target after the pressed Remove button unmounted itself. */}
+        {removedName !== null && (
+          <p
+            ref={removalNoticeRef}
+            tabIndex={-1}
+            className={`${FOCUS_RING} rounded-compact text-sm text-text-ink`}
+          >
+            {t('drawer.removed', { product: removedName })}
           </p>
+        )}
 
-          {/* Primary action — a semantic link, per DEC-047 D6's rule that
-              the header cart control (not this one) owns /cart navigation
-              behaviour in general; this is the drawer's own dedicated
-              action. */}
-          <Link
-            to="/cart"
-            className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-card bg-brand-teal px-4 text-sm font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
-          >
-            {t('drawer.goToCart')}
-          </Link>
+        {/*
+          🔴 A FAILED mutation is SAID, not left as a control that visibly
+          did nothing (review finding). Ordinary text, not role="alert" — D5
+          forbids a live region in here, and the shopper is already focused
+          inside the dialog where the text appears.
+        */}
+        {failure && (
+          <p className="text-sm text-state-error">
+            {failure.kind === 'network' ? t('state.errorOffline') : t('state.actionFailed')}
+          </p>
+        )}
 
-          {/* Quiet close action — a semantic button, distinct from the link
-              above and from CartPage's page.backToCatalog (DEC-047, §6). */}
-          <button
-            type="button"
-            onClick={onClose}
-            className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-compact text-sm font-medium text-brand-teal underline`}
-          >
-            {t('drawer.continue')}
-          </button>
-        </div>
-      )}
+        {lines.length > 0 && (
+          <>
+            {/*
+              🔴 The SERVER's subtotal, read from CartContext, never
+              re-derived. Shipping/threshold rows stay on the page (DEC-047
+              D3 for everything except editing).
+            */}
+            <p className="flex flex-wrap items-baseline gap-2 border-t border-border-hairline pt-4">
+              <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
+              <PriceBlock price={cart.subtotal} />
+            </p>
+
+            {/*
+              DEC-073's "checkout path". ⚠️ HIDDEN while a line blocks
+              checkout, exactly like the page's entry (ISSUE-104): the reason
+              is explained beside the offending row, `hasBlockingLine` is the
+              SERVER's flag, and offering a control checkout would refuse just
+              sends the shopper somewhere to be told no.
+            */}
+            {/* Why there is no checkout button, when there is none — the
+                page says this too (review finding: an absent control with no
+                explanation is a dead end). Ordinary text, not an alert (D5). */}
+            {cart.hasBlockingLine && (
+              <p className="text-sm text-state-error">{t('blocked.message')}</p>
+            )}
+            {!cart.hasBlockingLine && (
+              <Link
+                to="/checkout"
+                onClick={onClose}
+                className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-card bg-brand-teal px-4 text-sm font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
+              >
+                {t('page.checkoutCta')}
+              </Link>
+            )}
+
+            {/* The full cart page — shipping detail, undo, the wider layout. */}
+            <Link
+              to="/cart"
+              onClick={onClose}
+              className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-card border border-border-hairline px-4 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:bg-surface-sunken`}
+            >
+              {t('drawer.goToCart')}
+            </Link>
+          </>
+        )}
+
+        {/* Quiet close action — mounted in EVERY state, empty cart included. */}
+        <button
+          type="button"
+          onClick={onClose}
+          className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-compact text-sm font-medium text-brand-teal underline`}
+        >
+          {t('drawer.continue')}
+        </button>
+      </div>
     </Drawer>
   )
 }

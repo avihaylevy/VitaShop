@@ -67,7 +67,7 @@ export function HomePage() {
 function NewArrivals() {
   const { t } = useTranslation('catalog')
   const state = useNewArrivals()
-  const { handleAddToCart, drawerSlug, closeDrawer, returnFocusRef, gridRef, announced } =
+  const { handleAddToCart, drawerOpen, closeDrawer, returnFocusRef, gridRef, announced } =
     useAddToCart()
 
   const announcedProduct =
@@ -273,12 +273,7 @@ function NewArrivals() {
         Its own internal lifecycle governs everything else; this page owns only
         the slug, the return-focus owner and a stable close identity.
       */}
-      <CartDrawer
-        open={drawerSlug !== null}
-        slug={drawerSlug}
-        onClose={closeDrawer}
-        returnFocusRef={returnFocusRef}
-      />
+      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
 
       {/*
         Announced as slug + count so the sentence re-resolves through i18n on a

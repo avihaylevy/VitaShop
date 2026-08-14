@@ -32,8 +32,16 @@ type QuantityStepperProps = {
  * mirroring override and no direction-specific branch — do not "fix" this.
  *
  * The floor is 1 and is not configurable — reaching 0 is a REMOVAL, which has
- * its own labelled control. Both buttons are natively `disabled` — never a
- * click-guard.
+ * its own labelled control.
+ *
+ * 🔴 `aria-disabled` + a click guard, NOT native `disabled` — REVERSED from
+ * the original contract by the DEC-073 review. Chromium BLURS a focused
+ * element the moment it becomes natively disabled (the second defect family
+ * in .claude/rules/browser-verification.md). On the cart page that dropped
+ * focus to the page; inside the cart DRAWER — a focus-trapped dialog — it
+ * dropped focus outside the trap entirely, and the stepper that hit its cap
+ * stayed disabled after `pending` cleared, making the escape permanent.
+ * jsdom cannot represent the blur, so no green test is evidence here.
  */
 export function QuantityStepper({
   quantity,
@@ -55,8 +63,10 @@ export function QuantityStepper({
         variant="secondary"
         icon={<MinusIcon />}
         aria-label={t('quantity.decrease', { product: productName })}
-        disabled={!canDecrement}
-        onClick={onDecrement}
+        aria-disabled={!canDecrement || undefined}
+        onClick={() => {
+          if (canDecrement) onDecrement()
+        }}
       />
       {/*
         DESIGN_SYSTEM.md §8/§12: the quantity is exposed to assistive
@@ -75,8 +85,10 @@ export function QuantityStepper({
         variant="secondary"
         icon={<PlusIcon />}
         aria-label={t('quantity.increase', { product: productName })}
-        disabled={!canIncrement}
-        onClick={onIncrement}
+        aria-disabled={!canIncrement || undefined}
+        onClick={() => {
+          if (canIncrement) onIncrement()
+        }}
       />
     </div>
   )

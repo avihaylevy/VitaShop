@@ -168,7 +168,18 @@ beforeEach(() => {
   mockUseCatalogCategories.mockReset()
   mockUseCatalogCategories.mockReturnValue({ loading: false, categories: CATEGORIES, error: null, retry: vi.fn() })
   mockUseCart.mockReset()
-  mockUseCart.mockReturnValue({ addItem: vi.fn(), items: [], totalQuantity: 0 })
+  // DEC-073: the drawer is an editing panel reading the full cart shape, so
+  // this mock carries what it reads even though it renders closed here.
+  mockUseCart.mockReturnValue({
+    addItem: vi.fn(),
+    setLineQuantity: vi.fn(),
+    removeLine: vi.fn(),
+    pending: false,
+    outcome: null,
+    cart: { items: [], subtotal: '0.00', totalQuantity: 0, hasBlockingLine: false },
+    items: [],
+    totalQuantity: 0,
+  })
 })
 
 describe('CatalogPage responsive — skeleton/grid breakpoint parity', () => {

@@ -174,6 +174,29 @@ describe('seed convergence — the database equals the CSV, in both directions',
     expect(wrong).toEqual([])
   })
 
+  it('BRAND ROWS are exactly the CSV brands plus brands kept alive by product rows — instance 5, DEC-072', async () => {
+    // ISSUE-078: DEC-032 moved a product between brands and the abandoned
+    // בריאמיל row sat at 0 products forever — the family's fifth instance,
+    // in a table the sets above never watched. The seed now RETIRES a brand
+    // row when the CSV no longer references its name AND no product row
+    // (active or soft-deleted) still points at it.
+    const csvBrands = new Set(readVerifiedProductRows().map((r) => (r.brand ?? '').trim()))
+    const brands = await prisma.brand.findMany({
+      select: { name: true, _count: { select: { products: true } } },
+    })
+
+    // Direction 1 — nothing missing: every CSV brand exists.
+    const missing = [...csvBrands].filter((name) => !brands.some((b) => b.name === name))
+    expect(missing).toEqual([])
+
+    // Direction 2 — no orphan: a brand row with ZERO product rows that the
+    // CSV no longer names is exactly the drift this instance is about.
+    const orphans = brands
+      .filter((b) => b._count.products === 0 && !csvBrands.has(b.name))
+      .map((b) => b.name)
+    expect(orphans).toEqual([])
+  })
+
   it('🔴 the fixture itself is non-trivial — a catalogue of zero would satisfy every set above', async () => {
     // Without this, an empty database and an empty CSV agree perfectly and
     // every assertion in this file passes while proving nothing. Same trap as

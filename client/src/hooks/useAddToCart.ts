@@ -32,11 +32,49 @@ import { ADD_TO_CART_ATTRIBUTE } from '../components/catalog/ProductCard'
  * the caller's job, because only the caller knows which list the product came
  * from.
  */
+/**
+ * DEC-073 — the drawer auto-opens only on the FIRST add of a browser session.
+ * sessionStorage, not a module variable: the shopper moves between the home
+ * page and the catalogue (two mounts of this hook), and the whole point is
+ * not asking the same question five times. Exported for tests.
+ */
+export const DRAWER_SHOWN_SESSION_KEY = 'vitashop:cart-drawer-shown'
+
+function drawerAlreadyShown(): boolean {
+  try {
+    return window.sessionStorage.getItem(DRAWER_SHOWN_SESSION_KEY) === '1'
+  } catch {
+    // Storage can be unavailable (privacy mode). Degrade to opening every
+    // time — the pre-DEC-073 behaviour — rather than never confirming.
+    return false
+  }
+}
+
+function markDrawerShown(): void {
+  try {
+    window.sessionStorage.setItem(DRAWER_SHOWN_SESSION_KEY, '1')
+  } catch {
+    // Same degradation as above; nothing to do.
+  }
+}
+
 export function useAddToCart() {
   const { addItem } = useCart()
   const mountedRef = useRef(true)
   const [announced, setAnnounced] = useState<{ slug: string; count: number } | null>(null)
-  const [drawerSlug, setDrawerSlug] = useState<string | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  /**
+   * 🔴 A REF MIRROR OF `drawerOpen`, because the open decision must NOT live
+   * inside the state updater. The first version checked-and-stamped the
+   * session flag inside `setDrawerOpen`'s updater — an impure updater, and
+   * React's dev StrictMode double-invokes updaters precisely to surface
+   * that: the second invocation found the flag already stamped and returned
+   * `false`, so the drawer NEVER opened in the running app while every jsdom
+   * test (rendered without StrictMode) stayed green. Caught in the browser
+   * matrix, fixed by deciding BEFORE setState; the tests now render under
+   * StrictMode so this class fails in jsdom too.
+   */
+  const drawerOpenRef = useRef(false)
   const returnFocusRef = useRef<HTMLElement>(null)
   /** Scopes the return-focus lookup to one grid — see the header. */
   const gridRef = useRef<HTMLDivElement>(null)
@@ -60,18 +98,49 @@ export function useAddToCart() {
       void addItem(slug, 1).then((result) => {
         if (!result || !mountedRef.current) return
 
+        // 🔴 EVERY add is announced — quiet is not silent. The header badge
+        // updates from the same committed total.
         setAnnounced({ slug, count: result.cart.totalQuantity })
 
-        setDrawerSlug((current) => {
-          if (current === null) returnFocusRef.current = trigger
-          return slug
-        })
+        /*
+         * 🔴 DEC-073 — QUIET RE-ADDS, but ONLY FOR CLEAN ADDS. The drawer
+         * auto-opens on the first add of the session; after that, the badge
+         * and the announcement carry the confirmation.
+         *
+         * ⚠️ A CLAMPED OR REFUSED-AT-MAX ADD RE-OPENS IT (review finding,
+         * HIGH): the drawer was the ONLY surface on these pages that renders
+         * the outcome, so a quiet third click on a 2-in-stock product
+         * changed NOTHING and said NOTHING — the announcement even repeats
+         * the identical sentence, which a live region does not re-announce.
+         * That is verbatim the §7.16 silent loss. "Quiet" means not nagging
+         * about successes; it must never mean hiding that the add DID NOT
+         * TAKE.
+         *
+         * D1 stands: this runs AFTER the server confirmed, never before.
+         * An add while the drawer is ALREADY open changes content only (D8).
+         * ⚠️ Decided HERE, never inside the setState updater — see
+         * `drawerOpenRef`'s note for the StrictMode defect that shipped.
+         */
+        const outcome = result.outcome
+        const addDidNotFullyTake =
+          outcome.clampedByStock || outcome.clampedByCap || outcome.alreadyAtMaximum || outcome.unchanged
+        if (!addDidNotFullyTake && (drawerAlreadyShown() || drawerOpenRef.current)) return
+        if (drawerOpenRef.current) return
+        markDrawerShown()
+        // DEC-047-A R1 — the return-focus owner is established only on the
+        // closed -> open transition.
+        returnFocusRef.current = trigger
+        drawerOpenRef.current = true
+        setDrawerOpen(true)
       })
     },
     [addItem],
   )
 
-  const closeDrawer = useCallback(() => setDrawerSlug(null), [])
+  const closeDrawer = useCallback(() => {
+    drawerOpenRef.current = false
+    setDrawerOpen(false)
+  }, [])
 
-  return { handleAddToCart, drawerSlug, closeDrawer, returnFocusRef, gridRef, announced }
+  return { handleAddToCart, drawerOpen, closeDrawer, returnFocusRef, gridRef, announced }
 }

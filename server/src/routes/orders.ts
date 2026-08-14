@@ -3,7 +3,7 @@ import type { PrismaClient } from '@prisma/client'
 import { applyTransition } from '../lib/orderTransitionService.js'
 import { createOrderRateLimiters, type OrderRateLimiters } from '../lib/rateLimit.js'
 import { requireShopper } from './requireShopper.js'
-import { createRequireActiveShopper } from './requireActiveShopper.js'
+import { createRequireActiveShopper, createRequireShopperAccount } from './requireActiveShopper.js'
 
 /**
  * MILESTONE-008 Checkpoint E3 — the shopper's own order actions.
@@ -140,6 +140,7 @@ export function createOrderRouter(deps: OrderRouterDeps): ReturnType<typeof Rout
    * holding a pending order must be able to get out of it.
    */
   const requireActiveShopper = createRequireActiveShopper(deps.prisma)
+  const requireShopperAccount = createRequireShopperAccount(deps.prisma)
 
   /**
    * 🔴 NO-STORE, ROUTER-LEVEL — the same directive `routes/account.ts` sets,
@@ -181,7 +182,20 @@ export function createOrderRouter(deps: OrderRouterDeps): ReturnType<typeof Rout
    * defect Checkpoint B's migration split the column to prevent, and the same
    * rule that lets the catalogue toggle language without a refetch.
    */
-  router.get('/', limiters.read, requireShopper, requireActiveShopper, async (req, res) => {
+  /*
+   * 🔴 DEC-074 — SESSION-ONLY on the two READS, deliberately. ISSUE-101 asked
+   * whether a disabled shopper may see what they already bought, and the user
+   * answered YES: suspension stops ACTING, not seeing one's own purchase
+   * records — a shopper locked out of their receipts has no way to
+   * reconstruct what they were charged for. The cancel route below KEEPS
+   * `requireActiveShopper`: it is a write.
+   * ⚠️ AMENDED after review: `requireShopperAccount`, not the bare session
+   * guard — the account must still EXIST. Session-only here left a DELETED
+   * account's cookie alive forever, answering `200 []` instead of tearing
+   * the phantom session down. Existence was never the thing DEC-074
+   * loosened; only `disabled` was.
+   */
+  router.get('/', limiters.read, requireShopper, requireShopperAccount, async (req, res) => {
     const userId = req.session!.userId!
 
     try {
@@ -227,7 +241,9 @@ export function createOrderRouter(deps: OrderRouterDeps): ReturnType<typeof Rout
    * a 403 here would let the PAIR be diffed for the same answer. An order that
    * is not yours is indistinguishable from one that does not exist.
    */
-  router.get('/:id', limiters.read, requireShopper, requireActiveShopper, async (req, res) => {
+  // DEC-074 — existence-only (see the list above). The cancel route below
+  // is a WRITE and keeps the full active-shopper guard.
+  router.get('/:id', limiters.read, requireShopper, requireShopperAccount, async (req, res) => {
     const userId = req.session!.userId!
     // Narrowed rather than asserted — Express types a path parameter as
     // possibly an array, and an array reaching a Prisma `where` is a malformed

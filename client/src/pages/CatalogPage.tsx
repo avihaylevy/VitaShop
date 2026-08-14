@@ -74,9 +74,9 @@ export function CatalogPage() {
    * resolved BEFORE the await, the grid-scoped lookup, the closed -> open focus
    * owner (DEC-047-A R1), the response's cart-wide count, and nothing
    * publishing after unmount. Parent invariant is still
-   * `drawerSlug === null <=> drawer closed`, derived at the render below.
+   * `drawerOpen` is the hook's own boolean (DEC-073: whole-cart panel).
    */
-  const { handleAddToCart, drawerSlug, closeDrawer, returnFocusRef, gridRef, announced } =
+  const { handleAddToCart, drawerOpen, closeDrawer, returnFocusRef, gridRef, announced } =
     useAddToCart()
 
   // Still owned by CatalogPage per §8 — the resolver's output does not
@@ -543,15 +543,10 @@ export function CatalogPage() {
         error state — never re-keyed per product, never duplicated, no
         second CartDrawer anywhere. Its own internal open/closed and
         missing-line lifecycle (SLICE_8_PLAN.md §4) governs everything else;
-        CatalogPage owns only drawerSlug, returnFocusRef and the stable
+        CatalogPage owns only drawerOpen, returnFocusRef and the stable
         closeDrawer identity.
       */}
-      <CartDrawer
-        open={drawerSlug !== null}
-        slug={drawerSlug}
-        onClose={closeDrawer}
-        returnFocusRef={returnFocusRef}
-      />
+      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
     </div>
   )
 }

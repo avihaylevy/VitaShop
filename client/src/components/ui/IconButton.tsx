@@ -15,8 +15,13 @@ const VARIANT_CLASS: Record<IconButtonVariant, string> = {
   danger: 'border border-state-error bg-well text-state-error hover:bg-state-error/10 active:bg-state-error/15',
 }
 
+// aria-disabled: variants alongside disabled: — the ISSUE-098/b05e2a5 lesson:
+// a control that must stay FOCUSABLE while inert (inside a focus trap, or
+// while a request is in flight) uses aria-disabled, and the visual state must
+// win the cascade the same way the native attribute's does.
 const DISABLED_CLASS =
-  'disabled:pointer-events-none disabled:border-border-hairline disabled:bg-surface-sunken disabled:text-text-muted'
+  'disabled:pointer-events-none disabled:border-border-hairline disabled:bg-surface-sunken disabled:text-text-muted ' +
+  'aria-disabled:pointer-events-none aria-disabled:border-border-hairline aria-disabled:bg-surface-sunken aria-disabled:text-text-muted'
 
 type IconButtonProps = {
   icon: ReactElement

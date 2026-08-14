@@ -170,7 +170,11 @@ describe('🔴 the cart renders what the SERVER said', () => {
 
     await waitFor(() => expect(screen.getByText('Probiotic Intense')).toBeDefined())
     const increase = screen.getByRole('button', { name: /Increase quantity/ }) as HTMLButtonElement
-    expect(increase.disabled).toBe(true)
+    // aria-disabled, not native disabled — the control must stay FOCUSABLE
+    // while inert (DEC-073 review; Chromium blurs a natively-disabled focused
+    // element, which inside the drawer's focus trap dropped focus to <body>).
+    expect(increase.getAttribute('aria-disabled')).toBe('true')
+    expect(increase.disabled).toBe(false)
   })
 })
 
