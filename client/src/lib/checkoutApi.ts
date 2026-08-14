@@ -276,7 +276,19 @@ export async function payForCheckout(input: PayInput): Promise<PaymentResult> {
 
   if (status === 200 || status === 201) {
     if (!isPaymentSuccess(body)) return { ok: false, failure: { kind: 'server' } }
-    const success = body as PaymentSuccess
+    const success: PaymentSuccess = {
+      orderId: body.orderId as string,
+      orderNumber: body.orderNumber as string,
+      totalAmount: body.totalAmount as string,
+      shippingCost: body.shippingCost as string,
+      replayed: body.replayed as boolean,
+      estimate: body.estimate as PaymentSuccess['estimate'],
+      // 🔴 Only when the server actually sent one — the step-0 replay path
+      // reports the STORED status and the fresh-order path does not.
+      ...(typeof (body as Record<string, unknown>).status === 'string'
+        ? { status: (body as Record<string, unknown>).status as string }
+        : {}),
+    }
     /*
      * 🔴 A REPLAY IS NOT ALWAYS A CONFIRMATION. The server reports the STORED
      * status, and a cancelled order arrives here as 409 — but a `delivered` or
@@ -299,7 +311,16 @@ export async function payForCheckout(input: PayInput): Promise<PaymentResult> {
   if (status === 402) return { ok: false, failure: { kind: 'declined' } }
 
   if (code === 'ORDER_CANCELLED') {
-    const orderNumber = isPlainObject(body) && typeof body.orderNumber === 'string' ? body.orderNumber : ''
+    /*
+     * ⚠️ `null` WHEN IT IS MISSING, not `''`. An empty string interpolated
+     * into the copy renders "Order  was cancelled", which a shopper reads as
+     * a rendering fault — and this same file refuses a SUCCESS whose order
+     * number is blank on the grounds that a nameless receipt is worse than an
+     * error. The screen carries a sentence for the unnamed case rather than
+     * the rule being applied in opposite directions here.
+     */
+    const raw = isPlainObject(body) ? body.orderNumber : undefined
+    const orderNumber = typeof raw === 'string' && raw.length > 0 ? raw : null
     return { ok: false, failure: { kind: 'orderCancelled', orderNumber } }
   }
 

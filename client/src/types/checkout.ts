@@ -165,7 +165,7 @@ export type PaymentFailure =
    */
   | { kind: 'changed'; quote: CheckoutQuote }
   /** 409 — an order exists under this key and was CANCELLED. Not a failure to buy. */
-  | { kind: 'orderCancelled'; orderNumber: string }
+  | { kind: 'orderCancelled'; orderNumber: string | null }
   | { kind: 'blocked'; lines: readonly CheckoutBlockedLine[] }
   | { kind: 'emptyCart' }
   /** 400 ADDRESS_REQUIRED / ADDRESS_NOT_ALLOWED — a malformed payload, not a halt. */

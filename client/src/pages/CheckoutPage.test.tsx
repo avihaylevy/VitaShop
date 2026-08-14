@@ -504,6 +504,106 @@ describe('F2c — confirming and paying', () => {
     expect(JSON.parse(String(calls[0]!.body)).simulatedOutcome).toBe('failure')
   })
 
+  it('🔴 a BLOCKED order names its lines on the PAY path too', async () => {
+    // The HIGH finding: `blocked` had no branch here, so a 409
+    // UNPURCHASABLE_LINE from /pay rendered "the order could not be
+    // calculated" while the screen one component above knew how to name every
+    // line. §8.12's flattening, in the code that claims to prevent it.
+    payRoute(409, {
+      error: {
+        code: 'UNPURCHASABLE_LINE',
+        lines: [{ lineId: 'l1', slug: 'sold-out-one', why: 'SOLD_OUT', available: 0 }],
+      },
+    })
+    renderPage()
+    await fillAndPay()
+    expect(await screen.findByText('sold-out-one')).toBeTruthy()
+    expect(screen.getByText(/sold out/i)).toBeTruthy()
+    expect(screen.queryByText(/could not be calculated/i)).toBeNull()
+  })
+
+  it('an EMPTY CART on the pay path says so, not "could not be calculated"', async () => {
+    payRoute(409, { error: { code: 'EMPTY_CART' } })
+    renderPage()
+    await fillAndPay()
+    expect(await screen.findByText(/cart is empty/i)).toBeTruthy()
+    expect(screen.queryByText(/could not be calculated/i)).toBeNull()
+  })
+
+  it('an expired session on the PAY path offers a link, like the quote path', async () => {
+    payRoute(401, { error: { code: 'AUTHENTICATION_REQUIRED' } })
+    renderPage()
+    await fillAndPay()
+    expect(await screen.findByRole('link', { name: /go to sign in/i })).toBeTruthy()
+  })
+
+  it('🔴 a dead pay failure does NOT stick to a fresh quote', async () => {
+    payRoute(402, { error: { code: 'PAYMENT_DECLINED' } })
+    renderPage()
+    await fillAndPay()
+    expect(await screen.findByText(/no order was placed/i)).toBeTruthy()
+
+    /*
+     * 🔴 WAIT FOR THE NEW QUOTE TO BE READY BEFORE ASSERTING.
+     *
+     * The first version asserted the notice was gone immediately after the
+     * click — and it PASSED WITHOUT THE FIX, because switching sets the page
+     * to `loading`, which unmounts the whole payment section including the
+     * notice. It caught that gap and proved nothing. The stale notice only
+     * reappears once the new quote renders, so that is the moment to look.
+     */
+    fireEvent.click(screen.getByRole('radio', { name: /self pickup/i }))
+    await screen.findByText(/self pickup needs no address/i)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /confirm and pay/i })).toBeTruthy(),
+    )
+    expect(screen.queryByText(/no order was placed/i)).toBeNull()
+  })
+
+  it('locks the delivery radios while a payment is in flight', async () => {
+    // Changing the method underneath an in-flight payment is what put a
+    // courier summary beside a checked self-pickup radio.
+    const release: { fn: () => void } = { fn: () => {} }
+    const slow = new Promise<void>((resolve) => {
+      release.fn = resolve
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/api/account/profile')) {
+          return { status: 200, json: async () => PROFILE_NONE } as unknown as Response
+        }
+        if (String(url).includes('/api/checkout/pay')) {
+          await slow
+          return { status: 402, json: async () => ({ error: { code: 'PAYMENT_DECLINED' } }) } as unknown as Response
+        }
+        return { status: 200, json: async () => quote() } as unknown as Response
+      }),
+    )
+    renderPage()
+    await fillAndPay()
+    await waitFor(() =>
+      expect((screen.getByRole('radio', { name: /self pickup/i }) as HTMLInputElement).disabled).toBe(true),
+    )
+    release.fn()
+  })
+
+  it('the confirmation announces itself and takes focus', async () => {
+    payRoute(201, ORDER)
+    renderPage()
+    await fillAndPay()
+    const heading = await screen.findByRole('status')
+    await waitFor(() => expect(document.activeElement).toBe(heading))
+  })
+
+  it('renders the STORED status when a replay reports one', async () => {
+    payRoute(200, { ...ORDER, replayed: true, status: 'shipped' })
+    renderPage()
+    await fillAndPay()
+    // F0's labels: `shipped` is נשלחה / Shipped.
+    expect(await screen.findByText(/order status/i)).toBeTruthy()
+  })
+
   it('🔴 THE CONTROL — the button is DISABLED while the address is incomplete', async () => {
     // Without this, every test above could pass against a screen that never
     // guarded the address at all.

@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import { payForCheckout, requestCheckoutQuote } from '../lib/checkoutApi'
 import { newIdempotencyKey } from '../lib/idempotencyKey'
+import { orderStatusLabelKey } from '../lib/orderStatus'
 import { requestShopperProfile } from '../lib/accountApi'
 import type { ShopperProfile } from '../types/account'
 import {
   DELIVERY_METHOD_NAMES,
   type CheckoutQuote,
+  type CheckoutBlockedLine,
   type CheckoutQuoteFailure,
   type DeliveryEstimate,
   type DeliveryMethodName,
@@ -53,6 +55,9 @@ type LoadState =
 
 export function CheckoutPage() {
   const { t, i18n } = useTranslation('checkout')
+  // F0's six status labels live in their own namespace, shared with the admin
+  // orders page and, later, order history.
+  const { t: statusT } = useTranslation('orders')
   const legendId = useId()
   /**
    * ⚠️ `courier` is the initial CHOICE, not a default the server assumes. The
@@ -129,6 +134,7 @@ export function CheckoutPage() {
    * only reason a dropped connection is recoverable here.
    */
   const idempotencyKey = useRef(newIdempotencyKey())
+  const confirmationHeading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
     let live = true
@@ -164,6 +170,14 @@ export function CheckoutPage() {
   const load = useCallback(async (next: DeliveryMethodName) => {
     const id = ++requestId.current
     setState({ status: 'loading' })
+    /*
+     * 🔴 THE PAY RESULT BELONGS TO THE QUOTE IT WAS ATTEMPTED AGAINST. Without
+     * this, a decline stuck to the screen while the shopper switched delivery
+     * method, so a brand-new pickup quote rendered under "the payment was
+     * declined" for a payment never attempted against it — and `changed`
+     * survived the very re-confirmation it asked for.
+     */
+    setPayState({ status: 'idle' })
     const result = await requestCheckoutQuote(next)
     if (id !== requestId.current) return
     setState(result.ok ? { status: 'ready', quote: result.quote } : { status: 'failed', failure: result.failure })
@@ -173,7 +187,21 @@ export function CheckoutPage() {
     void load(method)
   }, [load, method])
 
+  // Focus the confirmation once, when it appears.
+  useEffect(() => {
+    if (payState.status === 'done') confirmationHeading.current?.focus()
+  }, [payState.status])
+
   async function confirmAndPay(quote: CheckoutQuote) {
+    /*
+     * 🔴 THE SAME TOKEN THE QUOTE LOADER USES. `CHECKOUT_CHANGED` writes a new
+     * quote into `state`, and that write was the ONE writer bypassing the
+     * staleness rule the ref exists to enforce: pressing Confirm and then
+     * switching delivery method landed the OLD method's quote on top of the
+     * new one, leaving a courier summary beside a checked self-pickup radio
+     * and a permanently disabled button.
+     */
+    const id = requestId.current
     setPayState({ status: 'paying' })
     const result = await payForCheckout({
       // 🔴 THE FINGERPRINT THE SHOPPER WAS SHOWN, unchanged. DEC-060's gate
@@ -186,6 +214,12 @@ export function CheckoutPage() {
       saveAddress,
     })
 
+    /*
+     * ⚠️ DELIBERATELY NOT BEHIND THE STALENESS CHECK. An order EXISTS at this
+     * point; discarding the confirmation because the shopper touched a radio
+     * mid-flight would hide a placed order — §8.12's defect with a fresh cause.
+     * Staleness governs QUOTES, never a receipt.
+     */
     if (result.ok) {
       setPayState({ status: 'done', order: result.order })
       return
@@ -197,6 +231,9 @@ export function CheckoutPage() {
      * refusal carried them, so they replace what is on screen and the next
      * press sends the new fingerprint.
      */
+    // A quote request started after this payment has already superseded it.
+    if (id !== requestId.current) return
+
     if (result.failure.kind === 'changed') {
       setState({ status: 'ready', quote: result.failure.quote })
     }
@@ -211,9 +248,36 @@ export function CheckoutPage() {
   if (payState.status === 'done') {
     return (
       <main className="mx-auto flex max-w-[900px] flex-col gap-4 px-4 py-6">
-        <h1 className="text-2xl font-semibold text-text-ink">{t('done.heading')}</h1>
-        <p className="text-lg font-semibold text-text-ink" dir="ltr">
-          {t('done.orderNumber', { number: payState.order.orderNumber })}
+        {/*
+          🔴 THE BUTTON THAT WAS PRESSED IS UNMOUNTED, so focus falls to
+          <body> and nothing is announced: a keyboard or screen-reader user
+          gets no signal the order was placed and has to hunt for the number.
+          `role="status"` announces it; `tabIndex={-1}` plus the autofocus
+          effect puts the caret on it.
+        */}
+        <h1
+          ref={confirmationHeading}
+          tabIndex={-1}
+          role="status"
+          className={`${FOCUS_RING} rounded-card text-2xl font-semibold text-text-ink`}
+        >
+          {t('done.heading')}
+        </h1>
+        {/*
+          🔴 THE NUMBER IS ISOLATED, NOT THE SENTENCE. `dir="ltr"` on the whole
+          paragraph forced the Hebrew label into LTR and put the colon on the
+          wrong side. Every other site in this codebase isolates only the
+          numeric run — `PriceBlock`, the catalogue's count, the quantity
+          stepper — which is what "LTR numeric isolation" means in
+          .claude/rules/browser-verification.md.
+        */}
+        <p className="text-lg font-semibold text-text-ink">
+          <Trans
+            i18nKey="done.orderNumber"
+            t={t}
+            values={{ number: payState.order.orderNumber }}
+            components={{ n: <span dir="ltr" style={{ unicodeBidi: 'isolate' }} /> }}
+          />
         </p>
         <p className="flex flex-wrap items-baseline gap-1.5 text-sm">
           <span className="text-text-muted">{t('done.total')}</span>
@@ -228,6 +292,22 @@ export function CheckoutPage() {
         */}
         {payState.order.replayed && (
           <p className="text-sm text-text-ink">{t('done.replayed')}</p>
+        )}
+
+        {/*
+          🔴 THE STORED STATUS, RENDERED — it was validated, carried and then
+          DROPPED, while a comment in the transport claimed it "travels to the
+          screen". A replay of an order already `shipped` or `delivered`, or
+          one stuck at `pending_payment` because `settleAsPaid` failed
+          (ISSUE-082), rendered an identical "Order received". Checkpoint F0's
+          labels exist for exactly this.
+        */}
+        {payState.order.status && orderStatusLabelKey(payState.order.status) && (
+          <p className="text-sm text-text-muted">
+            {t('done.status', {
+              status: statusT(orderStatusLabelKey(payState.order.status)!),
+            })}
+          </p>
         )}
         <Link to="/catalog" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
           {t('done.backToCatalog')}
@@ -267,6 +347,9 @@ export function CheckoutPage() {
                  * asked for — that is a new case and it needs its own test.
                  */
                 checked={method === name}
+                // 🔴 A payment is in flight against THIS quote; changing the
+                // method underneath it is what produced the mismatch above.
+                disabled={payState.status === 'paying'}
                 onChange={() => {
                   setMethod(name)
                   /*
@@ -545,25 +628,7 @@ function FailureNotice({
    * later — the shopper is stopped, and nothing tells them which product or
    * which action clears it.
    */
-  if (failure.kind === 'blocked') {
-    return (
-      <section className="flex flex-col gap-2 rounded-card border border-state-error p-4">
-        <h2 className="text-base font-semibold text-state-error">{t('blocked.heading')}</h2>
-        <p className="text-sm text-text-ink">{t('blocked.intro')}</p>
-        <ul className="flex flex-col gap-1 text-sm text-text-ink">
-          {failure.lines.map((line) => (
-            <li key={line.lineId}>
-              <span className="font-medium">{line.slug}</span>{' '}
-              <span>{t(`blocked.${line.why}`, { available: line.available })}</span>
-            </li>
-          ))}
-        </ul>
-        <Link to="/cart" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
-          {t('page.backToCart')}
-        </Link>
-      </section>
-    )
-  }
+  if (failure.kind === 'blocked') return <BlockedLinesNotice lines={failure.lines} />
 
   if (failure.kind === 'emptyCart') {
     return <p className="text-sm text-text-ink">{t('state.emptyCart')}</p>
@@ -618,8 +683,77 @@ function FailureNotice({
  * a later step failed and the shopper was told the ORDER failed, for an order
  * that exists. Flattening these would rebuild it on the screen.
  */
+/**
+ * The blocked-order panel, shared by BOTH failure surfaces.
+ *
+ * 🔴 IT WAS DUPLICATED-BY-OMISSION, WHICH IS WORSE THAN DUPLICATED. The pay
+ * path had no branch for `blocked` at all, so a 409 UNPURCHASABLE_LINE from
+ * `/pay` — reachable from the route's re-quote and from its halt — fell
+ * through to "the order could not be calculated", naming no line. One
+ * component now serves both, so a third caller cannot omit it either.
+ */
+function BlockedLinesNotice({ lines }: { lines: readonly CheckoutBlockedLine[] }) {
+  const { t } = useTranslation('checkout')
+  return (
+    <section className="flex flex-col gap-2 rounded-card border border-state-error p-4" role="alert">
+      <h2 className="text-base font-semibold text-state-error">{t('blocked.heading')}</h2>
+      <p className="text-sm text-text-ink">{t('blocked.intro')}</p>
+      <ul className="flex flex-col gap-1 text-sm text-text-ink">
+        {lines.map((line) => (
+          <li key={line.lineId}>
+            <span className="font-medium">{line.slug}</span>{' '}
+            <span>{t(`blocked.${line.why}`, { available: line.available })}</span>
+          </li>
+        ))}
+      </ul>
+      <Link to="/cart" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+        {t('page.backToCart')}
+      </Link>
+    </section>
+  )
+}
+
+/**
+ * 🔴 EXPLICIT BRANCHES, NOT A TERNARY CHAIN — and the shape is the fix.
+ *
+ * The first version was one nested ternary ending in `: t('state.error')`, and
+ * it silently had no branch for `blocked` or `emptyCart`. Both are reachable
+ * from `/pay`, and both rendered "the order could not be calculated" while the
+ * screen one component above already knew how to name every blocked line.
+ * That is §8.12's flattening, committed by code whose own comment says it
+ * exists to prevent it. A chain with a fallback swallows a missing case; a
+ * switch-like body makes the omission visible.
+ */
 function PayFailureNotice({ failure }: { failure: PaymentFailure }) {
   const { t } = useTranslation('checkout')
+
+  // The order cannot be placed at all, and WHICH line is the whole message.
+  if (failure.kind === 'blocked') return <BlockedLinesNotice lines={failure.lines} />
+
+  if (failure.kind === 'emptyCart') {
+    return (
+      <p role="alert" className="mb-3 text-sm text-state-error">
+        {t('state.emptyCart')}
+      </p>
+    )
+  }
+
+  /*
+   * 🔴 A LINK, exactly as the quote path already does. `/pay` is the LAST call
+   * of a long form, so an expired session is the common case here — and
+   * `RequireAuth` cannot rescue it, because `SessionContext` still believes
+   * the session is live. This branch shipped as a sentence with nowhere to go.
+   */
+  if (failure.kind === 'unauthenticated') {
+    return (
+      <div role="alert" className="mb-3 flex flex-col items-start gap-2">
+        <p className="text-sm text-state-error">{t('state.unauthenticated')}</p>
+        <Link to="/login" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+          {t('state.signIn')}
+        </Link>
+      </div>
+    )
+  }
 
   const message =
     failure.kind === 'declined'
@@ -627,7 +761,12 @@ function PayFailureNotice({ failure }: { failure: PaymentFailure }) {
       : failure.kind === 'changed'
         ? t('payFailure.changed')
         : failure.kind === 'orderCancelled'
-          ? t('payFailure.orderCancelled', { number: failure.orderNumber })
+          ? failure.orderNumber
+            ? t('payFailure.orderCancelled', { number: failure.orderNumber })
+            : // The server always sends the number today; if it ever does not,
+              // "Order  was cancelled" is a rendering fault a shopper reads as
+              // one. The same file refuses a SUCCESS whose number is blank.
+              t('payFailure.orderCancelledUnnamed')
           : failure.kind === 'addressRejected'
             ? t('payFailure.addressRejected')
             : failure.kind === 'invalidRequest'
@@ -642,9 +781,7 @@ function PayFailureNotice({ failure }: { failure: PaymentFailure }) {
                   ? t('state.emailNotVerified')
                   : failure.kind === 'rateLimited'
                     ? t('state.rateLimited')
-                    : failure.kind === 'unauthenticated'
-                      ? t('state.unauthenticated')
-                      : t('state.error')
+                    : t('state.error')
 
   return (
     <p role="alert" className="mb-3 text-sm text-state-error">
