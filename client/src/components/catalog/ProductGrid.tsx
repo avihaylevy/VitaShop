@@ -2,9 +2,18 @@ import type { ReactNode } from 'react'
 import type { ProductCardModel } from '../../types/product'
 import { ProductCard } from './ProductCard'
 
-type ProductGridProps = {
+/**
+ * 🔴 THE SAME DISCRIMINATED UNION `ProductCard` USES, passed straight through.
+ * A grid that made the handler merely optional would re-open the hole the
+ * card just closed: the catalogue could lose its Add to cart buttons with a
+ * green type-check and a green suite.
+ */
+type GridAction =
+  | { onAddToCart: (slug: string) => void; navigational?: never }
+  | { navigational: true; onAddToCart?: never }
+
+type ProductGridProps = GridAction & {
   products: readonly ProductCardModel[]
-  onAddToCart: (slug: string) => void
   showCategoryEyebrow?: boolean
   emptyState?: ReactNode
 }
@@ -19,7 +28,12 @@ type ProductGridProps = {
  * own `lg`), 4 from 1280px (Tailwind's own `xl`) — 420px has no built-in
  * Tailwind screen, so it's the one arbitrary `min-[420px]:` variant.
  */
-export function ProductGrid({ products, onAddToCart, showCategoryEyebrow, emptyState }: ProductGridProps) {
+export function ProductGrid({
+  products,
+  showCategoryEyebrow,
+  emptyState,
+  ...action
+}: ProductGridProps) {
   if (products.length === 0) {
     return emptyState ?? null
   }
@@ -30,7 +44,7 @@ export function ProductGrid({ products, onAddToCart, showCategoryEyebrow, emptyS
         <li key={product.slug}>
           <ProductCard
             {...product}
-            onAddToCart={onAddToCart}
+            {...(action.navigational ? { navigational: true as const } : { onAddToCart: action.onAddToCart! })}
             showCategoryEyebrow={showCategoryEyebrow}
           />
         </li>

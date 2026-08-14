@@ -18,7 +18,11 @@
   "home": {
     "loading": "Loading categories…",
     "error": "Categories could not be loaded right now.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "newArrivalsTitle": "New in store",
+    "newArrivalsLoading": "Loading new products…",
+    "newArrivalsError": "The new products could not be loaded right now.",
+    "newArrivalsEmpty": "No new products to show yet."
   },
   "catalogPage": {
     "loading": "Loading products…",

@@ -10,13 +10,39 @@ import { Button } from '../ui/Button'
 import { Surface } from '../ui/Surface'
 import { FOCUS_RING } from '../ui/focusRing'
 
-type ProductCardProps = ProductCardModel & {
-  onAddToCart: (slug: string) => void
-  /** Defaults to h3 — caller raises it when the card sits directly under an h2 grid heading. */
-  headingLevel?: 'h2' | 'h3' | 'h4'
-  /** Defaults to true — unchanged from the Checkpoint B contract. ProductGrid passes this through. */
-  showCategoryEyebrow?: boolean
-}
+/**
+ * 🔴 A DISCRIMINATED UNION, NOT AN OPTIONAL PROP — and the difference is a
+ * compile-time guard this project nearly lost.
+ *
+ * Checkpoint F4 first made `onAddToCart` simply optional so the home page's
+ * navigational shelf could omit it. That erased the ONLY enforcement that the
+ * catalogue passes one: a later refactor dropping `onAddToCart` from
+ * `CatalogPage` or `CatalogFallbackSection` would have type-checked, kept all
+ * 822 tests green, and silently removed every Add to cart button in the shop.
+ * A grep of the suite found no test asserting that button exists — the type
+ * WAS the test.
+ *
+ * A caller must now say which kind of card it wants, and cannot omit the
+ * handler by accident:
+ *
+ *   <ProductCard {...model} onAddToCart={fn} />   the catalogue
+ *   <ProductCard {...model} navigational />       the home-page shelf
+ *
+ * ⚠️ A `navigational` card renders ONE LINK AND NO BUTTON, which differs from
+ * the "one link + one button per card" ARIA shape the catalogue's contract
+ * states. Stated here rather than discovered in a snapshot.
+ */
+type CardAction =
+  | { onAddToCart: (slug: string) => void; navigational?: never }
+  | { navigational: true; onAddToCart?: never }
+
+type ProductCardProps = ProductCardModel &
+  CardAction & {
+    /** Defaults to h3 — caller raises it when the card sits directly under an h2 grid heading. */
+    headingLevel?: 'h2' | 'h3' | 'h4'
+    /** Defaults to true — unchanged from the Checkpoint B contract. ProductGrid passes this through. */
+    showCategoryEyebrow?: boolean
+  }
 
 /**
  * Slug-bound hook onto the native add-to-cart button — Slice 8
@@ -119,14 +145,16 @@ export function ProductCard({
       <PriceBlock price={price} />
       <StockState stockQuantity={stockQuantity} lowStockThreshold={lowStockThreshold} />
 
-      <Button
-        variant="primary"
-        disabled={isOut}
-        onClick={() => onAddToCart(slug)}
-        {...{ [ADD_TO_CART_ATTRIBUTE]: slug }}
-      >
-        {t('addToCart')}
-      </Button>
+      {onAddToCart && (
+        <Button
+          variant="primary"
+          disabled={isOut}
+          onClick={() => onAddToCart(slug)}
+          {...{ [ADD_TO_CART_ATTRIBUTE]: slug }}
+        >
+          {t('addToCart')}
+        </Button>
+      )}
     </Surface>
   )
 }

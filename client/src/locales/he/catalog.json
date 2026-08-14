@@ -18,7 +18,11 @@
   "home": {
     "loading": "טוען קטגוריות…",
     "error": "לא ניתן לטעון את הקטגוריות כעת.",
-    "retry": "נסה שוב"
+    "retry": "נסה שוב",
+    "newArrivalsTitle": "חדש בחנות",
+    "newArrivalsLoading": "טוען מוצרים חדשים…",
+    "newArrivalsError": "לא ניתן לטעון כעת את המוצרים החדשים.",
+    "newArrivalsEmpty": "אין עדיין מוצרים חדשים להצגה."
   },
   "catalogPage": {
     "loading": "טוען מוצרים…",
