@@ -5,6 +5,8 @@ import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import { requestCheckoutQuote } from '../lib/checkoutApi'
+import { requestShopperProfile } from '../lib/accountApi'
+import type { ShopperProfile } from '../types/account'
 import {
   DELIVERY_METHOD_NAMES,
   type CheckoutQuote,
@@ -74,6 +76,71 @@ export function CheckoutPage() {
    */
   const requestId = useRef(0)
 
+  /**
+   * REQ-F-041's pre-fill. 🔴 A PROFILE THAT FAILS TO LOAD MUST NOT BLOCK
+   * CHECKOUT — it is a convenience, and the shopper can type the same details.
+   * Only `unauthenticated` matters, and the quote below reports that anyway.
+   *
+   * ⚠️ `defaultAddress` is null for every real shopper today: nothing writes an
+   * `Address` row (ISSUE-093). The name and phone arrive; the address does not,
+   * and the form says so rather than looking mysteriously empty.
+   */
+  /*
+   * 🔴 THREE STATES, NOT A BOOLEAN. `profileLoaded` plus a null profile said
+   * "no address is saved on your account" to every shopper whose profile
+   * request FAILED — a 503, a 429 from the profile limiter, a dropped
+   * connection — including shoppers who do have one. "We could not load it"
+   * and "there is none" are different sentences and different truths.
+   */
+  const [profileState, setProfileState] = useState<
+    { status: 'loading' } | { status: 'ready'; profile: ShopperProfile } | { status: 'unavailable' }
+  >({ status: 'loading' })
+  const [address, setAddress] = useState({ line1: '', city: '', zipCode: '' })
+  /*
+   * 🔴 VALIDATION FIRES ON BLUR, NOT ON A SUBMIT THAT DOES NOT EXIST YET. The
+   * first version held a `showErrors` flag whose only setter would have been
+   * F2c's "continue to payment" button — dead state, and `tsc` said so. A
+   * field the shopper has left is a real trigger available today.
+   *
+   * ⚠️ This is DISPLAY ONLY. `addressProblem` on the server is the rule that
+   * decides, and it refuses the order regardless of what this form thinks.
+   */
+  const [touched, setTouched] = useState<{ line1: boolean; city: boolean }>({
+    line1: false,
+    city: false,
+  })
+
+  useEffect(() => {
+    let live = true
+    void requestShopperProfile().then((result) => {
+      if (!live) return
+      if (!result.ok) {
+        setProfileState({ status: 'unavailable' })
+        return
+      }
+      setProfileState({ status: 'ready', profile: result.profile })
+      const saved = result.profile.defaultAddress
+      if (!saved) return
+      /*
+       * 🔴 NEVER OVERWRITE WHAT THE SHOPPER HAS ALREADY TYPED. The profile
+       * resolves asynchronously; a shopper who starts typing a street while it
+       * is in flight had their words replaced by the saved address.
+       *
+       * ⚠️ LATENT TODAY ONLY BECAUSE `defaultAddress` IS ALWAYS NULL
+       * (ISSUE-093). It goes live the moment F2c starts persisting addresses,
+       * which is precisely when nobody would be looking for it.
+       */
+      setAddress((current) =>
+        current.line1 === '' && current.city === '' && current.zipCode === ''
+          ? { line1: saved.line1, city: saved.city, zipCode: saved.zipCode ?? '' }
+          : current,
+      )
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+
   const load = useCallback(async (next: DeliveryMethodName) => {
     const id = ++requestId.current
     setState({ status: 'loading' })
@@ -117,7 +184,18 @@ export function CheckoutPage() {
                  * asked for — that is a new case and it needs its own test.
                  */
                 checked={method === name}
-                onChange={() => setMethod(name)}
+                onChange={() => {
+                  setMethod(name)
+                  /*
+                   * ⚠️ The fieldset unmounts but its VALUES would survive, so
+                   * F2c would inherit a form holding an address for a method
+                   * the server refuses with ADDRESS_NOT_ALLOWED.
+                   */
+                  if (name === 'self_pickup') {
+                    setAddress({ line1: '', city: '', zipCode: '' })
+                    setTouched({ line1: false, city: false })
+                  }
+                }}
                 className={`${FOCUS_RING} size-4 shrink-0 accent-brand-teal`}
               />
               <span>{t(`delivery.${name}`)}</span>
@@ -125,6 +203,122 @@ export function CheckoutPage() {
           ))}
         </div>
       </fieldset>
+
+      {/*
+        🔴 SELF PICKUP TAKES NO ADDRESS AT ALL, and this is not cosmetic: the
+        server answers ADDRESS_NOT_ALLOWED if one is sent with it, exactly as
+        it answers ADDRESS_REQUIRED when one is missing for the other two.
+        `addressProblem` is the single rule; this mirrors it for display only.
+      */}
+      {method === 'self_pickup' ? (
+        <p className="text-sm text-text-muted">{t('address.notNeeded')}</p>
+      ) : (
+        <fieldset className="min-w-0 border-0 p-0">
+          <legend className="mb-2 text-sm font-semibold text-text-ink">{t('address.legend')}</legend>
+
+          {/*
+            🔴 THE NAME AND PHONE ARE NOW RENDERED. They were fetched, stored
+            and read only as a boolean, while two comments claimed the pre-fill
+            "delivers the NAME and PHONE today". A comment describing behaviour
+            that does not exist is the shape this project keeps being bitten by.
+          */}
+          {profileState.status === 'ready' && (
+            <p className="mb-1 text-xs text-text-muted">
+              {t('address.deliveringTo', {
+                name: `${profileState.profile.firstName} ${profileState.profile.lastName}`.trim(),
+              })}
+              {profileState.profile.phone
+                ? ` · ${t('address.contactPhone', { phone: profileState.profile.phone })}`
+                : ''}
+            </p>
+          )}
+
+          {profileState.status !== 'loading' && (
+            <p className="mb-2 text-xs text-text-muted">
+              {profileState.status === 'unavailable'
+                ? t('address.unavailable')
+                : profileState.profile.defaultAddress
+                  ? t('address.prefilled')
+                  : t('address.noSavedAddress')}
+            </p>
+          )}
+
+          <div className="flex flex-col gap-3">
+            {/*
+              🔴 THE ERROR SITS OUTSIDE THE <label>, and that placement is the
+              fix, not a tidy-up. Inside it, the message became part of the
+              input's ACCESSIBLE NAME: a screen reader announced the field as
+              "City Enter a city." and the error was never announced AS an
+              error. It is now linked with `aria-describedby` and lives in a
+              `role="alert"` region, so it is announced when it appears.
+            */}
+            <div className="flex flex-col gap-1 text-sm">
+              <label htmlFor={`${legendId}-line1`} className="text-text-ink">
+                {t('address.line1')}
+              </label>
+              <input
+                id={`${legendId}-line1`}
+                name="line1"
+                type="text"
+                autoComplete="address-line1"
+                required
+                aria-required="true"
+                value={address.line1}
+                onChange={(event) => setAddress((a) => ({ ...a, line1: event.target.value }))}
+                onBlur={() => setTouched((current) => ({ ...current, line1: true }))}
+                aria-invalid={touched.line1 && address.line1.trim() === ''}
+                aria-describedby={
+                  touched.line1 && address.line1.trim() === '' ? `${legendId}-line1-error` : undefined
+                }
+                className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
+              />
+              <span id={`${legendId}-line1-error`} role="alert" className="text-xs text-state-error">
+                {touched.line1 && address.line1.trim() === '' ? t('address.line1Required') : ''}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1 text-sm">
+              <label htmlFor={`${legendId}-city`} className="text-text-ink">
+                {t('address.city')}
+              </label>
+              <input
+                id={`${legendId}-city`}
+                name="city"
+                type="text"
+                autoComplete="address-level2"
+                required
+                aria-required="true"
+                value={address.city}
+                onChange={(event) => setAddress((a) => ({ ...a, city: event.target.value }))}
+                onBlur={() => setTouched((current) => ({ ...current, city: true }))}
+                aria-invalid={touched.city && address.city.trim() === ''}
+                aria-describedby={
+                  touched.city && address.city.trim() === '' ? `${legendId}-city-error` : undefined
+                }
+                className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
+              />
+              <span id={`${legendId}-city-error`} role="alert" className="text-xs text-state-error">
+                {touched.city && address.city.trim() === '' ? t('address.cityRequired') : ''}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1 text-sm">
+              <label htmlFor={`${legendId}-zip`} className="text-text-ink">
+                {t('address.zipCode')}
+              </label>
+              <input
+                id={`${legendId}-zip`}
+                name="zipCode"
+                type="text"
+                autoComplete="postal-code"
+                value={address.zipCode}
+                onChange={(event) => setAddress((a) => ({ ...a, zipCode: event.target.value }))}
+                className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
+              />
+            </div>
+          </div>
+        </fieldset>
+      )}
 
       {state.status === 'loading' && <p className="text-sm text-text-muted">{t('state.loading')}</p>}
 
@@ -251,6 +445,16 @@ function FailureNotice({
         </Link>
       </div>
     )
+  }
+
+  /*
+   * 🔴 DEC-067's gate. No retry and no sign-in link: the shopper IS signed in,
+   * and no amount of retrying clears an unverified address. The only action
+   * that helps is opening the verification mail, so that is what it says.
+   * There is no resend endpoint, so nothing here offers one.
+   */
+  if (failure.kind === 'emailNotVerified') {
+    return <p className="text-sm text-text-ink">{t('state.emailNotVerified')}</p>
   }
 
   // 🔴 NO RETRY BUTTON HERE, deliberately. The limiter refused; a button that
