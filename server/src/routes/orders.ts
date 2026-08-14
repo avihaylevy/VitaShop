@@ -33,6 +33,88 @@ export type OrderRouterDeps = {
   rateLimiters?: OrderRateLimiters
 }
 
+/**
+ * One screenful of history. No pagination parameter yet: a shopper's order
+ * count is bounded by their own purchases, and the admin list's `?page=` was
+ * built because a store-wide list is not. Recorded rather than left implicit —
+ * when a shopper passes 50, this needs a page parameter, not a bigger number.
+ */
+const HISTORY_PAGE_SIZE = 50
+
+/**
+ * 🔴 ONE SELECT, SHARED BY THE LIST AND THE DETAIL, so the two cannot drift
+ * into showing different figures for one order. The detail adds fields; it
+ * never redefines these.
+ */
+const ORDER_SUMMARY_SELECT = {
+  id: true,
+  orderNumber: true,
+  createdAt: true,
+  status: true,
+  totalAmount: true,
+  shippingCost: true,
+  deliveryMethod: true,
+  items: {
+    // Stable within an order, for the same reason the list is ordered at all:
+    // an unordered read can hand back two renderings of one order.
+    orderBy: { productNameEnAtPurchase: 'asc' },
+    select: {
+      productId: true,
+      productNameHeAtPurchase: true,
+      productNameEnAtPurchase: true,
+      quantity: true,
+      unitPriceAtPurchase: true,
+      product: { select: { slug: true } },
+    },
+  },
+} as const
+
+type OrderSummaryRow = {
+  id: string
+  orderNumber: string
+  createdAt: Date
+  status: string
+  totalAmount: { toFixed: (digits: number) => string }
+  shippingCost: { toFixed: (digits: number) => string }
+  deliveryMethod: string
+  items: {
+    productId: string
+    productNameHeAtPurchase: string
+    productNameEnAtPurchase: string
+    quantity: number
+    unitPriceAtPurchase: { toFixed: (digits: number) => string }
+    product: { slug: string }
+  }[]
+}
+
+/**
+ * ⚠️ EVERY MONEY FIELD LEAVES AS A FIXED STRING. Prisma hands back a Decimal;
+ * serialising it directly produces whatever its toJSON does, and turning it
+ * into a Number reintroduces the float this schema uses Decimal to avoid.
+ */
+function toOrderSummary(order: OrderSummaryRow) {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    createdAt: order.createdAt.toISOString(),
+    status: order.status,
+    totalAmount: order.totalAmount.toFixed(2),
+    shippingCost: order.shippingCost.toFixed(2),
+    deliveryMethod: order.deliveryMethod,
+    items: order.items.map((item) => ({
+      productId: item.productId,
+      // The slug is for LINKING to the product page. It is the live value, not
+      // a frozen one — deliberately: a link must point at where the product is
+      // now, and the NAME beside it is what was agreed.
+      slug: item.product.slug,
+      nameHe: item.productNameHeAtPurchase,
+      nameEn: item.productNameEnAtPurchase,
+      quantity: item.quantity,
+      unitPrice: item.unitPriceAtPurchase.toFixed(2),
+    })),
+  }
+}
+
 export function createOrderRouter(deps: OrderRouterDeps): ReturnType<typeof Router> {
   const { prisma } = deps
   const limiters = deps.rateLimiters ?? createOrderRateLimiters()
@@ -43,6 +125,138 @@ export function createOrderRouter(deps: OrderRouterDeps): ReturnType<typeof Rout
    * holding a pending order must be able to get out of it.
    */
   const requireActiveShopper = createRequireActiveShopper(deps.prisma)
+
+  /**
+   * 🔴 NO-STORE, ROUTER-LEVEL — the same directive `routes/account.ts` sets,
+   * for the same reason, and added at Checkpoint G1 when this router gained its
+   * first cacheable GETs.
+   *
+   * ⚠️ THIS ROUTER USED TO BE POST-ONLY, which browsers do not cache. G1's two
+   * reads carry order numbers, an item breakdown, the frozen shipping address
+   * and a tracking number: without the directive a browser may serve them back
+   * from cache AFTER SIGN-OUT, and a back-navigation on a shared machine
+   * re-renders someone's home address.
+   *
+   * Router-level rather than per-route, so the next personal-data route mounted
+   * here cannot forget it — and so the REFUSALS carry it too. A cached 401 or
+   * 404 is its own bug: the answer changes the moment somebody else signs in.
+   */
+  router.use((_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store')
+    next()
+  })
+
+  /**
+   * MILESTONE-008 Checkpoint G1 — REQ-F-050, the order history. TEST-050.
+   *
+   * 🔴 SCOPED IN THE WHERE, NEVER FETCHED AND COMPARED. `userId` comes from the
+   * session and goes into the query, so there is no ownership branch that can
+   * be written the wrong way round — the same structural choice the cancel
+   * route below makes, and the reason neither needs a filter afterwards.
+   *
+   * ⚠️ THE ITEMS COME WITH THE LIST, deliberately. REQ-F-050 asks for "each
+   * order's status and item breakdown", so a list that answered summaries only
+   * would need a second request per row to satisfy its own requirement. Bounded
+   * by construction: one page of orders, and `@@unique([orderId, productId])`
+   * caps lines at one per product.
+   *
+   * 🔴 BOTH FROZEN NAMES ARE RETURNED. INV-02 froze `productNameHeAtPurchase`
+   * AND `productNameEnAtPurchase`, and returning one of them would pick a
+   * language on the server that the shopper can change in the browser — the
+   * defect Checkpoint B's migration split the column to prevent, and the same
+   * rule that lets the catalogue toggle language without a refetch.
+   */
+  router.get('/', limiters.read, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+
+    try {
+      const orders = await prisma.order.findMany({
+        where: { userId },
+        // Newest first, with `id` as the tiebreaker: Prisma's now() is
+        // TRANSACTION-START time, so orders written in one transaction share a
+        // byte-identical createdAt and would otherwise order arbitrarily.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: HISTORY_PAGE_SIZE,
+        select: ORDER_SUMMARY_SELECT,
+      })
+
+      res.json({ orders: orders.map(toOrderSummary) })
+    } catch (error) {
+      console.error(`[orders] listing history for ${userId} failed`, error)
+      res.status(503).json({
+        error: { code: 'ORDER_HISTORY_UNAVAILABLE', message: 'Try again shortly.' },
+      })
+    }
+  })
+
+  /**
+   * REQ-F-050's detail half, and 🔴 TEST-050b's target.
+   *
+   * 🔴 ANOTHER SHOPPER'S ORDER IS 404, NOT 403 — DEC-070. A 403 would confirm
+   * the id is real, which is an enumeration oracle over every order in the
+   * store; and the cancel route below has answered 404 since Checkpoint E3, so
+   * a 403 here would let the PAIR be diffed for the same answer. An order that
+   * is not yours is indistinguishable from one that does not exist.
+   */
+  router.get('/:id', limiters.read, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    // Narrowed rather than asserted — Express types a path parameter as
+    // possibly an array, and an array reaching a Prisma `where` is a malformed
+    // query at best.
+    const orderId = typeof req.params.id === 'string' ? req.params.id : ''
+    if (orderId === '') {
+      res.status(404).json({ error: { code: 'ORDER_NOT_FOUND', message: 'No such order.' } })
+      return
+    }
+
+    try {
+      const order = await prisma.order.findFirst({
+        where: { id: orderId, userId },
+        select: {
+          ...ORDER_SUMMARY_SELECT,
+          shippingLine1: true,
+          shippingCity: true,
+          shippingZipCode: true,
+          trackingNumber: true,
+        },
+      })
+
+      if (!order) {
+        // 🔴 BYTE-IDENTICAL to the "no such order" answer, because they must be
+        // indistinguishable. A different message here would rebuild the oracle
+        // the status code closes.
+        res.status(404).json({ error: { code: 'ORDER_NOT_FOUND', message: 'No such order.' } })
+        return
+      }
+
+      res.json({
+        ...toOrderSummary(order),
+        trackingNumber: order.trackingNumber,
+        /*
+         * ⚠️ THE FROZEN ADDRESS, not the account's current one — INV-02's other
+         * half. `Address` is mutable and has no soft delete, so reading it here
+         * would rewrite where a past order shipped.
+         *
+         * Null for self pickup, which has no delivery address at all: the
+         * columns are nullable for exactly that case, and an object of empty
+         * strings would render as a blank address rather than as no address.
+         */
+        shippingAddress:
+          order.shippingLine1 === null
+            ? null
+            : {
+                line1: order.shippingLine1,
+                city: order.shippingCity,
+                zipCode: order.shippingZipCode,
+              },
+      })
+    } catch (error) {
+      console.error(`[orders] reading ${orderId} failed`, error)
+      res.status(503).json({
+        error: { code: 'ORDER_HISTORY_UNAVAILABLE', message: 'Try again shortly.' },
+      })
+    }
+  })
 
   /**
    * REQ-F-045's sibling: the shopper withdrawing an order they placed.

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { ORDER_RATE_LIMITS, AUTH_RATE_LIMITS, createOrderRateLimiters } from './rateLimit.js'
+import {
+  ORDER_RATE_LIMITS,
+  AUTH_RATE_LIMITS,
+  ADMIN_RATE_LIMITS,
+  createOrderRateLimiters,
+} from './rateLimit.js'
 import { createOrderRouter } from '../routes/orders.js'
 
 /** Minimal shape of an Express router layer — enough to walk the stack. */
@@ -58,15 +63,35 @@ describe('🔴 EVERY route mounted on the orders router carries a limiter', () =
       | undefined
 
     expect(first?.handle).toBe(limiters.cancel)
+
+    /*
+     * 🔴 CHECKPOINT G1'S TWO READS GET THE SAME CHECK, BY IDENTITY, and they
+     * must carry `read` rather than `cancel`. Reusing the cancel limiter here
+     * would be invisible to a handler count — and would lock a shopper out of
+     * their own history after ten page views, since `cancel` allows ten per
+     * fifteen minutes.
+     */
+    for (const path of ['/', '/:id']) {
+      const firstOfRead = layers.find((l) => l.route?.path === path)?.route?.stack[0] as
+        | { handle?: unknown }
+        | undefined
+      expect(firstOfRead?.handle, `${path} must be limited by \`read\``).toBe(limiters.read)
+    }
   })
 
-  it('the cancel route is present and is a POST', () => {
+  it('the router mounts exactly the routes it is meant to, with the right methods', () => {
+    /*
+     * ⚠️ AN EXACT INVENTORY, deliberately — it fails when a route is ADDED as
+     * well as when one disappears. Checkpoint G1 added the two reads and this
+     * assertion went red, which is the point: a new route on this router is a
+     * decision, and the limiter checks above only cover what is listed here.
+     */
     const router = createOrderRouter({ prisma: {} as never })
     const layers = (router as unknown as { stack: RouterLayer[] }).stack.filter((l) => l.route)
     const routes = layers
       .map((l) => `${Object.keys(l.route?.methods ?? {}).join('/')} ${l.route?.path}`)
       .sort()
-    expect(routes).toEqual(['post /:id/cancel'])
+    expect(routes).toEqual(['get /', 'get /:id', 'post /:id/cancel'])
   })
 })
 
@@ -83,5 +108,19 @@ describe('the configured numbers', () => {
     // later tweak is a deliberate act with a visible failure, not a silent
     // divergence from the decision that authorised the number.
     expect(ORDER_RATE_LIMITS.cancel).toEqual(AUTH_RATE_LIMITS.login)
+
+    /*
+     * 🔴 THE READ CEILING IS PINNED TOO, for the same reason and to the
+     * limiter it claims parity with. `read`'s comment says it is paced like the
+     * admin list rather than like `cancel`; nothing asserted that, so the two
+     * could drift silently and the comment would quietly become false.
+     * Found by review.
+     */
+    expect(ORDER_RATE_LIMITS.read).toEqual(ADMIN_RATE_LIMITS.list)
+
+    // ⚠️ AND THE TWO ORDER LIMITS MUST NOT COLLAPSE INTO EACH OTHER. A read
+    // paced like a cancel locks a shopper out of their own history after ten
+    // page views; a cancel paced like a read is 240 stock-restoring writes.
+    expect(ORDER_RATE_LIMITS.read).not.toEqual(ORDER_RATE_LIMITS.cancel)
   })
 })

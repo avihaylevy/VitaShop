@@ -368,8 +368,24 @@ describe('the shelf after a retry — ISSUE-098', () => {
   })
 
   it('the focus-landing heading carries the shared focus ring', async () => {
-    // DESIGN_SYSTEM §4 — one focus treatment everywhere. A landing target that
-    // draws the browser default is an indicator matching nothing else here.
+    /*
+     * DESIGN_SYSTEM §4 — one focus treatment everywhere. A landing target that
+     * draws the browser default is an indicator matching nothing else here.
+     *
+     * ⚠️ THIS ASSERTS THE CLASS, WHICH IS ALL jsdom CAN SEE. `.focus-ring` is
+     * `outline: none` plus a `:focus-visible` rule, and jsdom does not model
+     * `:focus-visible` — so this cannot tell a drawn ring from an invisible
+     * one. Raised in review, and MEASURED in Chromium instead:
+     *
+     *   keyboard (Tab to Retry, Enter) -> :focus-visible MATCHES,
+     *                                     2px solid rgb(14,88,82)
+     *   pointer  (real mouse click)    -> no match, outline-style: none
+     *
+     * 🔴 THE POINTER RESULT IS CORRECT, NOT A DEFECT. That is what
+     * `:focus-visible` is for: the keyboard user who pressed Retry gets the
+     * ring, and a mouse user gets no focus ring anywhere else on this site
+     * either. Drawing one here would be the inconsistency.
+     */
     routed(ok([product(1)]))
     renderHome()
 

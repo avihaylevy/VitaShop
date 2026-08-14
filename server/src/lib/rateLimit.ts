@@ -284,15 +284,27 @@ function shopperKey(req: Request, _res: Response): string {
  */
 export const ORDER_RATE_LIMITS = {
   cancel: { windowMs: 15 * MINUTE, limit: 10 },
+  /**
+   * MILESTONE-008 Checkpoint G1 — the shopper reading their OWN history.
+   *
+   * ⚠️ A READ, so it is paced like `ADMIN_RATE_LIMITS.list` (240), not like
+   * `cancel` (10). Opening history, tapping into an order and coming back
+   * spends several requests a minute legitimately; the cancel ceiling would
+   * lock a shopper out of their own orders while protecting nothing, because
+   * the query is already scoped to their own `userId`.
+   */
+  read: { windowMs: 15 * MINUTE, limit: 240 },
 } as const
 
 export interface OrderRateLimiters {
   cancel: RequestHandler
+  read: RequestHandler
 }
 
 export function createOrderRateLimiters(): OrderRateLimiters {
   return {
     cancel: rateLimit({ ...SHARED, ...ORDER_RATE_LIMITS.cancel, keyGenerator: shopperKey }),
+    read: rateLimit({ ...SHARED, ...ORDER_RATE_LIMITS.read, keyGenerator: shopperKey }),
   }
 }
 
