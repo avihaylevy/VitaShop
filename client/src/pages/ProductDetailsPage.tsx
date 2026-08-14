@@ -6,6 +6,10 @@ import { productDetailViewState } from '../features/catalog/productDetailViewSta
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import { ProductImage } from '../components/catalog/ProductImage'
 import { StockState } from '../components/catalog/StockState'
+import { ADD_TO_CART_ATTRIBUTE } from '../components/catalog/ProductCard'
+import { CartDrawer } from '../components/cart/CartDrawer'
+import { useAddToCart } from '../hooks/useAddToCart'
+import { getStockState } from '../lib/stockState'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import type { ProductDetailModel } from '../types/product'
@@ -27,12 +31,19 @@ import type { SupportedLanguage } from '../i18n/index'
  * namespace (§7c) — no `productDetails` namespace was created, and no raw
  * string is hardcoded here.
  *
- * 🔴 Not built here, deliberately: add-to-cart. The frozen §7 contract
- * covers the route, endpoint, DTO, states, i18n and a11y — it does not
- * place a cart control on this page, and Slice 8's add-to-cart queue,
- * drawer ownership and return-focus contract are `CatalogPage`'s. Adding
- * one would be inventing scope; it is recorded in the checkpoint closeout
- * instead.
+ * ISSUE-035 (2026-08-15, Wave 4) — add-to-cart, AT LAST. The note that
+ * stood here said building it would mean re-implementing Slice 8's
+ * CatalogPage-local machinery; ISSUE-105 moved that machinery into the
+ * shared `useAddToCart`, which is exactly what renders here now — the same
+ * FIFO-free confirmed-success flow, drawer ownership and return-focus
+ * contract, one implementation, third consumer.
+ *
+ * 🔴 The FAVOURITES control is deliberately still absent — the other half
+ * of this issue's "decide together" rule. There are NO server routes for
+ * favourites (M-009's opening move, ISSUE-058); a heart that saves into
+ * memory would be the dead-end the user already reported. Decision: the
+ * detail page gains the cart action now and the favourites action when
+ * M-009 gives it something real to do.
  */
 export function ProductDetailsPage() {
   const { t, i18n } = useTranslation('catalog')
@@ -44,8 +55,19 @@ export function ProductDetailsPage() {
   const viewState = productDetailViewState({ loading, error, notFound, product })
   const goToCatalog = useCallback(() => navigate('/catalog'), [navigate])
 
+  const { handleAddToCart, drawerOpen, closeDrawer, returnFocusRef, gridRef, announced } =
+    useAddToCart()
+
+  // The caller resolves the announced product's name (the hook stores
+  // slug + count only, so the sentence re-resolves on a language toggle).
+  // Only this page's own product is addable here.
+  const addedToCartMessage =
+    announced && viewState.state === 'ready' && announced.slug === viewState.product.slug
+      ? t('addedToCart', { product: viewState.product.name, count: announced.count })
+      : ''
+
   return (
-    <div className="px-7 py-8">
+    <div ref={gridRef} className="px-7 py-8">
       {viewState.state === 'loading' && (
         <p role="status" className="text-sm text-text-muted">
           {t('productDetails.loading')}
@@ -88,7 +110,26 @@ export function ProductDetailsPage() {
         </div>
       )}
 
-      {viewState.state === 'ready' && <ProductDetailView product={viewState.product} onBack={goToCatalog} />}
+      {viewState.state === 'ready' && (
+        <>
+          {/*
+            One polite live region for the page's single add control — the
+            same shape as CatalogPage's. Renders empty until the first add.
+          */}
+          <p role="status" className={addedToCartMessage ? 'mb-4 text-sm text-text-ink' : ''}>
+            {addedToCartMessage}
+          </p>
+          <ProductDetailView
+            product={viewState.product}
+            onBack={goToCatalog}
+            onAddToCart={handleAddToCart}
+          />
+        </>
+      )}
+
+      {/* Rendered once, unconditionally — the same CartDrawer contract as
+          CatalogPage and HomePage (DEC-047/DEC-073, via useAddToCart). */}
+      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
     </div>
   )
 }
@@ -96,6 +137,7 @@ export function ProductDetailsPage() {
 type ProductDetailViewProps = {
   product: ProductDetailModel
   onBack: () => void
+  onAddToCart: (slug: string) => void
 }
 
 /**
@@ -104,8 +146,10 @@ type ProductDetailViewProps = {
  * every content block below it an `<h2>` — no level is skipped, and no
  * heading exists purely for styling.
  */
-function ProductDetailView({ product, onBack }: ProductDetailViewProps) {
+function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewProps) {
   const { t } = useTranslation('catalog')
+  // The same single disable condition as ProductCard: real stock only.
+  const isOut = getStockState(product.stockQuantity, product.lowStockThreshold) === 'out'
 
   return (
     <article>
@@ -139,6 +183,20 @@ function ProductDetailView({ product, onBack }: ProductDetailViewProps) {
           <div className="flex flex-wrap items-center gap-4">
             <PriceBlock price={product.price} />
             <StockState stockQuantity={product.stockQuantity} lowStockThreshold={product.lowStockThreshold} />
+          </div>
+
+          {/* ISSUE-035 — the page's single product action. The slug-keyed
+              attribute is the shared hook's return-focus target, scoped by
+              the page's gridRef exactly as on the catalogue. */}
+          <div>
+            <Button
+              variant="primary"
+              disabled={isOut}
+              onClick={() => onAddToCart(product.slug)}
+              {...{ [ADD_TO_CART_ATTRIBUTE]: product.slug }}
+            >
+              {t('addToCart')}
+            </Button>
           </div>
 
           <section aria-labelledby="product-specifications">

@@ -37,6 +37,13 @@ vi.mock('../hooks/useProductDetail', () => ({
   useProductDetail: (slug: string, language: string) => mockUseProductDetail(slug, language),
 }))
 
+// ISSUE-035 — the page mounts useAddToCart + CartDrawer now, both of which
+// read the cart. Same closed-drawer mock shape as CatalogPage.a11y.test.tsx.
+const mockUseCart = vi.fn()
+vi.mock('../state/CartContext', () => ({
+  useCart: () => mockUseCart(),
+}))
+
 function product(overrides: Partial<ProductDetailModel> = {}): ProductDetailModel {
   return {
     slug: 'solgar-omega-3',
@@ -103,6 +110,17 @@ function count(html: string, needle: string): number {
 
 beforeEach(() => {
   mockUseProductDetail.mockReset()
+  mockUseCart.mockReset()
+  mockUseCart.mockReturnValue({
+    addItem: vi.fn(),
+    setLineQuantity: vi.fn(),
+    removeLine: vi.fn(),
+    pending: false,
+    outcome: null,
+    cart: { items: [], subtotal: '0.00', totalQuantity: 0, hasBlockingLine: false },
+    items: [],
+    totalQuantity: 0,
+  })
 })
 
 describe('ProductDetailsPage — the four §7 states', () => {
@@ -158,7 +176,14 @@ describe('ProductDetailsPage — the four §7 states', () => {
 
     expect(html).toContain('אומגה 3')
     expect(html).not.toContain('role="alert"')
-    expect(html).not.toContain('role="status"')
+    // ISSUE-035: ready now carries exactly ONE polite live region — the
+    // add-to-cart announcement, empty until the first add (the CatalogPage
+    // shape). It was zero before the page had a cart action.
+    expect(html.split('role="status"').length - 1).toBe(1)
+    // The action itself: a real button, slug-keyed for the shared hook's
+    // return-focus lookup.
+    expect(html).toMatch(/<button[^>]*data-add-to-cart="solgar-omega-3"/)
+    expect(html).toContain('הוספה לעגלה')
   })
 })
 
