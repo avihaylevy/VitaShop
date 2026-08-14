@@ -29,7 +29,10 @@ export function WelcomeToast() {
   }, [welcomeName, dismissWelcome])
 
   return (
-    <div role="status" className="pointer-events-none fixed inset-x-0 top-20 z-[var(--z-dropdown)] flex justify-center px-4">
+    // top-32 (128px): the visible header's bottom edge measures 113-114px
+    // at every width (review finding — top-20 overlapped the nav row), so
+    // the toast clears it with a small gap at both breakpoints.
+    <div role="status" className="pointer-events-none fixed inset-x-0 top-32 z-[var(--z-dropdown)] flex justify-center px-4">
       {welcomeName !== null && (
         <p className="rounded-card border border-border-hairline bg-well px-4 py-2 text-sm font-medium text-text-ink shadow-[0_8px_24px_rgba(31,37,46,0.12)] motion-safe:animate-[welcome-toast-in_200ms_var(--ease-standard)]">
           {t('welcome.message', { name: welcomeName })}
