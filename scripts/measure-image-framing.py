@@ -101,7 +101,35 @@ def trimmed_bbox(image: "Image.Image") -> tuple[int, int, int, int]:
     return bbox
 
 
+# The well ProductImage renders into is a fixed 4:3 box (aspect-[4/3]);
+# frameWidthPct is a fraction of the well's WIDTH while frameHeightPct is a
+# fraction of its HEIGHT, so converting a pixel aspect between the two axes
+# needs this constant.
+WELL_ASPECT = 4 / 3
+
+
 def compute_framing(image_path: Path) -> dict:
+    """
+    ISSUE-107 — the 2026-08-15 correction, and the defect was the MATH, not
+    the rule. ProductImage `object-contain`s the WHOLE FILE into the frame
+    element, but this function used to size that element to the trimmed
+    CONTENT box. For the original tightly-cropped assets (content == file)
+    the two coincide and §7's verified "every body at 76%" held; for any
+    asset carrying its own in-file padding, the file was contained into a
+    content-sized box and the visible product rendered SMALLER than 76% by
+    exactly the padding ratio — the user's "some products are not the same
+    size" report, measured live (h=76% frames whose products differ wildly).
+
+    The corrected model sizes the element to the FILE box at the scale that
+    lands the CONTENT at 76% of the well height (capped so the content never
+    exceeds 84% of the well width), keeping the element at the file's own
+    aspect so object-contain letterboxes nothing. The translate then centres
+    the CONTENT in the well: the offset is (file centre − content centre) as
+    a percentage of the element's own dimensions, which is what CSS
+    translate percentages are relative to. A padded file's element may
+    legitimately exceed the well; the well's overflow-hidden crops only the
+    padding.
+    """
     with Image.open(image_path) as im:
         canvas_w, canvas_h = im.size
         x0, y0, x1, y1 = trimmed_bbox(im)
@@ -113,21 +141,21 @@ def compute_framing(image_path: Path) -> dict:
     canvas_cx = canvas_w / 2
     canvas_cy = canvas_h / 2
 
-    # Frame height is fixed at the target; frame width follows the
-    # content's own aspect ratio, then is capped per §7.
-    frame_height_pct = TARGET_HEIGHT_PCT
-    content_aspect = content_w / content_h
-    frame_width_pct = frame_height_pct * content_aspect
-    if frame_width_pct > MAX_WIDTH_PCT:
-        frame_width_pct = MAX_WIDTH_PCT
-        frame_height_pct = frame_width_pct / content_aspect
+    # Element (frame) sized to the FILE at the content-normalising scale.
+    frame_height_pct = TARGET_HEIGHT_PCT * canvas_h / content_h
+    frame_width_pct = frame_height_pct * (canvas_w / canvas_h) / WELL_ASPECT
 
-    # Centring correction: how far the content's own centre sits from the
-    # raster canvas's centre, as a % of canvas dimensions. Re-centring on
-    # the content (not the canvas) is the §7 requirement that fixes the
-    # "tall bottle looks smaller than a square box" failure.
-    shift_x_pct = ((content_cx - canvas_cx) / canvas_w) * 100
-    shift_y_pct = ((content_cy - canvas_cy) / canvas_h) * 100
+    # §7's cap binds on the CONTENT's rendered width, not the element's.
+    content_width_pct = TARGET_HEIGHT_PCT * (content_w / content_h) / WELL_ASPECT
+    if content_width_pct > MAX_WIDTH_PCT:
+        scale_down = MAX_WIDTH_PCT / content_width_pct
+        frame_height_pct *= scale_down
+        frame_width_pct *= scale_down
+
+    # Centre the CONTENT in the well: move the element by the distance from
+    # the content's centre to the file's centre, in element-relative %.
+    shift_x_pct = ((canvas_cx - content_cx) / canvas_w) * 100
+    shift_y_pct = ((canvas_cy - content_cy) / canvas_h) * 100
 
     return {
         "frameWidthPct": round(frame_width_pct, 2),

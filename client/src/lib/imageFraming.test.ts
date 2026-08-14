@@ -13,18 +13,24 @@ describe('getImageFraming', () => {
     }
   })
 
-  // 🔴 76% is a CEILING, not a constant — corrected 2026-08-12 (ISSUE-063).
-  // It read `toBe(76)` and passed for two years because all six original
-  // assets were portrait, so height always bound first. The 49-product set
-  // includes wider-than-tall products where the 84% WIDTH cap binds instead
-  // and height scales down to preserve aspect ratio (ברזל קומפורט: 71.32).
-  // The data was checked before this assertion was touched: 71.32 is a
-  // correct measurement, not a script bug.
-  it('no computed frameHeightPct exceeds the §7 target of 76%', () => {
+  // 🔴 THE FRAME IS THE FILE BOX NOW, NOT THE CONTENT BOX — ISSUE-107,
+  // 2026-08-15. The old model sized the element to the trimmed content and
+  // this test pinned it at <= 76%; that model rendered any PADDED file's
+  // product smaller than 76% (the whole file was object-contained into a
+  // content-sized box). The corrected script sizes the element to the FILE
+  // at the scale that lands the CONTENT at <= 76%/84%, so a padded file's
+  // frame legitimately exceeds the well and its padding is cropped. §7's
+  // content-level caps are enforced where the trimmed box is known — inside
+  // scripts/measure-image-framing.py — and verified in the browser; here the
+  // JSON can only be sanity-bounded: positive, and no frame more than
+  // double the well (a padding ratio beyond that means a broken trim).
+  it('every frame is positive and within sane bounds (content caps live in the script)', () => {
     for (const file of VERIFIED_IMAGE_FILES) {
-      const height = getImageFraming(file).frameHeightPct
-      expect(height).toBeLessThanOrEqual(76)
-      expect(height).toBeGreaterThan(0)
+      const framing = getImageFraming(file)
+      expect(framing.frameHeightPct).toBeGreaterThan(0)
+      expect(framing.frameHeightPct).toBeLessThanOrEqual(200)
+      expect(Math.abs(framing.shiftXPct)).toBeLessThanOrEqual(50)
+      expect(Math.abs(framing.shiftYPct)).toBeLessThanOrEqual(50)
     }
   })
 
@@ -37,9 +43,13 @@ describe('getImageFraming', () => {
     expect(new Set(measured.map((f) => f.frameWidthPct)).size).toBeGreaterThan(5)
   })
 
-  it('no computed frameWidthPct exceeds the §7 cap of 84%', () => {
+  it('every frame width is positive and within the same sane bound', () => {
+    // The §7 84% cap now binds on the CONTENT's rendered width, computed in
+    // the script from the trimmed box — the file-box frame may exceed it.
     for (const file of VERIFIED_IMAGE_FILES) {
-      expect(getImageFraming(file).frameWidthPct).toBeLessThanOrEqual(84)
+      const width = getImageFraming(file).frameWidthPct
+      expect(width).toBeGreaterThan(0)
+      expect(width).toBeLessThanOrEqual(200)
     }
   })
 
