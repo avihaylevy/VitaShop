@@ -63,11 +63,32 @@ export type CheckoutQuote = {
   fingerprint: string
 }
 
+/**
+ * 🔴 QUOTED FROM `server/src/lib/purchasability.ts`, NOT INVENTED HERE.
+ *
+ * ⚠️ THIS LIST WAS WRONG ON ARRIVAL and shipped in `7e0b1a8`: it read
+ * `INACTIVE | OUT_OF_STOCK | SHORT_STOCK`, pattern-matched from `cartApi.ts`'s
+ * merge report rather than from the module that feeds this route. The
+ * transport filtered every blocked line whose reason it did not recognise, so
+ * a withdrawn or sold-out line arrived as an EMPTY list and the screen
+ * rendered "these products cannot be bought right now" above nothing —
+ * ISSUE-080's dead end, reproduced one screen later by the very code whose
+ * comments claim to close it. `SHORT_STOCK` matched by coincidence, which is
+ * why nothing looked broken.
+ *
+ * The list is guarded against the server by a `?raw` read in
+ * `checkoutApi.test.ts`, exactly as `DELIVERY_METHOD_NAMES` is. The lesson is
+ * that a drift guard covers the list it names and nothing else.
+ */
+export const UNPURCHASABLE_REASONS = ['WITHDRAWN', 'SOLD_OUT', 'SHORT_STOCK'] as const
+
+export type UnpurchasableReason = (typeof UNPURCHASABLE_REASONS)[number]
+
 /** A line the order cannot include, named so the screen can say WHICH. */
 export type CheckoutBlockedLine = {
   lineId: string
   slug: string
-  why: 'INACTIVE' | 'OUT_OF_STOCK' | 'SHORT_STOCK'
+  why: UnpurchasableReason
   /** 🔴 0 unless SHORT_STOCK — the server says so explicitly. */
   available: number
 }
@@ -83,6 +104,12 @@ export type CheckoutQuoteFailure =
   | { kind: 'blocked'; lines: readonly CheckoutBlockedLine[] }
   | { kind: 'emptyCart' }
   | { kind: 'unauthenticated' }
+  /**
+   * 🔴 ITS OWN KIND, because the generic failure's UI is a Retry button and
+   * retrying a 429 immediately re-hits the limiter. The one branch closes the
+   * loop.
+   */
+  | { kind: 'rateLimited' }
   | { kind: 'server' }
   | { kind: 'offline' }
 

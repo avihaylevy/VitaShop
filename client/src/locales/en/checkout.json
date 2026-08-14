@@ -26,13 +26,15 @@
     "offline": "We could not reach the server. Check your connection and try again.",
     "retry": "Try again",
     "emptyCart": "Your cart is empty, so there is nothing to pay for.",
-    "unauthenticated": "Sign in to complete your order."
+    "unauthenticated": "Sign in to complete your order.",
+    "signIn": "Go to sign in",
+    "rateLimited": "Too many attempts. Wait a moment, then refresh the page."
   },
   "blocked": {
     "heading": "This order cannot be completed",
     "intro": "These products cannot be bought right now. Update or remove them in the cart.",
-    "INACTIVE": "This product is no longer sold. Remove it.",
-    "OUT_OF_STOCK": "This product is sold out. Remove it.",
+    "WITHDRAWN": "This product is no longer sold. Remove it.",
+    "SOLD_OUT": "This product is sold out. Remove it.",
     "SHORT_STOCK": "Only {{available}} left in stock. Lower the quantity to {{available}}."
   }
 }

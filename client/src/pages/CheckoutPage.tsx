@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
@@ -58,9 +58,27 @@ export function CheckoutPage() {
   const [method, setMethod] = useState<DeliveryMethodName>('courier')
   const [state, setState] = useState<LoadState>({ status: 'loading' })
 
+  /**
+   * 🔴 THE LAST REQUEST WINS, NOT THE LAST RESPONSE.
+   *
+   * Toggling courier → self pickup quickly puts two quotes in flight, and the
+   * courier one can settle second. Without this the screen showed ₪30 shipping
+   * and the courier total beside a checked self-pickup radio — and the held
+   * fingerprint belonged to the method the shopper had NOT chosen, so F2c's
+   * `/pay` would refuse with a mismatch the shopper could not account for.
+   *
+   * A counter rather than an AbortController: the request is a cheap read, and
+   * what matters is which answer is allowed to reach the screen. The same
+   * staleness rule the catalogue settled at §9b — an expected cancellation is
+   * not a result.
+   */
+  const requestId = useRef(0)
+
   const load = useCallback(async (next: DeliveryMethodName) => {
+    const id = ++requestId.current
     setState({ status: 'loading' })
     const result = await requestCheckoutQuote(next)
+    if (id !== requestId.current) return
     setState(result.ok ? { status: 'ready', quote: result.quote } : { status: 'failed', failure: result.failure })
   }, [])
 
@@ -83,6 +101,21 @@ export function CheckoutPage() {
                 type="radio"
                 name="deliveryMethod"
                 value={name}
+                /*
+                 * ⚠️ THE LOCAL INTENT, and the review asked for the quote's
+                 * method instead. I wrote that, then MUTATION-TESTED it: with
+                 * the request-id guard above in place, no test could tell the
+                 * two apart, and no scenario can either — a stale answer never
+                 * reaches `ready`, and while one is in flight the state is
+                 * `loading`, which falls back to this value anyway.
+                 *
+                 * 🔴 So the guard is the fix and this is not a second one. An
+                 * unreachable branch that READS as load-bearing is the exact
+                 * shape this project keeps being bitten by, so it is not kept
+                 * for appearances. If the two can ever disagree again — a
+                 * server that answers with a different method than it was
+                 * asked for — that is a new case and it needs its own test.
+                 */
                 checked={method === name}
                 onChange={() => setMethod(name)}
                 className={`${FOCUS_RING} size-4 shrink-0 accent-brand-teal`}
@@ -204,7 +237,26 @@ function FailureNotice({
   }
 
   if (failure.kind === 'unauthenticated') {
-    return <p className="text-sm text-text-ink">{t('state.unauthenticated')}</p>
+    /*
+     * 🔴 A LINK, NOT JUST A SENTENCE. `RequireAuth` cannot rescue this:
+     * `SessionContext` still believes the session is live, because only the
+     * server knows it expired. Without somewhere to go, the shopper is told to
+     * sign in on a page that offers no way to.
+     */
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-sm text-text-ink">{t('state.unauthenticated')}</p>
+        <Link to="/login" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+          {t('state.signIn')}
+        </Link>
+      </div>
+    )
+  }
+
+  // 🔴 NO RETRY BUTTON HERE, deliberately. The limiter refused; a button that
+  // re-hits it immediately is a loop the screen invites the shopper into.
+  if (failure.kind === 'rateLimited') {
+    return <p className="text-sm text-text-ink">{t('state.rateLimited')}</p>
   }
 
   return (

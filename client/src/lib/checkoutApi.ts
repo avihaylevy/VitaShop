@@ -1,8 +1,10 @@
 import { getApiBaseUrl } from './apiBaseUrl.js'
 import {
   DELIVERY_METHOD_NAMES,
+  UNPURCHASABLE_REASONS,
   type CheckoutBlockedLine,
   type CheckoutQuote,
+  type CheckoutQuoteLine,
   type CheckoutQuoteResult,
   type DeliveryEstimate,
   type DeliveryMethodName,
@@ -44,9 +46,33 @@ function isEstimate(value: unknown): value is DeliveryEstimate {
   return false
 }
 
+/**
+ * 🔴 EVERY FIELD THE SUMMARY RENDERS. `Array.isArray` alone was not validation:
+ * a line missing `lineTotal` reached `PriceBlock`, `Number(undefined)` produced
+ * NaN, and the shopper saw ₪NaN in the figure they were about to be charged. A
+ * line missing `id` produced duplicate React keys. `cartApi.ts`'s `isCartLine`
+ * set this precedent for exactly this reason.
+ */
+function isQuoteLine(value: unknown): value is CheckoutQuoteLine {
+  if (!isPlainObject(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    typeof value.slug === 'string' &&
+    typeof value.nameHe === 'string' &&
+    typeof value.nameEn === 'string' &&
+    typeof value.brandName === 'string' &&
+    typeof value.quantity === 'number' &&
+    Number.isInteger(value.quantity) &&
+    value.quantity > 0 &&
+    isMoney(value.unitPrice) &&
+    isMoney(value.lineTotal)
+  )
+}
+
 function isQuote(value: unknown): value is CheckoutQuote {
   if (!isPlainObject(value)) return false
-  if (!Array.isArray(value.lines)) return false
+  if (!Array.isArray(value.lines) || !value.lines.every(isQuoteLine)) return false
   if (!isMoney(value.basis) || !isMoney(value.totalAmount)) return false
   if (!isDeliveryMethodName(value.deliveryMethod)) return false
   if (!isEstimate(value.estimate)) return false
@@ -75,7 +101,9 @@ function blockedLinesOf(body: unknown): readonly CheckoutBlockedLine[] {
     return (
       typeof line.lineId === 'string' &&
       typeof line.slug === 'string' &&
-      (line.why === 'INACTIVE' || line.why === 'OUT_OF_STOCK' || line.why === 'SHORT_STOCK') &&
+      // 🔴 The server's own names — see UNPURCHASABLE_REASONS. Hand-writing
+      // this union is what dropped WITHDRAWN and SOLD_OUT on the floor.
+      (UNPURCHASABLE_REASONS as readonly unknown[]).includes(line.why) &&
       typeof line.available === 'number'
     )
   })
@@ -126,6 +154,11 @@ export async function requestCheckoutQuote(
   // that expired mid-checkout must send the shopper to sign in — not show them
   // a generic failure beside a basket they can still see.
   if (status === 401) return { ok: false, failure: { kind: 'unauthenticated' } }
+
+  // 🔴 429 IS NOT A SERVER ERROR. The generic failure's UI is a Retry button,
+  // and retrying a rate limit immediately re-hits it — a loop the shopper
+  // drives by doing exactly what the screen asks.
+  if (status === 429) return { ok: false, failure: { kind: 'rateLimited' } }
 
   const code = errorCodeOf(body)
   // 409, never 400, for both of these — the request was well formed and the
