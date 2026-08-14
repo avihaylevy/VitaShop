@@ -10,6 +10,7 @@ import type { EmailService } from '../lib/emailService.js'
 import type { DeliveryMethodName } from '../lib/shipping.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireVerifiedShopper } from './requireActiveShopper.js'
+import { saveShopperAddress } from '../lib/saveShopperAddress.js'
 
 /**
  * MILESTONE-008 Checkpoint D2 — `POST /api/checkout/validate` and
@@ -363,6 +364,19 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
     // unreachable replay told. A status that lags is a support problem; a
     // phantom failure is a lost order.
     await settleAsPaid(deps, order.orderId, order.orderNumber)
+
+    // ── 5b. ISSUE-093 — THE ADDRESS, SAVED ONLY IF THE SHOPPER ASKED ────────
+    // 🔴 AFTER THE COMMIT, AWAITED BUT NEVER ABLE TO FAIL THE REQUEST. The
+    // same placement rule INV-04 gives the email, for the same reason: the
+    // ORDER must survive. `saveShopperAddress` returns rather than throws.
+    //
+    // ⚠️ OPT-IN, DEFAULT OFF. The address is already stored on the order
+    // (INV-02), so this adds no new personal data — it indexes what is already
+    // held so a returning shopper need not retype it. Doing it silently would
+    // hand someone who shipped a one-off gift that address as their default.
+    if (body.saveAddress === true) {
+      await saveShopperAddress(prisma, { userId, address: readAddress(body) })
+    }
 
     // ── 6. INV-04 — THE EMAIL, AFTER THE COMMIT AND OUTSIDE EVERY TRANSACTION ─
     // 🔴 THE INVARIANT IS THE ORDERING, AND THIS IS THE ONLY PLACE IT CAN HOLD.
