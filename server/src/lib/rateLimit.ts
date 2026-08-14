@@ -312,6 +312,28 @@ export const ADMIN_RATE_LIMITS = {
   status: { windowMs: 15 * MINUTE, limit: 60 },
 } as const
 
+/**
+ * MILESTONE-008 Checkpoint F2b. A READ of the caller's own row, called once
+ * when the checkout screen mounts — so the ceiling exists to bound abuse, not
+ * to pace a shopper. Set alongside `CHECKOUT_RATE_LIMITS.validate` (240)
+ * rather than below it: the two are called from the same screen, and a profile
+ * limit tighter than the quote limit would break checkout before it protected
+ * anything.
+ */
+export const ACCOUNT_RATE_LIMITS = {
+  profile: { windowMs: 15 * MINUTE, limit: 240 },
+} as const
+
+export interface AccountRateLimiters {
+  profile: RequestHandler
+}
+
+export function createAccountRateLimiters(): AccountRateLimiters {
+  return {
+    profile: rateLimit({ ...SHARED, ...ACCOUNT_RATE_LIMITS.profile, keyGenerator: shopperKey }),
+  }
+}
+
 export interface AdminRateLimiters {
   status: RequestHandler
 }

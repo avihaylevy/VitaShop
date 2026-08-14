@@ -12,6 +12,7 @@ import { cartRouter } from './routes/cart.js'
 import { createCheckoutRouter } from './routes/checkout.js'
 import { createOrderRouter } from './routes/orders.js'
 import { createAdminOrderRouter } from './routes/adminOrders.js'
+import { createAccountRouter } from './routes/account.js'
 
 export const app = express()
 
@@ -82,6 +83,11 @@ app.use('/api/orders', createOrderRouter({ prisma }))
 // ⚠️ NO SCREENS — the admin UI is MILESTONE-010's; a minimal orders screen
 // comes with Checkpoint F.
 app.use('/api/admin/orders', createAdminOrderRouter({ prisma }))
+
+// MILESTONE-008 Checkpoint F2b — REQ-F-041's pre-filled checkout details.
+// 🔴 The first route serving PERSONAL data. The session is the only identity
+// it accepts: no id travels in the path, the query or the body.
+app.use('/api/account', createAccountRouter({ prisma }))
 
 // A2 — compute the constant dummy hash once at startup, so the first
 // unknown-email login is not measurably slower than every later one.
