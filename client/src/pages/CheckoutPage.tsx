@@ -1,0 +1,218 @@
+import { useCallback, useEffect, useId, useState } from 'react'
+import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
+import { Button } from '../components/ui/Button'
+import { FOCUS_RING } from '../components/ui/focusRing'
+import { PriceBlock } from '../components/catalog/PriceBlock'
+import { requestCheckoutQuote } from '../lib/checkoutApi'
+import {
+  DELIVERY_METHOD_NAMES,
+  type CheckoutQuote,
+  type CheckoutQuoteFailure,
+  type DeliveryEstimate,
+  type DeliveryMethodName,
+} from '../types/checkout'
+
+/**
+ * MILESTONE-008 Checkpoint F2a — the checkout screen's FIRST half: choosing
+ * how the order arrives, and seeing what it costs.
+ *
+ * 🔴 WHAT THIS SCREEN DOES NOT DO YET. No address form, no confirmation gate,
+ * no payment — F2b and F2c. The quote's `fingerprint` is held in state from
+ * the moment it arrives because DEC-060 requires `/pay` to receive the SAME
+ * one the shopper was shown; capturing it here rather than re-fetching it at
+ * submit time is the whole point of the gate.
+ *
+ * 🔴 EVERY FIGURE IS THE SERVER'S. The screen renders `basis`, the shipping
+ * cost and `totalAmount` as strings. It never adds them, and a shopper
+ * changing the delivery method triggers a NEW QUOTE rather than a local
+ * recalculation — §3.4, and the reason `/validate` exists as a read at all.
+ */
+
+function estimateText(
+  estimate: DeliveryEstimate,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return estimate.kind === 'ready_within'
+    ? t('delivery.readyWithin', { days: estimate.businessDays })
+    : t('delivery.deliveredBetween', {
+        min: estimate.minBusinessDays,
+        max: estimate.maxBusinessDays,
+      })
+}
+
+type LoadState =
+  | { status: 'loading' }
+  | { status: 'ready'; quote: CheckoutQuote }
+  | { status: 'failed'; failure: CheckoutQuoteFailure }
+
+export function CheckoutPage() {
+  const { t, i18n } = useTranslation('checkout')
+  const legendId = useId()
+  /**
+   * ⚠️ `courier` is the initial CHOICE, not a default the server assumes. The
+   * server requires an explicit method on every quote; `lib/shipping.ts`'s own
+   * default exists for the pre-checkout surfaces, and this screen must never
+   * rely on it.
+   */
+  const [method, setMethod] = useState<DeliveryMethodName>('courier')
+  const [state, setState] = useState<LoadState>({ status: 'loading' })
+
+  const load = useCallback(async (next: DeliveryMethodName) => {
+    setState({ status: 'loading' })
+    const result = await requestCheckoutQuote(next)
+    setState(result.ok ? { status: 'ready', quote: result.quote } : { status: 'failed', failure: result.failure })
+  }, [])
+
+  useEffect(() => {
+    void load(method)
+  }, [load, method])
+
+  return (
+    <main className="mx-auto flex max-w-[900px] flex-col gap-6 px-4 py-6">
+      <h1 className="text-2xl font-semibold text-text-ink">{t('page.title')}</h1>
+
+      <fieldset className="min-w-0 border-0 p-0">
+        <legend id={legendId} className="mb-2 text-sm font-semibold text-text-ink">
+          {t('delivery.legend')}
+        </legend>
+        <div className="flex flex-col gap-2">
+          {DELIVERY_METHOD_NAMES.map((name) => (
+            <label key={name} className="flex min-h-11 items-center gap-2 text-sm text-text-ink">
+              <input
+                type="radio"
+                name="deliveryMethod"
+                value={name}
+                checked={method === name}
+                onChange={() => setMethod(name)}
+                className={`${FOCUS_RING} size-4 shrink-0 accent-brand-teal`}
+              />
+              <span>{t(`delivery.${name}`)}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {state.status === 'loading' && <p className="text-sm text-text-muted">{t('state.loading')}</p>}
+
+      {state.status === 'failed' && (
+        <FailureNotice failure={state.failure} onRetry={() => void load(method)} />
+      )}
+
+      {state.status === 'ready' && (
+        <section className="flex flex-col gap-3" aria-labelledby={`${legendId}-summary`}>
+          <h2 id={`${legendId}-summary`} className="text-lg font-semibold text-text-ink">
+            {t('page.summaryHeading')}
+          </h2>
+
+          <p className="text-sm text-text-muted">{estimateText(state.quote.estimate, t)}</p>
+
+          <ul className="flex flex-col gap-2">
+            {state.quote.lines.map((line) => (
+              <li key={line.id} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+                <span className="text-text-ink">
+                  {i18n.language === 'he' ? line.nameHe : line.nameEn}
+                </span>
+                <span className="text-text-muted">
+                  {t('summary.lineQuantity', { quantity: line.quantity })}
+                </span>
+                <PriceBlock price={line.lineTotal} />
+              </li>
+            ))}
+          </ul>
+
+          <dl className="flex flex-col gap-1 border-t border-border-hairline pt-3 text-sm">
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-text-muted">{t('summary.itemsTotal')}</dt>
+              <dd>
+                <PriceBlock price={state.quote.basis} />
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-text-muted">{t('summary.shipping')}</dt>
+              <dd className="text-text-ink">
+                {/*
+                  🔴 Three outcomes, not two. Self pickup is MOOT rather than
+                  free — the cart DTO carries `noDeliveryRequired` for exactly
+                  this, and offering a pickup order "₪0.00 shipping" reads as a
+                  discount it never received.
+                */}
+                {state.quote.shipping.noDeliveryRequired ? (
+                  t('summary.noDeliveryRequired')
+                ) : state.quote.shipping.isFree ? (
+                  t('summary.shippingFree')
+                ) : (
+                  <PriceBlock price={state.quote.shipping.cost} />
+                )}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-2 font-semibold">
+              <dt className="text-text-ink">{t('summary.total')}</dt>
+              <dd>
+                <PriceBlock price={state.quote.totalAmount} />
+              </dd>
+            </div>
+          </dl>
+        </section>
+      )}
+
+      <Link to="/cart" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+        {t('page.backToCart')}
+      </Link>
+    </main>
+  )
+}
+
+function FailureNotice({
+  failure,
+  onRetry,
+}: {
+  failure: CheckoutQuoteFailure
+  onRetry: () => void
+}) {
+  const { t } = useTranslation('checkout')
+
+  /*
+   * 🔴 EACH FAILURE GETS ITS OWN ANSWER, and REQ-F-042's halt gets the most:
+   * it names every blocked line and what to do about it. A single "something
+   * went wrong" banner here would reproduce ISSUE-080's dead end one screen
+   * later — the shopper is stopped, and nothing tells them which product or
+   * which action clears it.
+   */
+  if (failure.kind === 'blocked') {
+    return (
+      <section className="flex flex-col gap-2 rounded-card border border-state-error p-4">
+        <h2 className="text-base font-semibold text-state-error">{t('blocked.heading')}</h2>
+        <p className="text-sm text-text-ink">{t('blocked.intro')}</p>
+        <ul className="flex flex-col gap-1 text-sm text-text-ink">
+          {failure.lines.map((line) => (
+            <li key={line.lineId}>
+              <span className="font-medium">{line.slug}</span>{' '}
+              <span>{t(`blocked.${line.why}`, { available: line.available })}</span>
+            </li>
+          ))}
+        </ul>
+        <Link to="/cart" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+          {t('page.backToCart')}
+        </Link>
+      </section>
+    )
+  }
+
+  if (failure.kind === 'emptyCart') {
+    return <p className="text-sm text-text-ink">{t('state.emptyCart')}</p>
+  }
+
+  if (failure.kind === 'unauthenticated') {
+    return <p className="text-sm text-text-ink">{t('state.unauthenticated')}</p>
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <p className="text-sm text-text-ink">
+        {failure.kind === 'offline' ? t('state.offline') : t('state.error')}
+      </p>
+      <Button onClick={onRetry}>{t('state.retry')}</Button>
+    </div>
+  )
+}

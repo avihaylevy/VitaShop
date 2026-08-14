@@ -1,0 +1,38 @@
+{
+  "page": {
+    "title": "Checkout",
+    "summaryHeading": "Order summary",
+    "backToCart": "Back to cart"
+  },
+  "delivery": {
+    "legend": "How you receive the order",
+    "self_pickup": "Self pickup",
+    "courier": "Courier to your door",
+    "pickup_point": "Collect from a pickup point",
+    "readyWithin": "Ready to collect within {{days}} business days",
+    "deliveredBetween": "Arrives in {{min}}–{{max}} business days"
+  },
+  "summary": {
+    "itemsTotal": "Items total",
+    "shipping": "Shipping",
+    "shippingFree": "Free",
+    "noDeliveryRequired": "No shipping with self pickup",
+    "total": "Total to pay",
+    "lineQuantity": "Quantity: {{quantity}}"
+  },
+  "state": {
+    "loading": "Working out your order…",
+    "error": "The order could not be calculated.",
+    "offline": "We could not reach the server. Check your connection and try again.",
+    "retry": "Try again",
+    "emptyCart": "Your cart is empty, so there is nothing to pay for.",
+    "unauthenticated": "Sign in to complete your order."
+  },
+  "blocked": {
+    "heading": "This order cannot be completed",
+    "intro": "These products cannot be bought right now. Update or remove them in the cart.",
+    "INACTIVE": "This product is no longer sold. Remove it.",
+    "OUT_OF_STOCK": "This product is sold out. Remove it.",
+    "SHORT_STOCK": "Only {{available}} left in stock. Lower the quantity to {{available}}."
+  }
+}

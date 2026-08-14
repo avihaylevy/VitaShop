@@ -6,6 +6,8 @@ import { HomePage } from './pages/HomePage'
 import { CatalogPage } from './pages/CatalogPage'
 import { ProductDetailsPage } from './pages/ProductDetailsPage'
 import { CartPage } from './components/cart'
+import { CheckoutPage } from './pages/CheckoutPage'
+import { RequireAuth } from './components/auth/RequireAuth'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
@@ -28,6 +30,25 @@ function App() {
         */}
         <Route path="/product/:slug" element={<ProductDetailsPage />} />
         <Route path="/cart" element={<CartPage />} />
+        {/*
+          MILESTONE-008 Checkpoint F2a — 🔴 THE FIRST ROUTE EVER WRAPPED IN
+          `RequireAuth`. §8.2: checkout is authenticated-only, traceable to
+          REQ-F-034, and the gate has shipped since MILESTONE-006 with nothing
+          attached to it.
+
+          ⚠️ The cart above stays OPEN, deliberately. The wall belongs on
+          completing an order, never on browsing or filling a basket — the
+          regression clause A10 names is the wall appearing where it should
+          not.
+        */}
+        <Route
+          path="/checkout"
+          element={
+            <RequireAuth>
+              <CheckoutPage />
+            </RequireAuth>
+          }
+        />
         {/*
           MILESTONE-006 Checkpoint H — the auth forms.
 
