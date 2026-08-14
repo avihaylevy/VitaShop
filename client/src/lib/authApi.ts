@@ -141,18 +141,32 @@ export async function verifyEmail(token: string): Promise<AuthResult<{ status: s
 }
 
 /**
- * Checkpoint H's gate depends on this. It returns a boolean and nothing else —
- * see the route's own comment for why it discloses nothing.
+ * Checkpoint H's gate depends on this.
+ *
+ * 🔴 DEC-071 — IT NOW CARRIES THE ROLE for a signed-in caller, so the account
+ * menu can show an admin link (ISSUE-097). It grants NOTHING: every admin route
+ * re-reads `User.role` from the database on each request (DEC-065), so this is
+ * advisory and a client that lies about it gains no access.
+ *
+ * ⚠️ AN UNKNOWN ROLE IS NOT AN ADMIN. Anything other than the two known values
+ * — a future role, a malformed body, a missing key — reads as `null`, which
+ * hides the link. The safe direction is the one that shows less.
  */
-export async function fetchSession(): Promise<boolean> {
+export type SessionRole = 'admin' | 'customer'
+
+export type SessionSnapshot = { authenticated: boolean; role: SessionRole | null }
+
+export async function fetchSession(): Promise<SessionSnapshot> {
   const base = getApiBaseUrl()
-  if (!base.ok) return false
+  if (!base.ok) return { authenticated: false, role: null }
   try {
     const response = await fetch(`${base.value}/api/auth/session`, { credentials: 'include' })
-    if (!response.ok) return false
-    const payload = (await response.json()) as { authenticated?: unknown }
-    return payload.authenticated === true
+    if (!response.ok) return { authenticated: false, role: null }
+    const payload = (await response.json()) as { authenticated?: unknown; role?: unknown }
+    if (payload.authenticated !== true) return { authenticated: false, role: null }
+    const role = payload.role === 'admin' || payload.role === 'customer' ? payload.role : null
+    return { authenticated: true, role }
   } catch {
-    return false
+    return { authenticated: false, role: null }
   }
 }

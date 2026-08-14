@@ -24,7 +24,8 @@
     "signOut": "Sign out",
     "guestGreeting": "Not signed in",
     "signedInGreeting": "Signed in",
-    "myOrders": "My orders"
+    "myOrders": "My orders",
+    "adminOrders": "Manage orders"
   },
   "favourites": {
     "label": "Favourites",

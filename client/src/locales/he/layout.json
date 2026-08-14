@@ -24,7 +24,8 @@
     "signOut": "התנתקות",
     "guestGreeting": "לא מחוברים",
     "signedInGreeting": "מחוברים",
-    "myOrders": "ההזמנות שלי"
+    "myOrders": "ההזמנות שלי",
+    "adminOrders": "ניהול הזמנות"
   },
   "favourites": {
     "label": "מועדפים",

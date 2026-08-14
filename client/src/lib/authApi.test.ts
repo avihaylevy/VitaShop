@@ -125,8 +125,14 @@ describe('🔴 a MISSING base URL must fail, not request a wrong one', () => {
   it('the failure is reported as a result, never thrown', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '')
     expect(await login('a@b.test', 'pw')).toEqual({ ok: false, failure: { kind: 'unexpected' } })
-    // fetchSession answers a plain boolean by contract — it discloses nothing.
-    expect(await fetchSession()).toBe(false)
+    /*
+     * ⚠️ `fetchSession` ANSWERS A SNAPSHOT SINCE DEC-071, not a bare boolean —
+     * it now carries the role so the account menu can show an admin link
+     * (ISSUE-097). With no base URL there is nobody to ask, so the answer is
+     * the guest one, and the ROLE IS NULL rather than absent: a caller reading
+     * `role` must never get `undefined` and treat it as a value.
+     */
+    expect(await fetchSession()).toEqual({ authenticated: false, role: null })
   })
 })
 

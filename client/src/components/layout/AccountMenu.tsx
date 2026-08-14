@@ -22,7 +22,7 @@ import { useSession } from '../../state/SessionContext'
  */
 export function AccountMenu() {
   const { t } = useTranslation('layout')
-  const { isSignedIn, signOut } = useSession()
+  const { isSignedIn, isAdmin, signOut } = useSession()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -112,6 +112,28 @@ export function AccountMenu() {
               >
                 {t('account.myOrders')}
               </Link>
+              {/*
+                🔴 ISSUE-097 CLOSED — the admin screen has existed since F3b
+                with NOTHING linking to it, so an admin signing in found a site
+                that behaved exactly like a shopper's. The user reported it as
+                "I cannot do anything as an admin".
+
+                🔴 THIS LINK IS UX, NOT SECURITY. `isAdmin` comes from the
+                session response (DEC-071) and only decides whether the entry is
+                DRAWN. Every admin route re-reads `User.role` from the database
+                per request (DEC-065), so a demoted admin who still has this
+                markup cached gets a 403 the moment they use it.
+              */}
+              {isAdmin && (
+                <Link
+                  role="menuitem"
+                  to="/admin/orders"
+                  onClick={() => setOpen(false)}
+                  className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+                >
+                  {t('account.adminOrders')}
+                </Link>
+              )}
               <button
                 role="menuitem"
                 type="button"

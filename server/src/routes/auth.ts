@@ -270,9 +270,59 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   // unauthenticated caller learns only about their own request, which they
   // already knew; there is no account to enumerate here because the answer
   // does not depend on any address the caller supplies.
-  router.get('/auth/session', limit.session, (req, res) => {
+  /**
+   * 🔴 DEC-071 AMENDS DEC-065 — the response now carries the ROLE for a
+   * SIGNED-IN caller, and nothing else changes.
+   *
+   * ISSUE-097: `/admin/orders` was linked from nowhere because the client had
+   * no way to know who is an admin, and the user reported the consequence
+   * plainly — "I cannot do anything as an admin". The three options were a
+   * cached role, an unconditional link every shopper sees, or leaving it
+   * unreachable; the user chose this one.
+   *
+   * 🔴 THE ROLE DECIDES WHETHER A LINK IS DRAWN. IT GRANTS NOTHING. Every
+   * admin route still runs `requireAdmin`, which reads `User.role` from the
+   * DATABASE on every request (DEC-065), so a demoted admin is refused
+   * immediately — no sign-out, no cache to expire, and nothing the browser
+   * believes can change it. `authSession.integration.test.ts` asserts exactly
+   * that, with the same cookie across the demotion.
+   *
+   * ⚠️ STILL NOTHING FOR AN ANONYMOUS CALLER. The answer stays a bare
+   * `{ authenticated: false }` — no role key at all — so the shape discloses
+   * nothing to someone who is not signed in, and there is still no address
+   * here to enumerate.
+   */
+  router.get('/auth/session', limit.session, async (req, res) => {
     const userId = req.session?.userId
-    res.json({ authenticated: typeof userId === 'string' && userId.length > 0 })
+    if (typeof userId !== 'string' || userId.length === 0) {
+      res.json({ authenticated: false })
+      return
+    }
+
+    /*
+     * ⚠️ READ FRESH, never taken from the session row. A role copied into the
+     * session at login would be exactly the cached credential DEC-065 argued
+     * against — stale the moment an admin is demoted, and invisible until they
+     * sign out. The row may also be GONE: a deleted account with a live cookie
+     * answers `authenticated: false` rather than inventing a role.
+     */
+    try {
+      const user = await deps.prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+      if (!user) {
+        res.json({ authenticated: false })
+        return
+      }
+      res.json({ authenticated: true, role: user.role })
+    } catch (error) {
+      console.error('[auth] reading the session role failed', error)
+      /*
+       * 🔴 FAIL CLOSED ON THE ROLE, NOT ON THE SESSION. The caller IS signed
+       * in — saying otherwise would sign them out of the interface over a
+       * database hiccup. Omitting the role hides the admin link, which is the
+       * safe direction: the server refuses anyway.
+       */
+      res.json({ authenticated: true })
+    }
   })
 
   // POST /api/auth/logout — clause A7. Checkpoint F2.
