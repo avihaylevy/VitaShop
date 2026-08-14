@@ -11,7 +11,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { readVerifiedProductRows } from '../lib/productsCsv.js'
 import { CANONICAL_CATEGORIES } from '../lib/catalogCategories.js'
 import type { PublicCatalogProduct } from '../lib/catalogMapper.js'
-import { sortByPopularity } from '../lib/catalogPopularity.js'
 import { prisma as appPrisma } from '../lib/prisma.js'
 
 interface CategoriesEnvelope {
@@ -1041,19 +1040,19 @@ describe('GET /api/products — sorting (Checkpoint D)', () => {
   })
 })
 
-// Checkpoint F — real popularity execution (§6a). The current vitashop_dev
-// seed has ZERO orders/order items (verified read-only — no seed permitted
-// by this file's own read-only rule), matching the plan's own documented
-// expectation: "every product scores 0 and all products tie; the
-// deterministic tie-break resolves the order. Stable and reproducible
-// today." That means today's `sort=popularity` output is PROVABLY identical
-// to `sort=newest`'s — not because popularity silently substitutes newest
-// (catalogPopularity.test.ts proves the scoring/sorting logic is genuinely
-// independent, and catalogOrderBy no longer even accepts 'popularity' as an
-// input), but because the tie-break is the only thing that CAN differ when
-// every score is 0. The actual SUM/cancelled-exclusion aggregation logic
-// (which needs order data this file may never create) is proven at the unit
-// layer — see resolvePopularityScores' fake-Prisma test.
+// Checkpoint F — real popularity execution (§6a).
+// 🔴 REWRITTEN 2026-08-14, ISSUE-106. This block used to assert that
+// popularity output EQUALS newest output — "the documented all-tie
+// behaviour", true only while the entire database held zero orders. The
+// user's first real purchase turned it red with nothing wrong: a test in a
+// read-only file must not assert a global ordering of a shared database,
+// because any order anyone ever places changes that ordering.
+// What this file still owns and asserts: the parameter is accepted, it
+// composes with filters/search/pagination, and sorting never changes
+// MEMBERSHIP. The ordering semantics themselves (units sold in 30 days,
+// cancelled excluded, tie-break) are proven end-to-end against fixture
+// orders in catalogPopularity.integration.test.ts, and at the unit layer in
+// catalogPopularity.test.ts.
 describe('GET /api/products — sort=popularity execution (Checkpoint F)', () => {
   it('is accepted (never 400) and returns 200 with results', async () => {
     const res = await fetch(`${baseUrl}/api/products?sort=popularity`)
@@ -1062,10 +1061,10 @@ describe('GET /api/products — sort=popularity execution (Checkpoint F)', () =>
     expect(body.items.length).toBeGreaterThan(0)
   })
 
-  it("today's empty order data means popularity output equals newest's output (the documented all-tie behaviour)", async () => {
+  it('sorting by popularity changes ORDER at most, never membership — same slugs as newest', async () => {
     const popularity = await fetchAllPages('sort=popularity')
     const newest = await fetchAllPages('sort=newest')
-    expect(popularity.slugs).toEqual(newest.slugs)
+    expect([...popularity.slugs].sort()).toEqual([...newest.slugs].sort())
   })
 
   it('composes with filters — popularity + category', async () => {
@@ -1217,14 +1216,18 @@ describe('GET /api/products — fallback (Checkpoint F)', () => {
     expect(body.fallback!.items).toHaveLength(Math.min(activeProducts.length, 8))
 
     // §6b 🔴 "Both kinds use the same deterministic popularity ordering
-    // (§6a)" — asserted directly, not just implemented. Today's seed has
-    // zero orders, so every score is 0 and sortByPopularity's tie-break
-    // (createdAt desc, slug asc) alone decides — this pins that exact
-    // order against a direct DB read, the same cross-check pattern the
-    // popularity-execution suite above already uses.
-    const expectedOrder = sortByPopularity(activeProducts, new Map())
-      .slice(0, 8)
-      .map((p) => p.slug)
+    // (§6a)" — asserted directly, not just implemented: the fallback's
+    // order must equal the TOP of the live `sort=popularity` output.
+    // 🔴 REWRITTEN 2026-08-14, ISSUE-106. This used to recompute the
+    // expected order as sortByPopularity(products, new Map()) — an EMPTY
+    // score map, correct only while the whole database held zero orders;
+    // the user's first purchase broke it. Comparing the two API surfaces
+    // pins exactly what §6b claims (same ordering) without this read-only
+    // file asserting what that ordering is — the scoring semantics are
+    // proven against fixture orders in catalogPopularity.integration.test.ts.
+    const popular = await fetch(`${baseUrl}/api/products?sort=popularity`)
+    const popularBody = (await popular.json()) as ProductsEnvelope
+    const expectedOrder = popularBody.items.slice(0, 8).map((p) => p.slug)
     expect(body.fallback!.items.map((i) => i.slug)).toEqual(expectedOrder)
   })
 

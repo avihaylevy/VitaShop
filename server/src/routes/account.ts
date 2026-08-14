@@ -7,11 +7,13 @@ import { createRequireActiveShopper } from './requireActiveShopper.js'
 /**
  * MILESTONE-008 Checkpoint F2b — REQ-F-041's pre-filled details.
  *
- * 🔴 THIS IS THE FIRST ENDPOINT IN THE PROJECT THAT SERVES PERSONAL DATA.
- * The catalogue is public, the cart is anonymous, and `/auth/session` returns
- * `{ authenticated: boolean }` and nothing else. A name, a phone number and a
- * home address are a different category, and the rules that follow are not
- * ceremony.
+ * 🔴 THIS WAS THE FIRST ENDPOINT IN THE PROJECT THAT SERVES PERSONAL DATA.
+ * The catalogue is public and the cart is anonymous. (`/auth/session` was a
+ * bare boolean when this was written; since ISSUE-089 it also returns the
+ * signed-in caller's OWN firstName and email, no-store — see auth.ts. That
+ * does not loosen anything here: this route still serves the fuller record —
+ * phone, address — and still refuses everything below.) The rules that follow
+ * are not ceremony.
  *
  * 🔴 THE SESSION IS THE ONLY IDENTITY. `req.session.userId` selects the row —
  * there is no `:id` parameter, no query string, and no body field that can
@@ -24,9 +26,12 @@ import { createRequireActiveShopper } from './requireActiveShopper.js'
  * session outlives the account row it names — `requireAdmin` makes the same
  * check for the same reason, and this is the shopper-side counterpart.
  *
- * ⚠️ EMAIL IS DELIBERATELY NOT RETURNED. Checkout does not need it: the
- * confirmation goes to the address on the account, chosen server-side. Sending
- * it would put an identifier on the wire for a screen that has no use for it.
+ * ⚠️ EMAIL IS STILL DELIBERATELY NOT RETURNED HERE. Checkout does not need
+ * it: the confirmation goes to the address on the account, chosen
+ * server-side. ISSUE-089 later put the email on `/auth/session` for the
+ * header's "signed in as" — a screen that DOES use it — which is the rule
+ * applied, not the rule broken: each response carries what its screen needs
+ * and nothing more.
  */
 
 export type AccountRouterDeps = {

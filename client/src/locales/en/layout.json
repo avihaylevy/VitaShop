@@ -20,6 +20,7 @@
     "signInCta": "Sign in",
     "registerCta": "Create account",
     "myAccount": "My account",
+    "signedInAs": "Signed in as:",
     "menuLabel": "Account menu",
     "signOut": "Sign out",
     "guestGreeting": "Not signed in",

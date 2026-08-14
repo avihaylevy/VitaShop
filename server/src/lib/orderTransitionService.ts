@@ -42,6 +42,22 @@ export type ApplyTransitionInput = {
    * recorded as the system's.
    */
   actorUserId?: string | null
+  /**
+   * ISSUE-103 — REQ-F-047's tracking number, written ATOMICALLY with the move
+   * so an order can never be `shipped` in one write and tracked in another
+   * that failed.
+   *
+   * 🔴 ONLY MEANINGFUL WHEN `to === 'shipped'` — the moment a courier hands
+   * one over. The ROUTE enforces that pairing (400 before this service runs);
+   * this service additionally ignores it on any other target rather than
+   * writing tracking data onto a cancellation.
+   *
+   * ⚠️ Optional even for `shipped`: REQ-F-047 says "where one exists".
+   * A RETRY of an already-shipped order hits the `from === to` short-circuit
+   * and writes nothing — correcting a wrong tracking number is deliberate
+   * M-010 work, not a side effect of replaying a transition.
+   */
+  trackingNumber?: string
 }
 
 export type ApplyTransitionResult =
@@ -168,7 +184,14 @@ export async function applyTransition(
     // nothing, and a throw is indistinguishable from a real database failure.
     const moved = await tx.order.updateMany({
       where: { id: orderId, status: from },
-      data: { status: to },
+      data: {
+        status: to,
+        // ISSUE-103: the tracking number rides the SAME guarded write as the
+        // status, so a lost race writes neither. Shipped-only — see the input.
+        ...(to === 'shipped' && typeof input.trackingNumber === 'string' && input.trackingNumber !== ''
+          ? { trackingNumber: input.trackingNumber }
+          : {}),
+      },
     })
     if (moved.count !== 1) {
       // Someone moved it in between, and the caller re-reads.

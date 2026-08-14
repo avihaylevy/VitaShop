@@ -3,7 +3,6 @@
     "title": "עגלת הקניות",
     "summary_one": "פריט אחד בעגלה",
     "summary_two": "שני פריטים בעגלה",
-    "summary_many": "{{count}} פריטים בעגלה",
     "summary_other": "{{count}} פריטים בעגלה",
     "backToCatalog": "המשך קנייה",
     "checkoutCta": "למעבר לתשלום"

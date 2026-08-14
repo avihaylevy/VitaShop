@@ -132,7 +132,30 @@ describe('🔴 a MISSING base URL must fail, not request a wrong one', () => {
      * the guest one, and the ROLE IS NULL rather than absent: a caller reading
      * `role` must never get `undefined` and treat it as a value.
      */
-    expect(await fetchSession()).toEqual({ authenticated: false, role: null })
+    expect(await fetchSession()).toEqual({ authenticated: false, role: null, firstName: null, email: null })
+  })
+})
+
+describe('ISSUE-089 — fetchSession carries the identity, validated', () => {
+  it('passes through a well-formed firstName and email', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ authenticated: true, role: 'customer', firstName: 'Avi', email: 'a@b.test' }),
+    } as unknown as Response)
+    expect(await fetchSession()).toEqual({
+      authenticated: true, role: 'customer', firstName: 'Avi', email: 'a@b.test',
+    })
+  })
+
+  it('a missing or malformed identity reads as null, never as garbage in the header', async () => {
+    // The server's fail-closed branch omits both; a non-string must not render.
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ authenticated: true, firstName: 42, email: '   ' }),
+    } as unknown as Response)
+    expect(await fetchSession()).toEqual({
+      authenticated: true, role: null, firstName: null, email: null,
+    })
   })
 })
 

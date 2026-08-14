@@ -48,6 +48,13 @@ const ADMIN_TARGETS: readonly OrderStatusName[] = ['processing', 'shipped', 'del
 const ADMIN_ORDERS_PAGE_SIZE = 25
 
 /**
+ * ISSUE-103. Generous — real courier references run 10–35 characters — while
+ * still refusing a pasted paragraph from reaching a column the order-detail
+ * screen renders verbatim.
+ */
+const TRACKING_NUMBER_MAX_LENGTH = 64
+
+/**
  * MILESTONE-008 Checkpoint G3 review — the sample and the batch, named.
  *
  * 🔴 THESE WERE BOTH AN IMPLICIT 100 inherited from
@@ -325,6 +332,41 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
         return
       }
 
+      /*
+       * ISSUE-103 — REQ-F-047's tracking number finally gets its WRITER.
+       * Optional ("where one exists"), and accepted ONLY alongside the move to
+       * `shipped`: a tracking number on a cancellation is a typo'd request, and
+       * writing it silently would be data nobody asked for on the wrong order.
+       */
+      const rawTracking = body.trackingNumber
+      let trackingNumber: string | undefined
+      if (rawTracking !== undefined && rawTracking !== null) {
+        // ⚠️ APPLICABILITY BEFORE WELL-FORMEDNESS — review finding. The other
+        // order masked the more useful error: a cancel with an oversized
+        // tracking number answered INVALID_TRACKING_NUMBER, and an integrator
+        // who fixed the length was met by a second, different 400.
+        if (target !== 'shipped') {
+          res.status(400).json({
+            error: {
+              code: 'TRACKING_NOT_APPLICABLE',
+              message: 'A tracking number accompanies the move to shipped only.',
+            },
+          })
+          return
+        }
+        const trimmed = typeof rawTracking === 'string' ? rawTracking.trim() : ''
+        if (trimmed === '' || trimmed.length > TRACKING_NUMBER_MAX_LENGTH) {
+          res.status(400).json({
+            error: {
+              code: 'INVALID_TRACKING_NUMBER',
+              message: `trackingNumber must be a non-empty string of at most ${TRACKING_NUMBER_MAX_LENGTH} characters.`,
+            },
+          })
+          return
+        }
+        trackingNumber = trimmed
+      }
+
       let result: Awaited<ReturnType<typeof applyTransition>>
       try {
         result = await applyTransition(prisma, {
@@ -332,6 +374,7 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
           to: target as OrderStatusName,
           actor: 'admin',
           actorUserId: adminId,
+          ...(trackingNumber !== undefined ? { trackingNumber } : {}),
         })
       } catch (error) {
         // 🔴 The same reasoning as the shopper's cancel route: unwrapped,

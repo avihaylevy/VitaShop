@@ -63,6 +63,48 @@ export function AdminOrdersPage() {
   /** Which row is asking "are you sure?" — cancellation is irreversible. */
   const [confirmingCancel, setConfirmingCancel] = useState<string | null>(null)
   /**
+   * ISSUE-103 — which row is collecting a tracking number for the move to
+   * `shipped`, and the draft value. One row at a time, like the cancel
+   * question; the number is OPTIONAL (REQ-F-047: "where one exists"), so the
+   * confirm goes through with the field empty.
+   */
+  const [shippingRow, setShippingRow] = useState<string | null>(null)
+  const [trackingDraft, setTrackingDraft] = useState('')
+  /**
+   * 🔴 THE SHIP FLOW MOVES FOCUS DELIBERATELY, three times — review finding,
+   * and the exact unmount-on-success family browser-verification.md names.
+   * Opening the panel unmounts the pressed trigger, so focus goes TO the
+   * tracking input (the thing the admin was just asked to fill). Aborting
+   * unmounts the abort button, so focus goes BACK to the re-rendered trigger
+   * (found by [data-ship-trigger] inside the row — Button forwards no ref,
+   * ISSUE-026). Confirming unmounts the whole panel, so focus lands on the
+   * row itself (tabIndex -1) while the existing live region announces the
+   * outcome. Without this, all three paths dropped focus to <body>.
+   */
+  const trackingInputRef = useRef<HTMLInputElement>(null)
+  const rowRefs = useRef(new Map<string, HTMLLIElement>())
+  const previousShippingRow = useRef<string | null>(null)
+  const shipCloseIntent = useRef<'abort' | 'confirm' | null>(null)
+
+  useEffect(() => {
+    const previous = previousShippingRow.current
+    previousShippingRow.current = shippingRow
+    if (shippingRow !== null) {
+      trackingInputRef.current?.focus()
+      return
+    }
+    if (previous === null) return
+    const row = rowRefs.current.get(previous)
+    const intent = shipCloseIntent.current
+    shipCloseIntent.current = null
+    if (!row) return
+    if (intent === 'abort') {
+      row.querySelector<HTMLElement>('[data-ship-trigger]')?.focus()
+    } else if (intent === 'confirm') {
+      row.focus()
+    }
+  }, [shippingRow])
+  /**
    * Announced to assistive tech; see the live region below.
    *
    * 🔴 THE NONCE IS LOAD-BEARING. A live region announces a CHANGE in its
@@ -200,8 +242,9 @@ export function AdminOrdersPage() {
     return failureText(outcome.failure, t)
   }
 
-  async function move(orderId: string, to: OrderStatusName) {
+  async function move(orderId: string, to: OrderStatusName, trackingNumber?: string) {
     setConfirmingCancel(null)
+    setShippingRow(null)
     setBusy((current) => ({ ...current, [orderId]: true }))
     setOutcomes((current) => {
       const next = { ...current }
@@ -209,7 +252,7 @@ export function AdminOrdersPage() {
       return next
     })
 
-    const result = await transitionOrder(orderId, to)
+    const result = await transitionOrder(orderId, to, trackingNumber)
 
     // 🔴 Clear only THIS row. Clearing unconditionally re-enabled whichever
     // row happened to be busy, which is not the one that just finished.
@@ -367,7 +410,14 @@ export function AdminOrdersPage() {
                 return (
                   <li
                     key={order.id}
-                    className="flex flex-col gap-2 rounded-card border border-border-card p-4"
+                    // -1: a deliberate landing target after the ship panel
+                    // closes on confirm — NOT in anyone's tab order.
+                    tabIndex={-1}
+                    ref={(element) => {
+                      if (element) rowRefs.current.set(order.id, element)
+                      else rowRefs.current.delete(order.id)
+                    }}
+                    className={`${FOCUS_RING} flex flex-col gap-2 rounded-card border border-border-card p-4`}
                   >
                     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
                       <span className="font-semibold text-text-ink" dir="ltr">
@@ -414,6 +464,53 @@ export function AdminOrdersPage() {
                           <Button onClick={() => setConfirmingCancel(null)}>{t('row.cancelAbort')}</Button>
                         </div>
                       </div>
+                    ) : shippingRow === order.id ? (
+                      /*
+                       * ISSUE-103 — the tracking number's ONLY writer in the
+                       * system. Optional, so confirming with the field empty
+                       * ships without one ("where one exists", REQ-F-047).
+                       */
+                      <div className="flex flex-col gap-2 rounded-card border border-border-card p-3">
+                        <label htmlFor={`tracking-${order.id}`} className="text-sm text-text-ink">
+                          {t('row.trackingLabel')}
+                        </label>
+                        {/*
+                          dir="ltr": a courier reference is LTR data; typed
+                          inside the Hebrew page it would otherwise render with
+                          its digits and letters reordered around the caret.
+                        */}
+                        <input
+                          id={`tracking-${order.id}`}
+                          ref={trackingInputRef}
+                          dir="ltr"
+                          maxLength={64}
+                          autoComplete="off"
+                          value={trackingDraft}
+                          onChange={(event) => setTrackingDraft(event.target.value)}
+                          className={`${FOCUS_RING} w-full max-w-xs rounded-card border border-border-card bg-transparent px-2 py-1 text-sm text-text-ink`}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="primary"
+                            loading={rowBusy}
+                            disabled={rowBusy}
+                            onClick={() => {
+                              shipCloseIntent.current = 'confirm'
+                              void move(order.id, 'shipped', trackingDraft)
+                            }}
+                          >
+                            {t('row.move', { status: statusLabel('shipped') })}
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              shipCloseIntent.current = 'abort'
+                              setShippingRow(null)
+                            }}
+                          >
+                            {t('row.shipAbort')}
+                          </Button>
+                        </div>
+                      </div>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
                         {order.allowedTransitions.length === 0 ? (
@@ -427,11 +524,25 @@ export function AdminOrdersPage() {
                               // alone announces nothing about being in flight.
                               loading={rowBusy}
                               disabled={rowBusy}
-                              onClick={() =>
-                                target === 'cancelled'
-                                  ? setConfirmingCancel(order.id)
-                                  : void move(order.id, target)
-                              }
+                              // The abort-path focus target: Button forwards
+                              // no ref (ISSUE-026), so the effect finds the
+                              // trigger by attribute inside the row.
+                              {...(target === 'shipped' ? { 'data-ship-trigger': true } : {})}
+                              onClick={() => {
+                                if (target === 'cancelled') {
+                                  setShippingRow(null)
+                                  setConfirmingCancel(order.id)
+                                } else if (target === 'shipped') {
+                                  // The tracking question — ISSUE-103. One row
+                                  // at a time, and a fresh draft each time.
+                                  // Focus moves to the input via the effect.
+                                  setConfirmingCancel(null)
+                                  setTrackingDraft('')
+                                  setShippingRow(order.id)
+                                } else {
+                                  void move(order.id, target)
+                                }
+                              }}
                             >
                               {t('row.move', { status: statusLabel(target) })}
                             </Button>

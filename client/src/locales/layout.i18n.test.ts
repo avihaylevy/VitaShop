@@ -83,7 +83,7 @@ describe('layout namespace — the shipped locale pair', () => {
     const he = indexKeys(HE).get('cart.ariaLabelWithCount')!
     const en = indexKeys(EN).get('cart.ariaLabelWithCount')!
 
-    expect([...he.categories].sort()).toEqual(['many', 'one', 'other', 'two'])
+    expect([...he.categories].sort()).toEqual(['one', 'other', 'two'])
     expect([...en.categories].sort()).toEqual(['one', 'other'])
     expect(he.hasBareKey).toBe(false)
     expect(en.hasBareKey).toBe(false)

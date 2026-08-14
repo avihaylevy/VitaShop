@@ -25,7 +25,6 @@
     "newArrivalsEmpty": "אין עדיין מוצרים חדשים להצגה.",
     "newArrivalsCount_one": "מוצר חדש אחד",
     "newArrivalsCount_two": "שני מוצרים חדשים",
-    "newArrivalsCount_many": "{{count}} מוצרים חדשים",
     "newArrivalsCount_other": "{{count}} מוצרים חדשים"
   },
   "catalogPage": {
@@ -44,7 +43,6 @@
     "filteredEmptyFiltersMessage": "לא נמצאו מוצרים התואמים לסינון שנבחר.",
     "resultCount_one": "נמצא מוצר אחד",
     "resultCount_two": "נמצאו שני מוצרים",
-    "resultCount_many": "נמצאו <n>{{count}}</n> מוצרים",
     "resultCount_other": "נמצאו <n>{{count}}</n> מוצרים"
   },
   "productDetails": {
@@ -92,7 +90,6 @@
     "ceilingHint": "אפשר לבחור עד {{max}} ערכים בקבוצה זו.",
     "activeCount_one": "מסנן אחד פעיל",
     "activeCount_two": "שני מסננים פעילים",
-    "activeCount_many": "{{count}} מסננים פעילים",
     "activeCount_other": "{{count}} מסננים פעילים"
   },
   "sort": {
@@ -115,11 +112,9 @@
     "note": "אלו הצעות, לא תוצאות החיפוש.",
     "count_one": "מוצגת הצעה אחת",
     "count_two": "מוצגות שתי הצעות",
-    "count_many": "מוצגות {{count}} הצעות",
     "count_other": "מוצגות {{count}} הצעות"
   },
   "addedToCart_one": "{{product}} נוסף לעגלה. בעגלה פריט אחד.",
   "addedToCart_two": "{{product}} נוסף לעגלה. בעגלה שני פריטים.",
-  "addedToCart_many": "{{product}} נוסף לעגלה. בעגלה {{count}} פריטים.",
   "addedToCart_other": "{{product}} נוסף לעגלה. בעגלה {{count}} פריטים."
 }

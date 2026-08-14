@@ -97,11 +97,11 @@ async function signIn(email: string): Promise<string> {
   return set.split(';')[0] ?? ''
 }
 
-function patchStatus(orderId: string, status: string, cookie?: string) {
+function patchStatus(orderId: string, status: string, cookie?: string, extraBody?: Record<string, unknown>) {
   return fetch(`${baseUrl}/api/admin/orders/${orderId}/status`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, ...(extraBody ?? {}) }),
   })
 }
 
@@ -434,5 +434,96 @@ describe('GET /api/admin/orders', () => {
     const body = await list('?page=9999', await signIn(ADMIN))
     expect(body.status).toBe(200)
     expect(((await body.json()) as { orders: unknown[] }).orders).toHaveLength(0)
+  })
+})
+
+/**
+ * ISSUE-103 — REQ-F-047's tracking number gets its WRITER. Until this, the
+ * column existed, the detail route returned it, the screen rendered it — and
+ * nothing in the running system could ever make it non-null.
+ */
+describe('PATCH /:id/status — the tracking number (ISSUE-103)', () => {
+  async function trackingOf(orderId: string): Promise<string | null> {
+    const o = await prisma.order.findUniqueOrThrow({
+      where: { id: orderId }, select: { trackingNumber: true },
+    })
+    return o.trackingNumber
+  }
+
+  it('🔴 shipping with a tracking number WRITES it, trimmed, atomically with the move', async () => {
+    const orderId = await placeOrder('adm-track', 1)
+    await setStatus(orderId, 'processing')
+    const cookie = await signIn(ADMIN)
+
+    const r = await patchStatus(orderId, 'shipped', cookie, { trackingNumber: '  RR123456789IL  ' })
+
+    expect(r.status).toBe(200)
+    expect(await r.json()).toMatchObject({ status: 'shipped', changed: true })
+    expect(await trackingOf(orderId)).toBe('RR123456789IL')
+  })
+
+  it('shipping WITHOUT a tracking number is still fine — REQ-F-047 says "where one exists"', async () => {
+    const orderId = await placeOrder('adm-track-none', 1)
+    await setStatus(orderId, 'processing')
+    const cookie = await signIn(ADMIN)
+
+    const r = await patchStatus(orderId, 'shipped', cookie)
+
+    expect(r.status).toBe(200)
+    expect(await trackingOf(orderId)).toBeNull()
+  })
+
+  it('🔴 a tracking number on any OTHER target is 400, and nothing moves', async () => {
+    // A tracking number on a cancellation is a typo'd request; writing it
+    // silently puts courier data on the wrong order forever.
+    const orderId = await placeOrder('adm-track-wrong', 1)
+    await setStatus(orderId, 'paid')
+    const cookie = await signIn(ADMIN)
+
+    const r = await patchStatus(orderId, 'processing', cookie, { trackingNumber: 'RR1' })
+
+    expect(r.status).toBe(400)
+    expect(((await r.json()) as { error: { code: string } }).error.code).toBe('TRACKING_NOT_APPLICABLE')
+
+    // Applicability wins over well-formedness (review finding): even a BLANK
+    // tracking number on a non-shipped target names the real problem — the
+    // pairing — not the string.
+    const blank = await patchStatus(orderId, 'processing', cookie, { trackingNumber: '   ' })
+    expect(blank.status).toBe(400)
+    expect(((await blank.json()) as { error: { code: string } }).error.code).toBe('TRACKING_NOT_APPLICABLE')
+    const o = await prisma.order.findUniqueOrThrow({ where: { id: orderId }, select: { status: true } })
+    expect(o.status).toBe('paid')
+    expect(await trackingOf(orderId)).toBeNull()
+  })
+
+  it('an empty or oversized tracking number is 400 INVALID_TRACKING_NUMBER, and nothing moves', async () => {
+    const orderId = await placeOrder('adm-track-bad', 1)
+    await setStatus(orderId, 'processing')
+    const cookie = await signIn(ADMIN)
+
+    for (const bad of ['   ', 'x'.repeat(65), 7]) {
+      const r = await patchStatus(orderId, 'shipped', cookie, { trackingNumber: bad })
+      expect(r.status, String(bad)).toBe(400)
+      expect(((await r.json()) as { error: { code: string } }).error.code).toBe('INVALID_TRACKING_NUMBER')
+    }
+    const o = await prisma.order.findUniqueOrThrow({ where: { id: orderId }, select: { status: true } })
+    expect(o.status).toBe('processing')
+    expect(await trackingOf(orderId)).toBeNull()
+  })
+
+  it('a lost concurrency race writes NO tracking number — it rides the guarded update', async () => {
+    // The service short-circuits `from === to` before the write, so a replay of
+    // `shipped` with a DIFFERENT number changes nothing. Correcting a tracking
+    // number is deliberate M-010 work, not a side effect of a retry.
+    const orderId = await placeOrder('adm-track-replay', 1)
+    await setStatus(orderId, 'processing')
+    const cookie = await signIn(ADMIN)
+
+    expect((await patchStatus(orderId, 'shipped', cookie, { trackingNumber: 'FIRST-1' })).status).toBe(200)
+    const replay = await patchStatus(orderId, 'shipped', cookie, { trackingNumber: 'SECOND-2' })
+
+    expect(replay.status).toBe(200)
+    expect(((await replay.json()) as { changed: boolean }).changed).toBe(false)
+    expect(await trackingOf(orderId)).toBe('FIRST-1')
   })
 })

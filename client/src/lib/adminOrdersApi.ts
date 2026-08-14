@@ -119,10 +119,20 @@ export async function requestAdminOrders(page = 1): Promise<AdminOrdersResult> {
 export async function transitionOrder(
   orderId: string,
   status: OrderStatusName,
+  /**
+   * ISSUE-103 — sent only with the move to `shipped`, and only when the admin
+   * typed one; the server refuses it on any other target. Trimmed here so a
+   * pasted value with whitespace does not read as "present" while empty.
+   */
+  trackingNumber?: string,
 ): Promise<TransitionResult> {
+  const trimmedTracking = trackingNumber?.trim() ?? ''
   const raw = await call(`/api/admin/orders/${encodeURIComponent(orderId)}/status`, {
     method: 'PATCH',
-    body: { status },
+    body: {
+      status,
+      ...(status === 'shipped' && trimmedTracking !== '' ? { trackingNumber: trimmedTracking } : {}),
+    },
   })
   if (raw === null) return { ok: false, failure: { kind: 'offline' } }
 

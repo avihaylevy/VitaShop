@@ -22,7 +22,7 @@ import { useSession } from '../../state/SessionContext'
  */
 export function AccountMenu() {
   const { t } = useTranslation('layout')
-  const { isSignedIn, isAdmin, signOut } = useSession()
+  const { isSignedIn, isAdmin, firstName, email, signOut } = useSession()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -86,11 +86,47 @@ export function AccountMenu() {
       </button>
 
       {open && (
-        <div
-          role="menu"
-          aria-label={t('account.menuLabel')}
-          className="absolute end-0 top-full z-[var(--z-dropdown)] mt-2 w-56 rounded-card border border-border-hairline bg-well p-2 shadow-[0_8px_24px_rgba(31,37,46,0.12)]"
-        >
+        /*
+         * 🔴 THE WRAPPER IS NOT THE MENU — review finding on ISSUE-089's
+         * first draft. The identity block sat INSIDE role="menu" as
+         * role="presentation", but presentation is not inherited: its <p>
+         * children stayed in the accessibility tree as non-menuitem children
+         * of a menu — an invalid owned-element structure that screen readers
+         * commonly SKIP in menu-reading mode. The block ISSUE-089 exists to
+         * deliver would have been inaudible to exactly its audience. The
+         * popup styling lives here; role="menu" wraps ONLY the menuitems.
+         */
+        <div className="absolute end-0 top-full z-[var(--z-dropdown)] mt-2 w-56 rounded-card border border-border-hairline bg-well p-2 shadow-[0_8px_24px_rgba(31,37,46,0.12)]">
+          {isSignedIn && (firstName !== null || email !== null) && (
+            /*
+              🔴 ISSUE-089 — WHO is signed in, finally said out loud. Before
+              this, signing in changed one label ("התחברות" -> "החשבון שלי")
+              and that was the entire signal.
+              ⚠️ Rendered only when the server actually sent an identity —
+              its fail-closed branch omits it, and a placeholder would be
+              the interface inventing who you are.
+            */
+            <div className="mb-2 border-b border-border-hairline px-3 pb-2 pt-1">
+              <p className="text-xs text-text-muted">{t('account.signedInAs')}</p>
+              {firstName !== null && (
+                <p className="truncate text-sm font-medium text-text-ink">{firstName}</p>
+              )}
+              {email !== null && (
+                /*
+                 * The ISSUE-084 pattern: the OUTER element inherits the
+                 * page direction and aligns by it; only the INNER span is
+                 * dir="ltr", so the @-parts keep their order without the
+                 * block being pinned to the left in Hebrew.
+                 */
+                <p className="truncate text-xs text-text-muted">
+                  <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                    {email}
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
+          <div role="menu" aria-label={t('account.menuLabel')}>
           {isSignedIn ? (
             <>
               <Link
@@ -166,6 +202,7 @@ export function AccountMenu() {
               </Link>
             </>
           )}
+          </div>
         </div>
       )}
     </div>

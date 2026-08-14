@@ -45,8 +45,14 @@ export type PromotionOutcome = {
    *
    * The two reasons are separated because they read differently to a shopper:
    * INACTIVE means we no longer sell it; UNAVAILABLE means it is out of stock.
+   *
+   * 🔴 ISSUE-073 — BOTH NAMES RIDE ALONG. A dropped line is no longer in any
+   * cart, so the client has NOTHING to resolve the slug against and was
+   * showing the slug itself ("truforme-briamil-mini-60") in a shopper-facing
+   * sentence. The product row is already in hand right here; bilingual,
+   * because the shopper's language is the client's decision, not this one's.
    */
-  dropped: { slug: string; reason: DropReason }[]
+  dropped: { slug: string; nameHe: string; nameEn: string; reason: DropReason }[]
 }
 
 export async function promoteGuestCart(
@@ -82,12 +88,12 @@ export async function promoteGuestCart(
     existingAccountCart ?? (await tx.cart.create({ data: { userId }, select: { id: true } }))
 
   const clampedSlugs: string[] = []
-  const dropped: { slug: string; reason: DropReason }[] = []
+  const dropped: { slug: string; nameHe: string; nameEn: string; reason: DropReason }[] = []
 
   for (const line of guestCart.items) {
     const product = await tx.product.findUnique({
       where: { id: line.productId },
-      select: { slug: true, stockQuantity: true, isActive: true },
+      select: { slug: true, nameHe: true, nameEn: true, stockQuantity: true, isActive: true },
     })
     if (!product) continue
 
@@ -95,7 +101,7 @@ export async function promoteGuestCart(
     // added through any other path either (the M-005 precedent), so carrying it
     // would make registration or login the one way to acquire it.
     if (!product.isActive) {
-      dropped.push({ slug: product.slug, reason: 'INACTIVE' })
+      dropped.push({ slug: product.slug, nameHe: product.nameHe, nameEn: product.nameEn, reason: 'INACTIVE' })
       continue
     }
 
@@ -110,7 +116,7 @@ export async function promoteGuestCart(
       : clampCartQuantity(line.quantity, product.stockQuantity)
 
     if (!clamped.ok) {
-      dropped.push({ slug: product.slug, reason: 'UNAVAILABLE' })
+      dropped.push({ slug: product.slug, nameHe: product.nameHe, nameEn: product.nameEn, reason: 'UNAVAILABLE' })
       continue
     }
 

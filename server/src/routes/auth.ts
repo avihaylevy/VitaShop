@@ -266,10 +266,12 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
   // A client cannot read an HttpOnly cookie, and inferring auth state from a
   // login response is lost on the next refresh.
   //
-  // 🔴 It returns a BOOLEAN AND NOTHING ELSE. No email, no id, no status. An
-  // unauthenticated caller learns only about their own request, which they
-  // already knew; there is no account to enumerate here because the answer
-  // does not depend on any address the caller supplies.
+  // 🔴 It began as a BOOLEAN AND NOTHING ELSE. DEC-071 added the role and
+  // ISSUE-089 added the caller's own firstName/email — but only for a
+  // SIGNED-IN caller. An unauthenticated caller still learns only about their
+  // own request, which they already knew; there is no account to enumerate
+  // here because the answer does not depend on any address the caller
+  // supplies.
   /**
    * 🔴 DEC-071 AMENDS DEC-065 — the response now carries the ROLE for a
    * SIGNED-IN caller, and nothing else changes.
@@ -291,8 +293,17 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
    * `{ authenticated: false }` — no role key at all — so the shape discloses
    * nothing to someone who is not signed in, and there is still no address
    * here to enumerate.
+   *
+   * 🔴 ISSUE-089 — the signed-in answer now also carries `firstName` and
+   * `email`, because NOTHING on any page said who is signed in: the header
+   * changed one label and that was the whole signal. This is the caller's OWN
+   * identity, told only to the session that already owns it — the anonymous
+   * shape is unchanged, and there is still nothing here another account could
+   * enumerate. `Cache-Control: no-store` accompanies it: the boolean was
+   * harmless to cache, a per-user identity is not.
    */
   router.get('/auth/session', limit.session, async (req, res) => {
+    res.set('Cache-Control', 'no-store')
     const userId = req.session?.userId
     if (typeof userId !== 'string' || userId.length === 0) {
       res.json({ authenticated: false })
@@ -307,12 +318,41 @@ export function createAuthRouter(deps: AuthRouterDeps): Router {
      * answers `authenticated: false` rather than inventing a role.
      */
     try {
-      const user = await deps.prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+      const user = await deps.prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, status: true, firstName: true, email: true },
+      })
       if (!user) {
         res.json({ authenticated: false })
         return
       }
-      res.json({ authenticated: true, role: user.role })
+      /*
+       * 🔴 STATUS IS CHECKED, NOT JUST EXISTENCE — review finding on this
+       * route. This project DISABLES accounts rather than deleting rows, so
+       * the `!user` branch alone is effectively dead as a revocation check: a
+       * disabled admin with a live cookie would keep seeing "Manage orders"
+       * (every click a 403) and the header would keep naming them — the
+       * interface lying about who is signed in. `requireActiveShopper`
+       * destroys such sessions on its routes; this route answers the same
+       * thing it would after that destruction.
+       */
+      if (user.status === 'disabled') {
+        res.json({ authenticated: false })
+        return
+      }
+      /*
+       * ⚠️ THE ROLE IS GRANTED ONLY TO `active` — the same condition
+       * `requireAdmin` applies — so a pending-verification admin is never
+       * offered a link the guard would refuse. The IDENTITY is included for
+       * any signed-in, non-disabled caller: it is their own, and a
+       * pending-verification shopper is legitimately signed in.
+       */
+      res.json({
+        authenticated: true,
+        ...(user.status === 'active' ? { role: user.role } : {}),
+        firstName: user.firstName,
+        email: user.email,
+      })
     } catch (error) {
       console.error('[auth] reading the session role failed', error)
       /*

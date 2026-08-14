@@ -201,6 +201,114 @@ describe('moving an order', () => {
     })
   })
 
+  describe('ISSUE-103 — shipping asks for a tracking number', () => {
+    const processingRow = () => row({ status: 'processing', allowedTransitions: ['shipped', 'cancelled'] })
+
+    it('does NOT send the PATCH on the first click — it opens the tracking question', async () => {
+      const patches = routed(page([processingRow()]))
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+
+      expect(await screen.findByLabelText(/tracking number \(optional\)/i)).toBeTruthy()
+      expect(patches).toHaveLength(0)
+    })
+
+    it('🔴 a typed tracking number rides the PATCH body', async () => {
+      const patches = routed(page([processingRow()]), {
+        status: 200,
+        body: { orderId: 'o1', status: 'shipped', changed: true, restoredStock: false },
+      })
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.change(await screen.findByLabelText(/tracking number \(optional\)/i), {
+        target: { value: ' RR123456789IL ' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /move to shipped/i }))
+
+      await waitFor(() => expect(patches).toHaveLength(1))
+      // Trimmed by the transport, so whitespace never reads as a value.
+      expect(JSON.parse(String(patches[0]!.init.body))).toEqual({
+        status: 'shipped',
+        trackingNumber: 'RR123456789IL',
+      })
+    })
+
+    it('confirming with the field EMPTY ships without one — REQ-F-047 says "where one exists"', async () => {
+      const patches = routed(page([processingRow()]), {
+        status: 200,
+        body: { orderId: 'o1', status: 'shipped', changed: true, restoredStock: false },
+      })
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(screen.getByRole('button', { name: /move to shipped/i }))
+
+      await waitFor(() => expect(patches).toHaveLength(1))
+      // 🔴 No `trackingNumber` key AT ALL — an empty string would be a 400.
+      expect(JSON.parse(String(patches[0]!.init.body))).toEqual({ status: 'shipped' })
+    })
+
+    it('backing out sends nothing and restores the buttons', async () => {
+      const patches = routed(page([processingRow()]))
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /^back$/i }))
+
+      expect(await screen.findByRole('button', { name: /move to cancelled/i })).toBeTruthy()
+      expect(screen.queryByLabelText(/tracking number/i)).toBeNull()
+      expect(patches).toHaveLength(0)
+    })
+
+    it('🔴 opening the tracking question moves focus TO the input — the pressed trigger unmounts', async () => {
+      // The unmount-on-action family from browser-verification.md: without a
+      // deliberate move, focus fell to <body> and the admin tabbed from the
+      // top of the document to reach the field they were just asked to fill.
+      routed(page([processingRow()]))
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+
+      const input = await screen.findByLabelText(/tracking number \(optional\)/i)
+      expect(document.activeElement).toBe(input)
+    })
+
+    it('🔴 backing out returns focus to the re-rendered ship trigger', async () => {
+      routed(page([processingRow()]))
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /^back$/i }))
+
+      const trigger = await screen.findByRole('button', { name: /move to shipped/i })
+      expect(document.activeElement).toBe(trigger)
+    })
+
+    it('🔴 confirming lands focus on the ROW — the whole panel unmounts', async () => {
+      routed(page([processingRow()]), {
+        status: 200,
+        body: { orderId: 'o1', status: 'shipped', changed: true, restoredStock: false },
+      })
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(screen.getByRole('button', { name: /move to shipped/i }))
+
+      const rows = await screen.findAllByRole('listitem')
+      await waitFor(() => expect(document.activeElement).toBe(rows[0]))
+    })
+
+    it('a STALE draft never leaks into the next order — reopening starts empty', async () => {
+      const patches = routed(page([processingRow()]))
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.change(await screen.findByLabelText(/tracking number \(optional\)/i), {
+        target: { value: 'STALE-1' },
+      })
+      fireEvent.click(await screen.findByRole('button', { name: /^back$/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+
+      const input = (await screen.findByLabelText(/tracking number \(optional\)/i)) as HTMLInputElement
+      expect(input.value).toBe('')
+      expect(patches).toHaveLength(0)
+    })
+  })
+
   it('🔴 a second row cannot be re-enabled by the FIRST row-s response', async () => {
     // `setBusyRow(null)` cleared whichever row was busy rather than the one
     // that finished, so B's buttons came back while B's PATCH was in flight —

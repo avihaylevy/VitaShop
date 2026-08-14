@@ -139,11 +139,15 @@ export const AUTH_RATE_LIMITS = {
   //
   // It is limited at all because "every auth route is limited" is a property
   // that can be CHECKED (see the coverage test); "every auth route except the
-  // ones judged cheap" is not. This one is cheap — a session-store read
-  // returning a boolean, no argon2, no write — but it is still an
-  // unauthenticated endpoint reaching Postgres, and it was added in Checkpoint
-  // H and slipped past G's principle, which is exactly the gap the coverage
-  // test now closes.
+  // ones judged cheap" is not. ⚠️ "Cheap" has drifted since this was written
+  // and the ceiling was REVISITED, not inherited: the route began as a
+  // session-store read returning a boolean, DEC-071 added a per-request
+  // `user.findUnique` for the role, and ISSUE-089 widened that select to the
+  // caller's own identity — so an unauthenticated caller can now drive an
+  // indexed single-row Postgres read at up to 16/minute/IP. Kept at 240:
+  // still no argon2, no write, one primary-key lookup — and StrictMode's
+  // double-mount plus per-view calls need the headroom. If this route ever
+  // grows a heavier query, this number is the thing to re-open.
   session: { windowMs: 15 * MINUTE, limit: 240 },
 } as const
 

@@ -101,13 +101,21 @@ export function LoginPage() {
 
   /**
    * A clamped product is still IN the cart, so its name is resolvable from the
-   * refreshed cart. A DROPPED one is not — it was removed — so only its slug
-   * exists to show. Showing the slug is worse reading than a name and is
-   * deliberately preferred to inventing one or saying nothing: see ISSUE-073.
+   * refreshed cart. A DROPPED one is not — it was removed — which is why the
+   * server now sends the names WITH the report (ISSUE-073): before that, the
+   * shopper was shown the slug itself. The slug remains the last resort for a
+   * report that somehow arrived without names — better machine-readable truth
+   * than an invented name or silence.
    */
   const nameForSlug = (slug: string) => {
     const line = cart.items.find((item) => item.slug === slug)
     return line ? (i18n.language === 'he' ? line.nameHe : line.nameEn) : slug
+  }
+  const nameForDropped = (entry: { slug: string; nameHe?: string; nameEn?: string }) => {
+    // Type-checked AT USE, not at the transport guard — a malformed name must
+    // cost the shopper the name, never the report (review finding).
+    const name = i18n.language === 'he' ? entry.nameHe : entry.nameEn
+    return typeof name === 'string' && name.trim() !== '' ? name : nameForSlug(entry.slug)
   }
 
   if (mergeReport) {
@@ -124,12 +132,12 @@ export function LoginPage() {
             <p>{tCart('merge.clamped', { products: mergeReport.clampedSlugs.map(nameForSlug).join(', ') })}</p>
           )}
           {inactive.length > 0 && (
-            <p>{tCart('merge.droppedInactive', { products: inactive.map((e) => nameForSlug(e.slug)).join(', ') })}</p>
+            <p>{tCart('merge.droppedInactive', { products: inactive.map(nameForDropped).join(', ') })}</p>
           )}
           {unavailable.length > 0 && (
             <p>
               {tCart('merge.droppedUnavailable', {
-                products: unavailable.map((e) => nameForSlug(e.slug)).join(', '),
+                products: unavailable.map(nameForDropped).join(', '),
               })}
             </p>
           )}

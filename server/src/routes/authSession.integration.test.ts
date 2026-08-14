@@ -116,6 +116,32 @@ describe('GET /api/auth/session', () => {
     expect(body.role).toBe('customer')
   })
 
+  it('🔴 a DISABLED account with a live cookie is answered as NOT signed in — review finding', async () => {
+    // This project disables accounts rather than deleting rows, so `!user`
+    // alone is a dead revocation branch. Without the status check, a disabled
+    // admin's browser keeps drawing "Manage orders" and naming them in the
+    // header while every request 403s.
+    const cookie = await signIn(SHOPPER)
+    try {
+      await prisma.user.update({ where: { email: SHOPPER }, data: { status: 'disabled' } })
+      const body = (await (await session(cookie)).json()) as Record<string, unknown>
+      expect(body.authenticated).toBe(false)
+      // And NOTHING else — no role, no identity for an account that is shut.
+      expect(Object.keys(body)).toEqual(['authenticated'])
+    } finally {
+      await prisma.user.update({ where: { email: SHOPPER }, data: { status: 'active' } })
+    }
+  })
+
+  it('🔴 ISSUE-089 — tells a signed-in caller WHO they are, and never caches it', async () => {
+    const response = await session(await signIn(SHOPPER))
+    // A per-user identity must not be cacheable; the old boolean was harmless.
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    const body = (await response.json()) as Record<string, unknown>
+    expect(body.firstName).toBe('Session')
+    expect(body.email).toBe(SHOPPER)
+  })
+
   it('🔴 reports an ADMIN as an admin — the whole point of ISSUE-097', async () => {
     const body = (await (await session(await signIn(ADMIN))).json()) as Record<string, unknown>
     expect(body.authenticated).toBe(true)

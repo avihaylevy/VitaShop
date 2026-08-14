@@ -33,9 +33,14 @@ import {
 
 /**
  * Deliberately exercises: a non-plural base ("greeting", carries
- * `{{name}}`) and a pluralised base ("itemCount", he: one/two/many/other,
+ * `{{name}}`) and a pluralised base ("itemCount", he: one/two/other,
  * en: one/other, all with `{{count}}` present on every category on both
  * sides) — the minimum shape needed to prove all 9 rules independently.
+ *
+ * ⚠️ ISSUE-099: `many` was removed from the Hebrew side of this fixture
+ * together with the REQUIRED_PLURAL_CATEGORIES row — Hebrew never resolves
+ * it (Intl.PluralRules('he') yields one/two/other), so the fixture carried
+ * a category the validator now correctly rejects.
  */
 function baseFixture(): { he: LocaleTree; en: LocaleTree } {
   return {
@@ -43,7 +48,6 @@ function baseFixture(): { he: LocaleTree; en: LocaleTree } {
       greeting: 'שלום {{name}}',
       itemCount_one: '{{count}} פריט',
       itemCount_two: '{{count}} פריטים',
-      itemCount_many: '{{count}} פריטים',
       itemCount_other: '{{count}} פריטים',
     },
     en: {
@@ -89,7 +93,7 @@ describe('localeIntegrity — the fixture itself is sound', () => {
     const { he } = baseFixture()
     expect(flatten(he).length).toBeGreaterThan(0)
     const index = indexKeys(he)
-    expect([...index.get('itemCount')!.categories].sort()).toEqual(['many', 'one', 'other', 'two'])
+    expect([...index.get('itemCount')!.categories].sort()).toEqual(['one', 'other', 'two'])
     expect(placeholders('{{count}} x')).toEqual(['count'])
     expect(placeholderUnion(he, index, 'itemCount')).toEqual(['count'])
   })
@@ -142,7 +146,7 @@ describe('localeIntegrity — Rule 2 (pluralisation agreement) and Rule 3 (non-p
 })
 
 describe('localeIntegrity — Rule 4 (exact required plural categories)', () => {
-  it.each(['one', 'two', 'many', 'other'])('rejects Hebrew missing itemCount_%s', (category) => {
+  it.each(['one', 'two', 'other'])('rejects Hebrew missing itemCount_%s', (category) => {
     const { he, en } = baseFixture()
     expect(validateNamespacePair(removeKey(he, `itemCount_${category}`), en).join('\n')).toContain(
       `missing "_${category}" in he`,
@@ -161,6 +165,16 @@ describe('localeIntegrity — Rule 4 (exact required plural categories)', () => 
     setKey(he, 'itemCount_few', '{{count}} מס')
 
     expect(validateNamespacePair(he, en)).toEqual(['"itemCount" has unexpected "_few" category in he'])
+  })
+
+  it('🔴 ISSUE-099 — rejects "_many" in Hebrew, the category the table itself used to demand', () => {
+    // CLDR dropped Hebrew's `many`; Intl.PluralRules('he') resolves only
+    // one/two/other, so a `_many` string is dead translation. The old table
+    // MANDATED it — this is the regression test on the corrected row.
+    const { he, en } = baseFixture()
+    setKey(he, 'itemCount_many', '{{count}} פריטים')
+
+    expect(validateNamespacePair(he, en)).toEqual(['"itemCount" has unexpected "_many" category in he'])
   })
 
   it('rejects a plural category English never resolves (exact-array diagnostic)', () => {
@@ -225,13 +239,12 @@ describe('localeIntegrity — Rule 7 (union placeholder parity per base)', () =>
 
   it('rejects a placeholder dropped across EVERY plural category of a pluralised base (union-level mismatch)', () => {
     const { he, en } = baseFixture()
-    // Drop {{count}} from ALL FOUR Hebrew categories — he's union becomes
+    // Drop {{count}} from ALL THREE Hebrew categories — he's union becomes
     // empty of "count" while en's union (via itemCount_other) still has it.
     // Distinct from the per-category Rule 8/9 proofs below: this exercises
     // Rule 7's UNION check on a pluralised base, not a single category.
     setKey(he, 'itemCount_one', 'פריט אחד')
     setKey(he, 'itemCount_two', 'שני פריטים')
-    setKey(he, 'itemCount_many', 'הרבה פריטים')
     setKey(he, 'itemCount_other', 'פריטים')
 
     const errors = validateNamespacePair(he, en)
@@ -254,7 +267,6 @@ function legitimateOmissionFixture(): { he: LocaleTree; en: LocaleTree } {
     he: {
       itemCount_one: 'פריט אחד', // no {{count}} — hardcoded, by design
       itemCount_two: '{{count}} פריטים',
-      itemCount_many: '{{count}} פריטים',
       itemCount_other: '{{count}} פריטים',
     },
     en: {
@@ -277,9 +289,9 @@ describe('localeIntegrity — legitimate per-category placeholder omission (Rule
     const { he, en } = legitimateOmissionFixture()
     // Rule 9's required set is the INTERSECTION of placeholders across every
     // overlap category (here: "one" -> {} and "other" -> {count}). The
-    // intersection with an empty set is empty, so the locale-only "two" and
-    // "many" categories are required to carry NOTHING — even though they
-    // (legitimately) still carry {{count}} themselves. This is the same
+    // intersection with an empty set is empty, so the locale-only "two"
+    // category is required to carry NOTHING — even though it
+    // (legitimately) still carries {{count}} itself. This is the same
     // fixture as the test above; asserted again here as the Rule 9-specific
     // claim, not just Rule 8's.
     expect(validateNamespacePair(he, en)).toEqual([])
@@ -376,55 +388,19 @@ describe('localeIntegrity — Rule 9 (locale-only category checked against the o
     )
   })
 
-  it('rejects {{count}} dropped from itemCount_many (Hebrew-only) independently of itemCount_two', () => {
-    const { he, en } = baseFixture()
-    setKey(he, 'itemCount_many', 'הרבה פריטים')
-
-    const errors = validateNamespacePair(he, en)
-    expect(errors).toContain(
-      '"itemCount_many" in he is missing required placeholder(s) [count] present in every overlapping plural category ("one"/"other") of "itemCount"',
-    )
-  })
 })
 
-describe('localeIntegrity — Rule 9 diagnostic order is deterministic, independent of source-key insertion order', () => {
-  /**
-   * `flatten()`/`indexKeys()` build each base's category `Set` by iterating
-   * the tree's OWN key order (`Object.entries`), so two semantically
-   * identical locale files that merely declare their plural categories in a
-   * different order (a realistic drift — nothing enforces JSON key order)
-   * must still produce byte-identical diagnostics. Before this fix, Rule
-   * 9's locale-only-category loop iterated `entry.categories` (the Set)
-   * directly — insertion-order-dependent — instead of a sorted copy like
-   * Rule 4's equivalent loop already does.
-   */
-  function heWithOrder(categoryOrder: ['two', 'many'] | ['many', 'two']): LocaleTree {
-    const dropped: LocaleTree = {
-      greeting: 'שלום {{name}}',
-      itemCount_one: '{{count}} פריט',
-      itemCount_other: '{{count}} פריטים',
-    }
-    for (const category of categoryOrder) {
-      dropped[`itemCount_${category}`] = 'פריטים' // both drop {{count}} — the violation
-    }
-    return dropped
-  }
-
-  it('produces the same Rule 9 diagnostics, in the same order, regardless of whether "two" or "many" was declared first', () => {
-    const en = baseFixture().en
-    const errorsTwoFirst = validateNamespacePair(heWithOrder(['two', 'many']), en)
-    const errorsManyFirst = validateNamespacePair(heWithOrder(['many', 'two']), en)
-
-    expect(errorsTwoFirst).toEqual(errorsManyFirst)
-
-    const rule9Messages = errorsTwoFirst.filter((message) => message.includes('is missing required placeholder(s)'))
-    // Sorted ("many" < "two" alphabetically), not insertion order.
-    expect(rule9Messages).toEqual([
-      '"itemCount_many" in he is missing required placeholder(s) [count] present in every overlapping plural category ("one"/"other") of "itemCount"',
-      '"itemCount_two" in he is missing required placeholder(s) [count] present in every overlapping plural category ("one"/"other") of "itemCount"',
-    ])
-  })
-})
+/*
+ * ⚠️ A "Rule 9 diagnostic order is deterministic" describe lived here until
+ * ISSUE-099. It proved the locale-only-category loop iterates a SORTED copy
+ * of the category Set by declaring Hebrew's two locale-only categories
+ * ("two" and "many") in both insertion orders and asserting byte-identical
+ * diagnostics. With `many` correctly gone from Hebrew's table, Hebrew has
+ * exactly ONE locale-only category and the scenario can no longer be
+ * constructed from a valid fixture — no current locale pair has two
+ * locale-only categories. The `.sort()` it guarded is still in Rule 9
+ * (localeIntegrity.ts), alongside Rule 4's identical, still-tested one.
+ */
 
 describe('localeIntegrity — the real shipped pairs, under the full 9-rule contract', () => {
   it('cart reports zero violations', () => {
@@ -440,8 +416,13 @@ type LocaleCode7 = 'he' | 'en'
 type KeyIndex7 = Map<string, { categories: Set<string>; hasBareKey: boolean }>
 
 const PLURAL_SUFFIX_7 = /_(zero|one|two|few|many|other)$/
+// ⚠️ ISSUE-099: `many` removed from the he row here too. This copy exists to
+// prove Rules 8/9 are NEW coverage, not to pin the old (wrong) plural table —
+// leaving `many` would make the legacy validator demand a category the shared
+// fixture no longer carries, and every comparison below would fail on Rule 4
+// noise instead of the Rule 8/9 gap it demonstrates.
 const REQUIRED_PLURAL_CATEGORIES_7: Record<LocaleCode7, readonly string[]> = {
-  he: ['one', 'two', 'many', 'other'],
+  he: ['one', 'two', 'other'],
   en: ['one', 'other'],
 }
 

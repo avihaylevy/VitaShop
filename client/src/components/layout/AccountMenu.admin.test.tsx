@@ -113,3 +113,40 @@ describe('the account menu', () => {
     expect(screen.queryByRole('menuitem', { name: /manage orders/i })).toBeNull()
   })
 })
+
+describe('ISSUE-089 — the menu says WHO is signed in', () => {
+  it('🔴 renders the name and email the session reported', async () => {
+    respondSession({ authenticated: true, role: 'customer', firstName: 'Avihay', email: 'shopper@vitashop.local' })
+    renderMenu()
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /account menu/i })).toBeTruthy())
+    await openMenu()
+
+    expect(await screen.findByText(/signed in as/i)).toBeTruthy()
+    expect(screen.getByText('Avihay')).toBeTruthy()
+    expect(screen.getByText('shopper@vitashop.local')).toBeTruthy()
+  })
+
+  it('renders NO identity block when the server omitted it (its fail-closed branch)', async () => {
+    respondSession({ authenticated: true, role: 'customer' })
+    renderMenu()
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /account menu/i })).toBeTruthy())
+    await openMenu()
+
+    // The menu itself rendered — the control keeping the absence meaningful.
+    expect(await screen.findByRole('menuitem', { name: /my orders/i })).toBeTruthy()
+    expect(screen.queryByText(/signed in as/i)).toBeNull()
+  })
+
+  it('a guest sees no identity and no "signed in as"', async () => {
+    respondSession({ authenticated: false })
+    renderMenu()
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /account menu/i })).toBeTruthy())
+    await openMenu()
+
+    expect(await screen.findByRole('menuitem', { name: /sign in/i })).toBeTruthy()
+    expect(screen.queryByText(/signed in as/i)).toBeNull()
+  })
+})

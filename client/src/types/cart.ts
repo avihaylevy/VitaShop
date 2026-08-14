@@ -132,7 +132,18 @@ export type CartMergeReport = {
   mergeFailed: boolean
   merged: boolean
   clampedSlugs: string[]
-  dropped: { slug: string; reason: 'INACTIVE' | 'UNAVAILABLE' }[]
+  /**
+   * ISSUE-073 — the names ride with the report, because a DROPPED line is in
+   * no cart and the slug was the only thing left to show a shopper. Optional:
+   * a missing or malformed name reads as absent, and the slug stays the last
+   * resort rather than the first.
+   */
+  dropped: {
+    slug: string
+    nameHe?: string
+    nameEn?: string
+    reason: 'INACTIVE' | 'UNAVAILABLE'
+  }[]
 }
 
 export const EMPTY_CART: Cart = {

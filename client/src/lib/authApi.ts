@@ -154,19 +154,40 @@ export async function verifyEmail(token: string): Promise<AuthResult<{ status: s
  */
 export type SessionRole = 'admin' | 'customer'
 
-export type SessionSnapshot = { authenticated: boolean; role: SessionRole | null }
+/**
+ * ISSUE-089 — `firstName`/`email` are the signed-in caller's OWN identity,
+ * rendered so a page finally says who is signed in. Either may be null: the
+ * server omits both on its fail-closed branch, and a malformed value reads
+ * as absent rather than rendering garbage in the header.
+ */
+export type SessionSnapshot = {
+  authenticated: boolean
+  role: SessionRole | null
+  firstName: string | null
+  email: string | null
+}
+
+const ANONYMOUS: SessionSnapshot = { authenticated: false, role: null, firstName: null, email: null }
 
 export async function fetchSession(): Promise<SessionSnapshot> {
   const base = getApiBaseUrl()
-  if (!base.ok) return { authenticated: false, role: null }
+  if (!base.ok) return ANONYMOUS
   try {
     const response = await fetch(`${base.value}/api/auth/session`, { credentials: 'include' })
-    if (!response.ok) return { authenticated: false, role: null }
-    const payload = (await response.json()) as { authenticated?: unknown; role?: unknown }
-    if (payload.authenticated !== true) return { authenticated: false, role: null }
+    if (!response.ok) return ANONYMOUS
+    const payload = (await response.json()) as {
+      authenticated?: unknown
+      role?: unknown
+      firstName?: unknown
+      email?: unknown
+    }
+    if (payload.authenticated !== true) return ANONYMOUS
     const role = payload.role === 'admin' || payload.role === 'customer' ? payload.role : null
-    return { authenticated: true, role }
+    const firstName =
+      typeof payload.firstName === 'string' && payload.firstName.trim() !== '' ? payload.firstName : null
+    const email = typeof payload.email === 'string' && payload.email.trim() !== '' ? payload.email : null
+    return { authenticated: true, role, firstName, email }
   } catch {
-    return { authenticated: false, role: null }
+    return ANONYMOUS
   }
 }

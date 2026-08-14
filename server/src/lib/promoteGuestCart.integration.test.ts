@@ -204,8 +204,12 @@ describe('promoteGuestCart — the paths that matter', () => {
 
         expect(await prisma.cartItem.count({ where: { cart: { userId } } })).toBe(0)
         // 🔴 NAMED, not silent. Removal is a larger change than a clamp, and it
-        // used to be reported nowhere at all.
-        expect(result.dropped).toEqual([{ slug: victim.slug, reason: 'INACTIVE' }])
+        // used to be reported nowhere at all. ISSUE-073: BOTH display names
+        // ride along — a dropped line is in no cart, so without them the
+        // client could only show the slug.
+        expect(result.dropped).toEqual([
+          { slug: victim.slug, nameHe: 'בדיקה', nameEn: 'fixture', reason: 'INACTIVE' },
+        ])
       } finally {
         await prisma.cartItem.deleteMany({ where: { productId: victim.id } })
         await prisma.product.delete({ where: { id: victim.id } })
@@ -222,8 +226,14 @@ describe('promoteGuestCart — the paths that matter', () => {
 
     const result = await prisma.$transaction((tx) => promoteGuestCart(tx, GUEST, userId))
 
+    // ISSUE-073: names asserted against the DATABASE row, not retyped here —
+    // the seeded Hebrew name changing must not break a test about DROP reasons.
+    const row = await prisma.product.findUniqueOrThrow({
+      where: { slug: 'altman-fenugreek-chromium-90' },
+      select: { nameHe: true, nameEn: true },
+    })
     expect(result.dropped).toEqual([
-      { slug: 'altman-fenugreek-chromium-90', reason: 'UNAVAILABLE' },
+      { slug: 'altman-fenugreek-chromium-90', nameHe: row.nameHe, nameEn: row.nameEn, reason: 'UNAVAILABLE' },
     ])
     expect(await prisma.cartItem.count({ where: { cart: { userId } } })).toBe(0)
   })

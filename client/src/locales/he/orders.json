@@ -16,7 +16,6 @@
     "placed": "בוצעה ב-{{date}}",
     "quantity_one": "יחידה אחת",
     "quantity_two": "שתי יחידות",
-    "quantity_many": "{{count}} יחידות",
     "quantity_other": "{{count}} יחידות",
     "cancel": "ביטול הזמנה",
     "cancelAsk": "לבטל את ההזמנה? הפעולה אינה הפיכה.",

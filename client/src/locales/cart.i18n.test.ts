@@ -32,7 +32,7 @@ describe('cart namespace — the shipped locale pair', () => {
     const he = indexKeys(HE).get('page.summary')!
     const en = indexKeys(EN).get('page.summary')!
 
-    expect([...he.categories].sort()).toEqual(['many', 'one', 'other', 'two'])
+    expect([...he.categories].sort()).toEqual(['one', 'other', 'two'])
     expect([...en.categories].sort()).toEqual(['one', 'other'])
     expect(he.hasBareKey).toBe(false)
     expect(en.hasBareKey).toBe(false)

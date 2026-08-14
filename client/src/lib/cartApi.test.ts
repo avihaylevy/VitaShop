@@ -228,4 +228,32 @@ describe("the login response's merge report", () => {
   it('rejects a missing mergeFailed — absence must not read as success', () => {
     expect(isCartMergeReport({ merged: true, clampedSlugs: [], dropped: [] })).toBe(false)
   })
+
+  it('ISSUE-073 — accepts the names the server now sends with a dropped line', () => {
+    expect(
+      isCartMergeReport({
+        mergeFailed: false,
+        merged: true,
+        clampedSlugs: [],
+        dropped: [{ slug: 'b', nameHe: 'שם', nameEn: 'Name', reason: 'INACTIVE' }],
+      }),
+    ).toBe(true)
+  })
+
+  it('ISSUE-073 (amended by review) — a malformed or null name must NOT sink the report', () => {
+    // The report is the clamp/drop notification; the name is decoration with
+    // a slug fallback. Losing the whole message over a bad name would be the
+    // silent loss the report exists to prevent. The renderer type-checks the
+    // name at use instead.
+    for (const badName of [42, null, ''] as const) {
+      expect(
+        isCartMergeReport({
+          mergeFailed: false,
+          merged: true,
+          clampedSlugs: [],
+          dropped: [{ slug: 'b', nameHe: badName, reason: 'INACTIVE' }],
+        }),
+      ).toBe(true)
+    }
+  })
 })

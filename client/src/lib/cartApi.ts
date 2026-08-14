@@ -105,6 +105,12 @@ export function isCartMergeReport(value: unknown): value is CartMergeReport {
       (entry) =>
         isPlainObject(entry) &&
         typeof entry.slug === 'string' &&
+        // ISSUE-073, amended by review: the names are DECORATION with a slug
+        // fallback, so they are deliberately NOT validated here — a malformed
+        // (or null) name must not sink the whole report, which is the clamp
+        // AND drop notification, the exact silent loss this report exists to
+        // prevent. The renderer (LoginPage's nameForDropped) type-checks the
+        // name at use and falls back to the slug.
         (entry.reason === 'INACTIVE' || entry.reason === 'UNAVAILABLE'),
     )
   )

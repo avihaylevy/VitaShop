@@ -13,7 +13,9 @@
     "move": "Move to {{status}}",
     "cancelAsk": "Cancel this order? This cannot be undone, and the stock is returned.",
     "cancelConfirm": "Yes, cancel it",
-    "cancelAbort": "No"
+    "cancelAbort": "No",
+    "trackingLabel": "Tracking number (optional)",
+    "shipAbort": "Back"
   },
   "state": {
     "loading": "Loading orders…",

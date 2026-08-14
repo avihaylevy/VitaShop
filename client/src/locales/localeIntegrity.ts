@@ -45,16 +45,25 @@ export type LocaleCode = 'he' | 'en'
 
 /**
  * The CLDR plural categories each language actually resolves. Hebrew has
- * four, English two — which is exactly why a naive key-set equality check
+ * three, English two — which is exactly why a naive key-set equality check
  * cannot be used here: it would forbid correct Hebrew.
  *
  * 🔴 This is an EXACT set, not a lower bound: a pluralised base must carry
  * every category listed for its locale and no others. A category the
  * language never resolves is dead translation that will never be shown, so
  * it is reported rather than tolerated or normalised away.
+ *
+ * 🔴 ISSUE-099 — Hebrew has NO `many`. This table used to list it, which
+ * made the validator MANDATE the exact thing the paragraph above says it
+ * exists to report. CLDR dropped Hebrew's `many` category, and it was
+ * measured on this project's own runtime before this row was changed:
+ *   new Intl.PluralRules('he').resolvedOptions().pluralCategories
+ *     -> ['one', 'two', 'other']            (Node v24.16.0, CLDR 42+)
+ *   select(3 · 4 · 10 · 20 · 100) -> 'other' every time
+ * A `_many` Hebrew string can never be shown by this runtime.
  */
 export const REQUIRED_PLURAL_CATEGORIES: Record<LocaleCode, readonly string[]> = {
-  he: ['one', 'two', 'many', 'other'],
+  he: ['one', 'two', 'other'],
   en: ['one', 'other'],
 }
 

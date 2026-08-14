@@ -23,7 +23,8 @@ import { fetchSession, logout as logoutRequest, type SessionRole } from '../lib/
  * 🔴 The session cookie is HttpOnly, so the client CANNOT read it. Auth state
  * is only ever what the server says it is — never inferred from a cookie,
  * never cached in localStorage, and never assumed from a previous response.
- * The endpoint returns a boolean and nothing else.
+ * The endpoint began as a bare boolean; DEC-071 added the role and ISSUE-089
+ * the caller's own name and email — still only what the server says.
  */
 
 export type SessionStatus = 'loading' | 'authenticated' | 'guest'
@@ -39,6 +40,13 @@ type SessionContextValue = {
    * client does not recognise, so the safe direction is the one shown.
    */
   isAdmin: boolean
+  /**
+   * ISSUE-089 — the signed-in caller's own identity, for the header to
+   * finally SAY who is signed in. Null while loading, for guests, and on the
+   * server's fail-closed branch — render nothing rather than a placeholder.
+   */
+  firstName: string | null
+  email: string | null
   /** Re-reads the server's answer. Call after a successful login. */
   refresh: () => Promise<void>
   signOut: () => Promise<void>
@@ -50,11 +58,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('loading')
 
   const [role, setRole] = useState<SessionRole | null>(null)
+  const [firstName, setFirstName] = useState<string | null>(null)
+  const [email, setEmail] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     const snapshot = await fetchSession()
     setStatus(snapshot.authenticated ? 'authenticated' : 'guest')
     setRole(snapshot.role)
+    setFirstName(snapshot.firstName)
+    setEmail(snapshot.email)
   }, [])
 
   useEffect(() => {
@@ -63,6 +75,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       setStatus(snapshot.authenticated ? 'authenticated' : 'guest')
       setRole(snapshot.role)
+      setFirstName(snapshot.firstName)
+      setEmail(snapshot.email)
     })
     return () => {
       cancelled = true
@@ -78,7 +92,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // 🔴 CLEARED WITH THE SESSION. A stale `admin` here would keep drawing the
     // link for whoever uses the browser next — and while the server would
     // refuse them, the interface would be lying about who is signed in.
+    // ISSUE-089: the identity goes with it, for the same reason.
     setRole(null)
+    setFirstName(null)
+    setEmail(null)
   }, [])
 
   const value = useMemo<SessionContextValue>(
@@ -86,10 +103,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       status,
       isSignedIn: status === 'authenticated',
       isAdmin: status === 'authenticated' && role === 'admin',
+      firstName: status === 'authenticated' ? firstName : null,
+      email: status === 'authenticated' ? email : null,
       refresh,
       signOut,
     }),
-    [status, role, refresh, signOut],
+    [status, role, firstName, email, refresh, signOut],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

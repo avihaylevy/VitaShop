@@ -20,6 +20,7 @@
     "signInCta": "התחברות",
     "registerCta": "יצירת חשבון",
     "myAccount": "החשבון שלי",
+    "signedInAs": "מחובר/ת בתור:",
     "menuLabel": "תפריט חשבון",
     "signOut": "התנתקות",
     "guestGreeting": "לא מחוברים",
@@ -37,7 +38,6 @@
     "ariaLabelEmpty": "עגלה, ריקה",
     "ariaLabelWithCount_one": "עגלה, פריט אחד",
     "ariaLabelWithCount_two": "עגלה, שני פריטים",
-    "ariaLabelWithCount_many": "עגלה, {{count}} פריטים",
     "ariaLabelWithCount_other": "עגלה, {{count}} פריטים"
   },
   "mobileMenu": {
