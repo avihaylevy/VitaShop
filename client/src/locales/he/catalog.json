@@ -22,7 +22,11 @@
     "newArrivalsTitle": "חדש בחנות",
     "newArrivalsLoading": "טוען מוצרים חדשים…",
     "newArrivalsError": "לא ניתן לטעון כעת את המוצרים החדשים.",
-    "newArrivalsEmpty": "אין עדיין מוצרים חדשים להצגה."
+    "newArrivalsEmpty": "אין עדיין מוצרים חדשים להצגה.",
+    "newArrivalsCount_one": "מוצר חדש אחד",
+    "newArrivalsCount_two": "שני מוצרים חדשים",
+    "newArrivalsCount_many": "{{count}} מוצרים חדשים",
+    "newArrivalsCount_other": "{{count}} מוצרים חדשים"
   },
   "catalogPage": {
     "loading": "טוען מוצרים…",

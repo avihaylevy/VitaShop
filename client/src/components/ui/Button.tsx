@@ -21,6 +21,28 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
 const DISABLED_CLASS =
   'disabled:pointer-events-none disabled:border-border-hairline disabled:bg-surface-sunken disabled:text-text-muted'
 
+/**
+ * 🔴 THE SAME LOOK FOR `aria-disabled`, and it belongs here rather than at the
+ * call site — ISSUE-098.
+ *
+ * A control that must stay FOCUSABLE while unavailable cannot use `disabled`:
+ * the browser blurs a disabled element the moment the attribute appears, which
+ * is how the home page's Retry button dropped focus to `<body>` mid-request.
+ * `aria-disabled` keeps focus and announces the same state — but it matched
+ * none of the `disabled:` rules above, so such a button ANNOUNCED unavailable
+ * while looking fully live.
+ *
+ * ⚠️ THE CALL SITE CANNOT FIX THIS WITH PLAIN CLASSES. Passing
+ * `bg-surface-sunken` in `className` collides with the variant's own `bg-well`
+ * at equal specificity, so the winner is whichever Tailwind emits later —
+ * measured in Chromium, the variant won and the button stayed white while its
+ * text and pointer-events changed. A variant selector resolves it for good:
+ * `aria-disabled:bg-…` compiles to an attribute selector and outranks the
+ * plain class.
+ */
+const ARIA_DISABLED_CLASS =
+  'aria-disabled:pointer-events-none aria-disabled:border-border-hairline aria-disabled:bg-surface-sunken aria-disabled:text-text-muted'
+
 type ButtonProps = {
   variant?: ButtonVariant
   loading?: boolean
@@ -56,7 +78,7 @@ export function Button({
       aria-busy={loading || undefined}
       className={`${FOCUS_RING} relative inline-flex items-center justify-center gap-2 rounded-card px-4 text-sm font-medium transition-colors duration-150 ease-standard ${
         wrap ? 'min-h-11 py-2 text-center leading-snug' : 'h-11 whitespace-nowrap'
-      } ${fullWidth ? 'w-full' : 'min-w-11'} ${DISABLED_CLASS} ${VARIANT_CLASS[variant]} ${className}`}
+      } ${fullWidth ? 'w-full' : 'min-w-11'} ${DISABLED_CLASS} ${ARIA_DISABLED_CLASS} ${VARIANT_CLASS[variant]} ${className}`}
     >
       <span className={`inline-flex items-center justify-center gap-2 ${loading ? 'invisible' : ''}`}>
         {icon && <Icon size={18}>{icon}</Icon>}

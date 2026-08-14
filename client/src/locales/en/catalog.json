@@ -22,7 +22,9 @@
     "newArrivalsTitle": "New in store",
     "newArrivalsLoading": "Loading new products…",
     "newArrivalsError": "The new products could not be loaded right now.",
-    "newArrivalsEmpty": "No new products to show yet."
+    "newArrivalsEmpty": "No new products to show yet.",
+    "newArrivalsCount_one": "1 new product",
+    "newArrivalsCount_other": "{{count}} new products"
   },
   "catalogPage": {
     "loading": "Loading products…",

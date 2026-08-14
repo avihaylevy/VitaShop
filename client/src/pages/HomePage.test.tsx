@@ -215,3 +215,263 @@ describe('the New Arrivals shelf', () => {
     expect(await screen.findByRole('heading', { name: /new in store/i })).toBeTruthy()
   })
 })
+
+/**
+ * ISSUE-098 — found by the Checkpoint F4 browser matrix, not by this suite.
+ *
+ * 🔴 THE SUITE ALREADY TESTED THAT RETRY WORKS, and it does: the request goes
+ * out, the cards come back, `RETRY actually re-requests` is green. The defect
+ * was in what the DOM did to the user AFTERWARDS — measured in Chromium,
+ * `document.activeElement` was `<body>` and the live region held the empty
+ * string, so a keyboard user landed back at the top of the page and a screen
+ * reader was told nothing at all.
+ *
+ * ⚠️ THAT IS WHY THESE TESTS ASSERT ON FOCUS AND ON ANNOUNCED TEXT rather than
+ * on the products. Asserting the products return would have passed before the
+ * fix and after it.
+ */
+describe('the shelf after a retry — ISSUE-098', () => {
+  /**
+   * The one live region the shelf owns.
+   *
+   * ⚠️ Found by its heading's id, NOT by an accessible name — the first version
+   * looked the section up as `region, name: /new in store/i` and could not find
+   * it in the Hebrew test, because the name is the translated heading.
+   */
+  function statusRegion() {
+    return document.querySelector('[aria-labelledby="new-arrivals-heading"] [role="status"]')!
+  }
+
+  it('🔴 announces the COUNT once the retry succeeds', async () => {
+    let attempt = 0
+    routed(async () => {
+      attempt += 1
+      if (attempt === 1) throw new TypeError('network')
+      return ok([product(1), product(2), product(3), product(4)])()
+    })
+    renderHome()
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+
+    await screen.findByText('Product 1')
+    await waitFor(() => expect(statusRegion().textContent).toBe('4 new products'))
+  })
+
+  it('🔴 moves FOCUS to the shelf heading once the retry succeeds', async () => {
+    // Measured in Chromium: focus was on <body>. The Retry button only exists
+    // in the failed state, so success unmounted it and took the focus along.
+    let attempt = 0
+    routed(async () => {
+      attempt += 1
+      if (attempt === 1) throw new TypeError('network')
+      return ok([product(1)])()
+    })
+    renderHome()
+
+    const retry = await screen.findByRole('button', { name: /try again/i })
+    retry.focus()
+    fireEvent.click(retry)
+
+    await screen.findByText('Product 1')
+    const heading = screen.getByRole('heading', { name: /new in store/i })
+    await waitFor(() => expect(document.activeElement).toBe(heading))
+  })
+
+  it('🔴 THE CONTROL — an ordinary load does NOT steal focus', async () => {
+    /*
+     * Without this, "move focus to the heading" would pass against a shelf
+     * that grabbed focus on every page load — which is worse than the defect
+     * it fixes, and would look identical in the passing test above.
+     */
+    routed(ok([product(1)]))
+    renderHome()
+
+    await screen.findByText('Product 1')
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  /** A retry whose second response this test resolves by hand. */
+  function pendingRetry() {
+    let resolveSecond: (value: Response) => void = () => {}
+    let attempt = 0
+    const urls = routed(async () => {
+      attempt += 1
+      if (attempt === 1) throw new TypeError('network')
+      return new Promise<Response>((resolve) => {
+        resolveSecond = resolve
+      })
+    })
+    return {
+      urls,
+      settle: async (items: unknown[]) => {
+        await act(async () => {
+          resolveSecond(await ok(items)())
+        })
+      },
+    }
+  }
+
+  it('🔴 does NOT yank focus back if the user moved on while the retry was in flight', async () => {
+    /*
+     * 🔴 THE OTHER SIDE OF THIS ISSUE, and it would have been introduced BY the
+     * fix. A retry on a slow connection leaves the user free to tab into the
+     * header or scroll away; pulling focus to the shelf seconds later — and
+     * scrolling the page to it — is WCAG 3.2.5 unexpected change of context.
+     * The fix for "focus went nowhere" must not become "focus goes wherever
+     * the shelf likes, whenever it finishes".
+     */
+    const retryInFlight = pendingRetry()
+    renderHome()
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+    await waitFor(() => expect(statusRegion().textContent).toMatch(/loading new products/i))
+
+    // The user goes somewhere else while it loads.
+    const elsewhere = screen.getByRole('link', { name: /vitamins/i })
+    elsewhere.focus()
+    expect(document.activeElement).toBe(elsewhere)
+
+    await retryInFlight.settle([product(1)])
+    await screen.findByText('Product 1')
+
+    expect(document.activeElement).toBe(elsewhere)
+    expect(document.activeElement).not.toBe(screen.getByRole('heading', { name: /new in store/i }))
+  })
+
+  it('🔴 the in-flight Retry button CANNOT be clicked again', async () => {
+    /*
+     * `aria-disabled` is a promise to the assistive-technology user, not an
+     * enforcement — the element is still clickable, so the handler has to
+     * refuse. Without this, "unavailable" would be a label over a control that
+     * still fires a second request.
+     *
+     * ⚠️ THE VISUAL half of this state is NOT asserted here. It lives in
+     * `Button`'s `aria-disabled:` variants, and whether those actually WIN the
+     * cascade is a browser question — the first attempt put plain classes at
+     * this call site, jsdom saw them present, and Chromium rendered a white
+     * button because the variant's own `bg-well` outranked them. jsdom cannot
+     * tell those two apart; the browser matrix is where that is checked.
+     */
+    const retryInFlight = pendingRetry()
+    const requests = () => retryInFlight.urls.filter((u) => u.includes('/api/products')).length
+    renderHome()
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+    await waitFor(() => expect(statusRegion().textContent).toMatch(/loading new products/i))
+
+    const before = requests()
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }))
+    expect(requests()).toBe(before)
+
+    await retryInFlight.settle([product(1)])
+    await screen.findByText('Product 1')
+  })
+
+  it('the focus-landing heading carries the shared focus ring', async () => {
+    // DESIGN_SYSTEM §4 — one focus treatment everywhere. A landing target that
+    // draws the browser default is an indicator matching nothing else here.
+    routed(ok([product(1)]))
+    renderHome()
+
+    await screen.findByText('Product 1')
+    const heading = screen.getByRole('heading', { name: /new in store/i })
+    expect(heading.className).toContain('focus-ring')
+    expect(heading.getAttribute('tabindex')).toBe('-1')
+  })
+
+  it('🔴 the in-flight Retry button is aria-disabled, NEVER disabled', async () => {
+    /*
+     * 🔴 THIS TEST EXISTS BECAUSE THE BROWSER DISAGREED WITH A GREEN SUITE.
+     * The first fix kept the button mounted during the retry but marked it
+     * `disabled`, and `a retry that FAILS AGAIN keeps focus` passed. In
+     * Chromium focus was on <body>: a disabled element is not focusable, so
+     * the browser blurs it the moment the attribute appears. jsdom does not
+     * implement that blur, so the assertion could not see the defect.
+     *
+     * ⚠️ Asserting on the ATTRIBUTE is what makes this checkable in jsdom at
+     * all. It goes red the moment `disabled` comes back.
+     */
+    let resolveSecond: (value: Response) => void = () => {}
+    let attempt = 0
+    routed(async () => {
+      attempt += 1
+      if (attempt === 1) throw new TypeError('network')
+      return new Promise<Response>((resolve) => {
+        resolveSecond = resolve
+      })
+    })
+    renderHome()
+
+    const retry = await screen.findByRole('button', { name: /try again/i })
+    fireEvent.click(retry)
+
+    // In flight: still mounted, still focusable, and saying so.
+    await waitFor(() => expect(statusRegion().textContent).toMatch(/loading new products/i))
+    const inFlight = screen.getByRole('button', { name: /try again/i })
+    expect(inFlight.hasAttribute('disabled')).toBe(false)
+    expect(inFlight.getAttribute('aria-disabled')).toBe('true')
+
+    await act(async () => {
+      resolveSecond(await ok([product(1)])())
+    })
+    await screen.findByText('Product 1')
+  })
+
+  it('🔴 a retry that FAILS AGAIN keeps focus on the Retry button', async () => {
+    // The second half of the same defect: the button unmounted while the
+    // retry was in flight, so a repeated failure also dropped focus.
+    routed(async () => {
+      throw new TypeError('network')
+    })
+    renderHome()
+
+    const retry = await screen.findByRole('button', { name: /try again/i })
+    retry.focus()
+    fireEvent.click(retry)
+
+    await waitFor(() => expect(statusRegion().textContent).toMatch(/could not be loaded/i))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /try again/i }))
+  })
+
+  it('counts in the singular when exactly one product comes back', async () => {
+    let attempt = 0
+    routed(async () => {
+      attempt += 1
+      if (attempt === 1) throw new TypeError('network')
+      return ok([product(1)])()
+    })
+    renderHome()
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+
+    await screen.findByText('Product 1')
+    await waitFor(() => expect(statusRegion().textContent).toBe('1 new product'))
+  })
+
+  it('announces the EMPTY outcome rather than "0 new products"', async () => {
+    // A retry that succeeds with nothing to show must still say something —
+    // silence here is the defect this issue is about.
+    let attempt = 0
+    routed(async () => {
+      attempt += 1
+      if (attempt === 1) throw new TypeError('network')
+      return ok([])()
+    })
+    renderHome()
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+
+    await waitFor(() => expect(statusRegion().textContent).toMatch(/no new products to show yet/i))
+  })
+
+  it('announces the count in Hebrew too', async () => {
+    await act(async () => {
+      await i18n.changeLanguage('he')
+    })
+    routed(ok([product(1), product(2)]))
+    renderHome()
+
+    await screen.findByText('מוצר 1')
+    await waitFor(() => expect(statusRegion().textContent).toBe('שני מוצרים חדשים'))
+  })
+})
