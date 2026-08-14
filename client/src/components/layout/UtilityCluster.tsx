@@ -97,9 +97,18 @@ export function CartControl() {
         </Icon>
       </span>
       {totalQuantity > 0 && (
+        /*
+         * ISSUE-113 — keyed by the committed total so every change REMOUNTS
+         * the span and restarts the pop animation (index.css). motion-safe:
+         * gates the animation only; under prefers-reduced-motion the number
+         * still changes, statically. aria-hidden stays — the add-to-cart
+         * announcement is the audible confirmation, and animating must not
+         * add a second one.
+         */
         <span
+          key={totalQuantity}
           aria-hidden="true"
-          className="absolute -top-1 -end-1 flex h-5 min-w-5 items-center justify-center rounded-round bg-brand-teal px-1 text-[11px] font-medium leading-none text-white"
+          className="absolute -top-1 -end-1 flex h-5 min-w-5 items-center justify-center rounded-round bg-brand-teal px-1 text-[11px] font-medium leading-none text-white motion-safe:animate-[cart-badge-pop_300ms_var(--ease-standard)]"
         >
           {totalQuantity}
         </span>

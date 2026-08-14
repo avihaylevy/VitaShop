@@ -151,6 +151,25 @@ describe('ISSUE-089 — the menu says WHO is signed in', () => {
   })
 })
 
+describe('ISSUE-112 — the signed-in NAME is visible on the trigger itself', () => {
+  it('🔴 greets by first name when the session carries one', async () => {
+    respondSession({ authenticated: true, role: 'customer', firstName: 'Avihay', email: 'shopper@vitashop.local' })
+    renderMenu()
+
+    const trigger = await screen.findByRole('button', { name: /account menu/i })
+    await waitFor(() => expect(trigger.textContent).toContain('Hi Avihay'))
+  })
+
+  it('falls back to "My account" when the server omitted the identity (fail-closed)', async () => {
+    respondSession({ authenticated: true, role: 'customer' })
+    renderMenu()
+
+    const trigger = await screen.findByRole('button', { name: /account menu/i })
+    await waitFor(() => expect(trigger.textContent).toContain('My account'))
+    expect(trigger.textContent).not.toMatch(/Hi /)
+  })
+})
+
 describe('ISSUE-039 — keyboard menu behaviour (review finding: it had no regression net)', () => {
   it('🔴 opening moves focus to the FIRST menuitem, arrows cycle with wrap, End jumps last', async () => {
     respondSession({ authenticated: false })

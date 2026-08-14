@@ -239,3 +239,22 @@ body {
   clip: auto;
   white-space: normal;
 }
+
+/*
+ * ISSUE-113 — the cart badge POPS when the committed total changes, so an
+ * add is visible without a toast and without re-announcing over the cart
+ * live region (the badge is aria-hidden; the announcement is the audible
+ * half). Applied via motion-safe: in CartControl, so prefers-reduced-motion
+ * gets the number change with no motion at all.
+ */
+@keyframes cart-badge-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

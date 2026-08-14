@@ -65,6 +65,24 @@ describe('a SHOPPING card', () => {
   })
 })
 
+describe('ISSUE-109 — the image is a click surface for the product, not a second link', () => {
+  it('🔴 wraps the image in an anchor to the SAME product URL', () => {
+    const { container } = renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
+    const imageAnchor = container.querySelector('a[aria-hidden="true"]')
+    expect(imageAnchor).not.toBeNull()
+    expect(imageAnchor?.getAttribute('href')).toBe('/product/fixture-product')
+  })
+
+  it('🔴 the image anchor is NOT a tab stop and NOT in the accessibility tree', () => {
+    const { container } = renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
+    const imageAnchor = container.querySelector('a[aria-hidden="true"]')
+    expect(imageAnchor?.getAttribute('tabindex')).toBe('-1')
+    // The role query respects aria-hidden, so the accessible-link count
+    // staying 1 (the shape test above) is the a11y-tree half of this proof.
+    expect(screen.getAllByRole('link')).toHaveLength(1)
+  })
+})
+
 describe('a NAVIGATIONAL card', () => {
   it('renders the link and NO button', () => {
     renderGrid(<ProductGrid products={[MODEL]} navigational />)

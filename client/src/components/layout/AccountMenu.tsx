@@ -101,7 +101,19 @@ export function AccountMenu() {
     }
   }, [open])
 
-  const triggerLabel = isSignedIn ? t('account.myAccount') : t('account.signInCta')
+  /*
+   * ISSUE-112 — the signed-in NAME is visible on the page itself, not only
+   * inside the opened menu (ISSUE-089 put it there; the user asked for more).
+   * The trigger greets by first name when the server sent one; the fail-closed
+   * branch (no identity in the session response) falls back to the old label
+   * rather than inventing one. firstName is data, not translatable prose —
+   * the greeting template is the i18n string.
+   */
+  const triggerLabel = isSignedIn
+    ? firstName !== null
+      ? t('account.greeting', { name: firstName })
+      : t('account.myAccount')
+    : t('account.signInCta')
 
   function closeAndReturnFocus() {
     setOpen(false)

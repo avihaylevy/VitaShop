@@ -20,6 +20,7 @@
     "signInCta": "התחברות",
     "registerCta": "יצירת חשבון",
     "myAccount": "החשבון שלי",
+    "greeting": "שלום {{name}}",
     "signedInAs": "מחובר/ת בתור:",
     "menuLabel": "תפריט חשבון",
     "signOut": "התנתקות",

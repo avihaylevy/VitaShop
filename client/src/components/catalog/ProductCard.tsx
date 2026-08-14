@@ -113,7 +113,18 @@ export function ProductCard({
       className="group relative flex flex-col gap-3 p-4 transition-[box-shadow,border-color] duration-200 ease-standard hover:z-10 hover:shadow-[var(--shadow-card-hover)] motion-safe:transition-transform motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.012] focus-within:border-brand-teal"
       style={{ backgroundColor: categoryTone }}
     >
-      <ProductImage imageFile={imageFile} alt={name} />
+      {/*
+       * ISSUE-109 — the image is a SECOND CLICK SURFACE for the same
+       * destination, not a second link: tabIndex={-1} + aria-hidden removes
+       * it from the tab order and the accessibility tree, so the card's ARIA
+       * contract stays "one link + one button" (the name link below is the
+       * one accessible link, and ProductGrid.action.test.tsx counts it).
+       * The img alt is emptied here — the name link already carries the text.
+       */}
+      {/* `block` so the inline anchor adds no descender gap under the well. */}
+      <Link to={`/product/${slug}`} tabIndex={-1} aria-hidden="true" className="block">
+        <ProductImage imageFile={imageFile} alt="" />
+      </Link>
 
       {showCategoryEyebrow && <p className="text-xs text-text-muted">{categoryLabel}</p>}
 
