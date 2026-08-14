@@ -13,8 +13,29 @@ export const languageDirection: Record<SupportedLanguage, 'rtl' | 'ltr'> = {
   en: 'ltr',
 }
 
+/**
+ * ISSUE-038 — the chosen language survives a FULL page load. In-app the SPA
+ * kept the choice; a refresh, deep link, bookmark or email link reset the
+ * interface to Hebrew, discarding a stated preference (it corrupted a
+ * verification pass, which is how it was found). One localStorage key, read
+ * at init and written on every change; storage failures (privacy mode)
+ * degrade to the old start-in-Hebrew behaviour.
+ */
+export const LANGUAGE_STORAGE_KEY = 'vitashop:language'
+
+function storedLanguage(): SupportedLanguage | null {
+  try {
+    const value = window.localStorage.getItem(LANGUAGE_STORAGE_KEY)
+    return value === 'he' || value === 'en' ? value : null
+  } catch {
+    return null
+  }
+}
+
+const initialLanguage: SupportedLanguage = storedLanguage() ?? defaultLanguage
+
 void i18next.use(initReactI18next).init({
-  lng: defaultLanguage,
+  lng: initialLanguage,
   fallbackLng: defaultLanguage,
   supportedLngs: supportedLanguages,
   resources,
@@ -29,6 +50,17 @@ export function applyDocumentDirection(language: SupportedLanguage) {
   document.documentElement.dir = languageDirection[language]
 }
 
-applyDocumentDirection(defaultLanguage)
+applyDocumentDirection(initialLanguage)
+
+// Persist every change, wherever it is triggered from (the header toggle,
+// the mobile menu — one listener instead of N call sites).
+i18next.on('languageChanged', (language) => {
+  if (language !== 'he' && language !== 'en') return
+  try {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language)
+  } catch {
+    // Privacy mode: the choice lasts the session only, as before.
+  }
+})
 
 export default i18next

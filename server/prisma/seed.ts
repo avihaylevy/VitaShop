@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { CANONICAL_CATEGORIES } from '../src/lib/catalogCategories.js'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,17 +40,13 @@ const ingredientsCsvPath = path.join(repoRoot, 'assets/products/ingredients.csv'
 // ⚠️ ISSUE-044 — this DUPLICATES `src/lib/catalogCategories.ts`, which already
 // holds all six canonical nameHe -> nameEn pairs in REQ-F-001 spec order. This
 // copy held only three, so it was already a divergent subset before batch 2
-// touched it. The values below are copied from CANONICAL_CATEGORIES verbatim;
-// the real fix is to import that list instead of restating it, which is filed
-// rather than done here so it is not a silent refactor inside a data batch.
-const CATEGORY_EN: Record<string, string> = {
-  'ויטמינים': 'Vitamins',
-  'מינרלים': 'Minerals',
-  'אומגה ושומנים': 'Omega & Fats',
-  'פרוביוטיקה': 'Probiotics',
-  'צמחי מרפא': 'Medicinal Herbs',
-  'חלבונים ואבקות': 'Proteins & Powders', // batch 3 — the last of the six
-}
+// touched it. ISSUE-044 CLOSED 2026-08-14: the map is now DERIVED from
+// CANONICAL_CATEGORIES — the same list `GET /api/categories` serves — so the
+// seed no longer keeps a copy to drift. The loud unknown-category throw in
+// translateCategory stands.
+const CATEGORY_EN: Record<string, string> = Object.fromEntries(
+  CANONICAL_CATEGORIES.map((category) => [category.nameHe, category.nameEn]),
+)
 const HEALTH_GOAL_EN: Record<string, string> = {
   'לב וכלי דם': 'Heart & Blood Vessels',
   'מוח וזיכרון': 'Brain & Memory',

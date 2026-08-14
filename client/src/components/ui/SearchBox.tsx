@@ -19,10 +19,10 @@ type SearchBoxProps = {
  * semantically distinct control (a `<button type="submit">`, focusable and
  * labelled on its own), not a copy of a decorative glyph.
  *
- * Submitting navigates to `/catalog?q=...`. The catalogue route itself is
- * out of scope for this slice (UI_IMPLEMENTATION_PLAN.md build order step 6)
- * and does not exist yet, so a submit currently lands on no matching route —
- * the field's own state/a11y/submit behaviour is complete regardless.
+ * Submitting navigates to `/catalog?q=...`. (ISSUE-059 sweep: this note once
+ * said the catalogue route did not exist — it has since MILESTONE-005, and
+ * `q` became a real, server-validated parameter there per DEC-043's
+ * extension. The submit lands on a live page.)
  */
 export function SearchBox({ className = '' }: SearchBoxProps) {
   const { t } = useTranslation('layout')

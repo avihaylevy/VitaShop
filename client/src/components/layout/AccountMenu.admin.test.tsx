@@ -150,3 +150,54 @@ describe('ISSUE-089 — the menu says WHO is signed in', () => {
     expect(screen.queryByText(/signed in as/i)).toBeNull()
   })
 })
+
+describe('ISSUE-039 — keyboard menu behaviour (review finding: it had no regression net)', () => {
+  it('🔴 opening moves focus to the FIRST menuitem, arrows cycle with wrap, End jumps last', async () => {
+    respondSession({ authenticated: false })
+    renderMenu()
+    await waitFor(() => expect(screen.queryByRole('button', { name: /account menu/i })).toBeTruthy())
+    await openMenu()
+
+    const items = await screen.findAllByRole('menuitem')
+    await waitFor(() => expect(document.activeElement).toBe(items[0]))
+
+    fireEvent.keyDown(items[0], { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(items[1])
+    // Wrap: down from the last returns to the first.
+    fireEvent.keyDown(items[1], { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(items[0])
+    // Up from the first wraps to the last.
+    fireEvent.keyDown(items[0], { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(items[items.length - 1])
+    fireEvent.keyDown(items[items.length - 1], { key: 'End' })
+    expect(document.activeElement).toBe(items[items.length - 1])
+    fireEvent.keyDown(items[items.length - 1], { key: 'Home' })
+    expect(document.activeElement).toBe(items[0])
+  })
+
+  it('🔴 ArrowUp with NO item focused enters at the LAST item — the (-1) off-by-one the review caught', async () => {
+    respondSession({ authenticated: false })
+    renderMenu()
+    await waitFor(() => expect(screen.queryByRole('button', { name: /account menu/i })).toBeTruthy())
+    await openMenu()
+    const items = await screen.findAllByRole('menuitem')
+
+    // Simulate focus not sitting on any menuitem (the effect not landed /
+    // focus on the container): dispatch from the menu element itself.
+    const menu = screen.getByRole('menu')
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    fireEvent.keyDown(menu, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(items[items.length - 1])
+  })
+
+  it('Tab CLOSES the menu instead of leaving it open behind the focus (APG)', async () => {
+    respondSession({ authenticated: false })
+    renderMenu()
+    await waitFor(() => expect(screen.queryByRole('button', { name: /account menu/i })).toBeTruthy())
+    await openMenu()
+    const items = await screen.findAllByRole('menuitem')
+
+    fireEvent.keyDown(items[0], { key: 'Tab' })
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  })
+})

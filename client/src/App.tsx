@@ -1,6 +1,5 @@
 import { Route, Routes } from 'react-router'
 import { AppShell } from './components/layout/AppShell'
-import { OverlayShowcase } from './components/dev/OverlayShowcase'
 import { CatalogShowcase } from './components/dev/CatalogShowcase'
 import { HomePage } from './pages/HomePage'
 import { CatalogPage } from './pages/CatalogPage'
@@ -118,12 +117,15 @@ function App() {
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         {/*
           Dev-only. Vite substitutes `false` for import.meta.env.DEV in a
-          production build, so this branch and the OverlayShowcase import
+          production build, so this branch and the CatalogShowcase import
           above become dead code and are tree-shaken out — the route is not
           merely unreachable in production, the component is not shipped.
           Verified by grepping dist/.
+          🔴 OverlayShowcase was REMOVED here (ISSUE-029 / DEC-047 D10 —
+          approved 2026-08-05, executed 2026-08-14): CartDrawer has long been
+          the production consumer of Modal/Drawer, which is the condition D10
+          set for the removal.
         */}
-        {import.meta.env.DEV && <Route path="/ui-showcase" element={<OverlayShowcase />} />}
         {import.meta.env.DEV && <Route path="/catalog-showcase" element={<CatalogShowcase />} />}
         {/*
           🔴 ISSUE-066 — the catch-all, and it must stay LAST: react-router

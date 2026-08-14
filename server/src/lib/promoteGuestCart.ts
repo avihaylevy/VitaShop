@@ -90,11 +90,24 @@ export async function promoteGuestCart(
   const clampedSlugs: string[] = []
   const dropped: { slug: string; nameHe: string; nameEn: string; reason: DropReason }[] = []
 
+  /*
+   * ISSUE-068 — ONE findMany, not a findUnique per line. This loop runs
+   * INSIDE the registration/login transaction, so its round trips held the
+   * transaction open in proportion to cart size. The lines are bounded (one
+   * per product, capped quantities), so this was small — but a transaction's
+   * duration should not scale with a shopper's cart at all.
+   */
+  const products = new Map(
+    (
+      await tx.product.findMany({
+        where: { id: { in: guestCart.items.map((line) => line.productId) } },
+        select: { id: true, slug: true, nameHe: true, nameEn: true, stockQuantity: true, isActive: true },
+      })
+    ).map((product) => [product.id, product]),
+  )
+
   for (const line of guestCart.items) {
-    const product = await tx.product.findUnique({
-      where: { id: line.productId },
-      select: { slug: true, nameHe: true, nameEn: true, stockQuantity: true, isActive: true },
-    })
+    const product = products.get(line.productId)
     if (!product) continue
 
     // A product that went INACTIVE mid-flight is not carried over. It cannot be

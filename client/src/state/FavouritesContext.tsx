@@ -3,9 +3,10 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 /**
  * Count-only interim state for the header favourites badge, mirroring
  * CartContext. A `Set` keyed by product id, so toggling the same product
- * twice is idempotent rather than double-counting — the real behaviour
- * `FavouritesProvider` needs once product cards exist
- * (UI_IMPLEMENTATION_PLAN.md §4).
+ * twice is idempotent rather than double-counting. (ISSUE-059 sweep:
+ * product cards have long existed; what is still missing is any way to ADD a
+ * favourite — ISSUE-058, owned by MILESTONE-009, which replaces this
+ * count-only interim state.)
  */
 
 type FavouritesContextValue = {

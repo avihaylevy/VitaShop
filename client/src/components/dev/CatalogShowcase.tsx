@@ -7,7 +7,7 @@ import { VERIFIED_PRODUCT_FIXTURES, SYNTHETIC_VARIANTS, toProductCardModel } fro
 /**
  * 🔴 Development only. Gated at the route in App.tsx behind
  * import.meta.env.DEV, tree-shaken out of a production build — see
- * OverlayShowcase for the same pattern and its dist/ verification note.
+ * the App.tsx dev-route note for the dist/ verification pattern (its older sibling OverlayShowcase was removed per DEC-047 D10 / ISSUE-029).
  *
  * Renders only the six DEC-032 verified product fixtures, plus synthetic
  * stock/image variants cloned from them. No CartContext — onAddToCart is

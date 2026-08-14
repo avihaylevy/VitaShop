@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactElement } from 'react'
+import { forwardRef, type ButtonHTMLAttributes, type ReactElement } from 'react'
 import { FOCUS_RING } from './focusRing'
 import { Icon } from './Icon'
 
@@ -57,21 +57,30 @@ type ButtonProps = {
  * for `aria-busy` — a caller-supplied `aria-busy` in the spread cannot
  * override it. The label and icon stay in the layout (just invisible) while
  * loading, so the button's width/height never shifts when loading toggles.
+ *
+ * Ref-forwarding — ISSUE-026's first half, matching IconButton: callers that
+ * must return focus to a specific Button (UndoRow's restore choreography, the
+ * admin ship-flow) no longer need container refs plus scoped querySelectors.
+ * Existing call sites keep working; new focus targets take a ref directly.
  */
-export function Button({
-  variant = 'primary',
-  loading = false,
-  icon,
-  fullWidth = false,
-  wrap = false,
-  disabled,
-  type = 'button',
-  className = '',
-  children,
-  ...rest
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = 'primary',
+    loading = false,
+    icon,
+    fullWidth = false,
+    wrap = false,
+    disabled,
+    type = 'button',
+    className = '',
+    children,
+    ...rest
+  },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       {...rest}
       disabled={disabled || loading}
@@ -91,4 +100,4 @@ export function Button({
       )}
     </button>
   )
-}
+})

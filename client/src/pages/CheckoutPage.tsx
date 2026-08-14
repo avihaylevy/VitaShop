@@ -115,10 +115,10 @@ export function CheckoutPage() {
   >({ status: 'loading' })
   const [address, setAddress] = useState({ line1: '', city: '', zipCode: '' })
   /*
-   * 🔴 VALIDATION FIRES ON BLUR, NOT ON A SUBMIT THAT DOES NOT EXIST YET. The
-   * first version held a `showErrors` flag whose only setter would have been
-   * F2c's "continue to payment" button — dead state, and `tsc` said so. A
-   * field the shopper has left is a real trigger available today.
+   * 🔴 VALIDATION FIRES ON BLUR, BY DECISION. (ISSUE-059 sweep: this once
+   * read "not on a submit that does not exist yet" — F2c's confirm step has
+   * long existed; blur stays the trigger because a field the shopper has
+   * left is the honest moment to speak, not the final button.)
    *
    * ⚠️ This is DISPLAY ONLY. `addressProblem` on the server is the rule that
    * decides, and it refuses the order regardless of what this form thinks.

@@ -17,8 +17,9 @@ import { useSession } from '../../state/SessionContext'
  * Real `/login` and `/register` navigation, not a fake instant sign-in —
  * DESIGN_SYSTEM.md §5: "authentication is never communicated by the user
  * icon alone... the signed-out menu exposes התחברות (primary) and
- * יצירת חשבון as two distinct actions." Neither route is built yet
- * (out of scope this slice), same gap as SearchBox's /catalog target.
+ * יצירת חשבון as two distinct actions." (ISSUE-059 sweep: this note once
+ * said neither route was built — both /login and /register shipped with
+ * MILESTONE-006 and the links have been live since.)
  */
 export function AccountMenu() {
   const { t } = useTranslation('layout')
@@ -26,6 +27,48 @@ export function AccountMenu() {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  /*
+   * ISSUE-039 — the ARIA menu-button pattern actually followed: opening MOVES
+   * FOCUS to the first menuitem (it used to stay on the trigger, so the
+   * declared role=menu was a promise the keyboard experience broke), and
+   * arrow keys walk the items. Escape already closes and returns focus.
+   */
+  useEffect(() => {
+    if (!open) return
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+  }, [open])
+
+  function handleMenuKeyDown(event: React.KeyboardEvent) {
+    // APG: Tab closes a menu rather than leaving it open behind the focus.
+    if (event.key === 'Tab') {
+      setOpen(false)
+      return
+    }
+    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End']
+    if (!keys.includes(event.key)) return
+    const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+    if (items.length === 0) return
+    event.preventDefault()
+    const current = items.indexOf(document.activeElement as HTMLElement)
+    // Review finding: with nothing focused, current is -1 and the modular
+    // arithmetic sent ArrowUp to items[n-2]. From an unfocused state the
+    // arrows enter at the ends: ArrowDown -> first, ArrowUp -> last.
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : current === -1
+            ? event.key === 'ArrowDown'
+              ? 0
+              : items.length - 1
+            : event.key === 'ArrowDown'
+              ? (current + 1) % items.length
+              : (current - 1 + items.length) % items.length
+    items[next]?.focus()
+  }
 
   useEffect(() => {
     if (!open) return
@@ -126,7 +169,7 @@ export function AccountMenu() {
               )}
             </div>
           )}
-          <div role="menu" aria-label={t('account.menuLabel')}>
+          <div ref={menuRef} role="menu" aria-label={t('account.menuLabel')} onKeyDown={handleMenuKeyDown}>
           {isSignedIn ? (
             <>
               <Link
