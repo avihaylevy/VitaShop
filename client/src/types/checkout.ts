@@ -123,3 +123,66 @@ export type CheckoutQuoteFailure =
 export type CheckoutQuoteResult =
   | { ok: true; quote: CheckoutQuote }
   | { ok: false; failure: CheckoutQuoteFailure }
+
+/**
+ * MILESTONE-008 Checkpoint F2c — what `POST /api/checkout/pay` can answer.
+ *
+ * 🔴 ELEVEN OUTCOMES, AND THE SPLIT IS THE WHOLE DESIGN. §8.12 records ONE
+ * defect shape appearing FOUR times in Checkpoint D: *a later step failed and
+ * the shopper was told the order failed — for an order that EXISTS*. Every
+ * one of those was a distinct server answer flattened into "it didn't work".
+ *
+ * The two that must never be flattened:
+ *
+ *   `succeeded` with `replayed: true` — the order was already placed and this
+ *   was a retry. It is a CONFIRMATION, not an error.
+ *   `orderCancelled` — an order exists under this key and was cancelled. It
+ *   carries the order number precisely so the screen can say WHICH.
+ */
+export type PaymentSuccess = {
+  orderId: string
+  orderNumber: string
+  totalAmount: string
+  shippingCost: string
+  /** True when this key had already produced an order — a retry, not a new buy. */
+  replayed: boolean
+  estimate: DeliveryEstimate
+  /**
+   * Present only on the step-0 replay path, where the server reports the
+   * STORED status. Absent on a fresh order, which is `pending_payment` moving
+   * to `paid` inside the same request.
+   */
+  status?: string
+}
+
+export type PaymentFailure =
+  /** 402 — REQ-F-045: no order, stock untouched, cart preserved. */
+  | { kind: 'declined' }
+  /**
+   * 409 CHECKOUT_CHANGED — DEC-060's gate refusing. 🔴 IT CARRIES THE NEW
+   * QUOTE: REQ-F-042 requires the updated figures to be shown and confirmed
+   * again, so the screen re-renders rather than guessing what moved.
+   */
+  | { kind: 'changed'; quote: CheckoutQuote }
+  /** 409 — an order exists under this key and was CANCELLED. Not a failure to buy. */
+  | { kind: 'orderCancelled'; orderNumber: string }
+  | { kind: 'blocked'; lines: readonly CheckoutBlockedLine[] }
+  | { kind: 'emptyCart' }
+  /** 400 ADDRESS_REQUIRED / ADDRESS_NOT_ALLOWED — a malformed payload, not a halt. */
+  | { kind: 'addressRejected'; reason: 'ADDRESS_REQUIRED' | 'ADDRESS_NOT_ALLOWED' }
+  /**
+   * 400 for FINGERPRINT_REQUIRED, INVALID_IDEMPOTENCY_KEY,
+   * INVALID_PAYMENT_OUTCOME, INVALID_DELIVERY_METHOD. 🔴 A BUG IN THIS CLIENT,
+   * not something a shopper can act on — the screen says so rather than
+   * inventing advice.
+   */
+  | { kind: 'invalidRequest'; code: string }
+  | { kind: 'emailNotVerified' }
+  | { kind: 'unauthenticated' }
+  | { kind: 'rateLimited' }
+  | { kind: 'server' }
+  | { kind: 'offline' }
+
+export type PaymentResult =
+  | { ok: true; order: PaymentSuccess }
+  | { ok: false; failure: PaymentFailure }

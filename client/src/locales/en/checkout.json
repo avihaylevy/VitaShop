@@ -51,5 +51,30 @@
     "deliveringTo": "Ordering as {{name}}",
     "contactPhone": "Contact phone: {{phone}}",
     "unavailable": "We could not load your saved details. You can enter them here."
+  },
+  "pay": {
+    "legend": "Payment",
+    "simulated": "🔴 Simulated payment — nothing is charged and no card details are collected.",
+    "outcomeLegend": "Payment outcome to simulate",
+    "outcomeSuccess": "Successful payment",
+    "outcomeFailure": "Declined payment",
+    "saveAddress": "Save this address for next time",
+    "submit": "Confirm and pay",
+    "submitting": "Placing your order…"
+  },
+  "done": {
+    "heading": "Order received",
+    "orderNumber": "Order number: {{number}}",
+    "total": "Amount paid",
+    "replayed": "This order was already placed. This is a repeat confirmation, not a second charge.",
+    "backToCatalog": "Continue shopping"
+  },
+  "payFailure": {
+    "declined": "The payment was declined. No order was placed, your cart is unchanged, and you can try again.",
+    "changed": "The details changed since they were shown. These are the updated figures — please confirm them again.",
+    "orderCancelled": "Order {{number}} was cancelled. Start a new checkout to order again.",
+    "addressRejected": "That address does not suit the delivery method you chose.",
+    "invalidRequest": "Something in the request was wrong ({{code}}). That is a fault on our side — reload the page and try again.",
+    "offline": "The connection dropped before we heard back. 🔴 Your order may still have gone through — press Confirm and pay again; it cannot create a second order."
   }
 }

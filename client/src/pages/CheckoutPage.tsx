@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { PriceBlock } from '../components/catalog/PriceBlock'
-import { requestCheckoutQuote } from '../lib/checkoutApi'
+import { payForCheckout, requestCheckoutQuote } from '../lib/checkoutApi'
+import { newIdempotencyKey } from '../lib/idempotencyKey'
 import { requestShopperProfile } from '../lib/accountApi'
 import type { ShopperProfile } from '../types/account'
 import {
@@ -13,6 +14,8 @@ import {
   type CheckoutQuoteFailure,
   type DeliveryEstimate,
   type DeliveryMethodName,
+  type PaymentFailure,
+  type PaymentSuccess,
 } from '../types/checkout'
 
 /**
@@ -110,6 +113,23 @@ export function CheckoutPage() {
     city: false,
   })
 
+  const [saveAddress, setSaveAddress] = useState(false)
+  const [outcome, setOutcome] = useState<'success' | 'failure'>('success')
+  const [payState, setPayState] = useState<
+    | { status: 'idle' }
+    | { status: 'paying' }
+    | { status: 'done'; order: PaymentSuccess }
+    | { status: 'failed'; failure: PaymentFailure }
+  >({ status: 'idle' })
+
+  /**
+   * 🔴 ONE KEY PER CHECKOUT ATTEMPT, HELD IN A REF — INV-05's client half.
+   * Regenerating it per press would turn a retried payment into a second
+   * order; the server answers a seen key from the stored order, which is the
+   * only reason a dropped connection is recoverable here.
+   */
+  const idempotencyKey = useRef(newIdempotencyKey())
+
   useEffect(() => {
     let live = true
     void requestShopperProfile().then((result) => {
@@ -152,6 +172,69 @@ export function CheckoutPage() {
   useEffect(() => {
     void load(method)
   }, [load, method])
+
+  async function confirmAndPay(quote: CheckoutQuote) {
+    setPayState({ status: 'paying' })
+    const result = await payForCheckout({
+      // 🔴 THE FINGERPRINT THE SHOPPER WAS SHOWN, unchanged. DEC-060's gate
+      // compares it against one re-derived from live data.
+      fingerprint: quote.fingerprint,
+      deliveryMethod: quote.deliveryMethod,
+      address: quote.deliveryMethod === 'self_pickup' ? null : { ...address, zipCode: address.zipCode || null },
+      idempotencyKey: idempotencyKey.current,
+      simulatedOutcome: outcome,
+      saveAddress,
+    })
+
+    if (result.ok) {
+      setPayState({ status: 'done', order: result.order })
+      return
+    }
+
+    /*
+     * 🔴 THE GATE REFUSING IS NOT AN ERROR STATE — it is a NEW QUOTE to
+     * confirm. REQ-F-042 requires the updated figures to be shown; the
+     * refusal carried them, so they replace what is on screen and the next
+     * press sends the new fingerprint.
+     */
+    if (result.failure.kind === 'changed') {
+      setState({ status: 'ready', quote: result.failure.quote })
+    }
+    setPayState({ status: 'failed', failure: result.failure })
+  }
+
+  /*
+   * 🔴 THE CONFIRMATION REPLACES THE FORM ENTIRELY. Leaving the pay button on
+   * screen beside a placed order invites a second press, and the order number
+   * is the one thing the shopper keeps.
+   */
+  if (payState.status === 'done') {
+    return (
+      <main className="mx-auto flex max-w-[900px] flex-col gap-4 px-4 py-6">
+        <h1 className="text-2xl font-semibold text-text-ink">{t('done.heading')}</h1>
+        <p className="text-lg font-semibold text-text-ink" dir="ltr">
+          {t('done.orderNumber', { number: payState.order.orderNumber })}
+        </p>
+        <p className="flex flex-wrap items-baseline gap-1.5 text-sm">
+          <span className="text-text-muted">{t('done.total')}</span>
+          <PriceBlock price={payState.order.totalAmount} />
+        </p>
+        <p className="text-sm text-text-muted">{estimateText(payState.order.estimate, t)}</p>
+        {/*
+          🔴 A REPLAY IS A CONFIRMATION, AND IT SAYS SO. §8.12 records the
+          opposite defect four times: a retry told the shopper the order
+          failed, for an order that existed. This says the order exists AND
+          that nothing was charged twice.
+        */}
+        {payState.order.replayed && (
+          <p className="text-sm text-text-ink">{t('done.replayed')}</p>
+        )}
+        <Link to="/catalog" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+          {t('done.backToCatalog')}
+        </Link>
+      </main>
+    )
+  }
 
   return (
     <main className="mx-auto flex max-w-[900px] flex-col gap-6 px-4 py-6">
@@ -383,6 +466,62 @@ export function CheckoutPage() {
         </section>
       )}
 
+      {state.status === 'ready' && (
+        <fieldset className="min-w-0 border-0 p-0">
+          <legend className="mb-2 text-sm font-semibold text-text-ink">{t('pay.legend')}</legend>
+
+          {/*
+            🔴 REQ-F-043 — SAID PLAINLY, NOT IMPLIED. No provider, no card
+            fields, nothing that resembles a card number. An honest named
+            control is the requirement; a fake card form would look like the
+            real thing and invite someone to type a real number into it.
+          */}
+          <p className="mb-2 text-xs text-text-muted">{t('pay.simulated')}</p>
+
+          <div className="mb-3 flex flex-col gap-2" role="group" aria-label={t('pay.outcomeLegend')}>
+            {(['success', 'failure'] as const).map((value) => (
+              <label key={value} className="flex min-h-11 items-center gap-2 text-sm text-text-ink">
+                <input
+                  type="radio"
+                  name="simulatedOutcome"
+                  value={value}
+                  checked={outcome === value}
+                  onChange={() => setOutcome(value)}
+                  className={`${FOCUS_RING} size-4 shrink-0 accent-brand-teal`}
+                />
+                <span>{value === 'success' ? t('pay.outcomeSuccess') : t('pay.outcomeFailure')}</span>
+              </label>
+            ))}
+          </div>
+
+          {/* ISSUE-093 — opt-in, default off, and only where an address exists. */}
+          {state.quote.deliveryMethod !== 'self_pickup' && (
+            <label className="mb-3 flex min-h-11 items-center gap-2 text-sm text-text-ink">
+              <input
+                type="checkbox"
+                checked={saveAddress}
+                onChange={(event) => setSaveAddress(event.target.checked)}
+                className={`${FOCUS_RING} size-4 shrink-0 accent-brand-teal`}
+              />
+              <span>{t('pay.saveAddress')}</span>
+            </label>
+          )}
+
+          {payState.status === 'failed' && <PayFailureNotice failure={payState.failure} />}
+
+          <Button
+            onClick={() => void confirmAndPay(state.quote)}
+            disabled={
+              payState.status === 'paying' ||
+              (state.quote.deliveryMethod !== 'self_pickup' &&
+                (address.line1.trim() === '' || address.city.trim() === ''))
+            }
+          >
+            {payState.status === 'paying' ? t('pay.submitting') : t('pay.submit')}
+          </Button>
+        </fieldset>
+      )}
+
       <Link to="/cart" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
         {t('page.backToCart')}
       </Link>
@@ -470,5 +609,46 @@ function FailureNotice({
       </p>
       <Button onClick={onRetry}>{t('state.retry')}</Button>
     </div>
+  )
+}
+
+/**
+ * 🔴 EACH PAYMENT REFUSAL SAYS WHAT TO DO NEXT, and they are not the same
+ * thing. §8.12 records ONE defect shape appearing FOUR times in Checkpoint D —
+ * a later step failed and the shopper was told the ORDER failed, for an order
+ * that exists. Flattening these would rebuild it on the screen.
+ */
+function PayFailureNotice({ failure }: { failure: PaymentFailure }) {
+  const { t } = useTranslation('checkout')
+
+  const message =
+    failure.kind === 'declined'
+      ? t('payFailure.declined')
+      : failure.kind === 'changed'
+        ? t('payFailure.changed')
+        : failure.kind === 'orderCancelled'
+          ? t('payFailure.orderCancelled', { number: failure.orderNumber })
+          : failure.kind === 'addressRejected'
+            ? t('payFailure.addressRejected')
+            : failure.kind === 'invalidRequest'
+              ? t('payFailure.invalidRequest', { code: failure.code })
+              : failure.kind === 'offline'
+                ? // 🔴 THE ONE THAT MUST NOT SAY "FAILED". The connection dropped;
+                  // the order may exist. Pressing again is SAFE because the
+                  // idempotency key is unchanged, and saying so is the difference
+                  // between a shopper retrying and a shopper ordering twice.
+                  t('payFailure.offline')
+                : failure.kind === 'emailNotVerified'
+                  ? t('state.emailNotVerified')
+                  : failure.kind === 'rateLimited'
+                    ? t('state.rateLimited')
+                    : failure.kind === 'unauthenticated'
+                      ? t('state.unauthenticated')
+                      : t('state.error')
+
+  return (
+    <p role="alert" className="mb-3 text-sm text-state-error">
+      {message}
+    </p>
   )
 }

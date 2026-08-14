@@ -354,6 +354,166 @@ describe('F2b — the review findings, each with a control', () => {
   })
 })
 
+describe('F2c — confirming and paying', () => {
+  function payRoute(payStatus: number, payBody: unknown) {
+    const calls: RequestInit[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes('/api/account/profile')) {
+          return { status: 200, json: async () => PROFILE_NONE } as unknown as Response
+        }
+        if (String(url).includes('/api/checkout/pay')) {
+          calls.push(init as RequestInit)
+          return { status: payStatus, json: async () => payBody } as unknown as Response
+        }
+        return { status: 200, json: async () => quote() } as unknown as Response
+      }),
+    )
+    return calls
+  }
+
+  const ORDER = {
+    orderId: 'o1',
+    orderNumber: 'VS-20260813-ABC123',
+    totalAmount: '130.00',
+    shippingCost: '30.00',
+    replayed: false,
+    estimate: { kind: 'delivered_between', minBusinessDays: 3, maxBusinessDays: 5 },
+  }
+
+  async function fillAndPay() {
+    const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
+    fireEvent.change(line1, { target: { value: 'רחוב 1' } })
+    fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
+    const button = await screen.findByRole('button', { name: /confirm and pay/i })
+    fireEvent.click(button)
+  }
+
+  it('sends the fingerprint the shopper was SHOWN', async () => {
+    const calls = payRoute(201, ORDER)
+    renderPage()
+    await fillAndPay()
+    await waitFor(() => expect(calls).toHaveLength(1))
+    // DEC-060: the gate compares this against a digest re-derived from live
+    // data. Sending anything else defeats it rather than passing it.
+    expect(JSON.parse(String(calls[0]!.body)).fingerprint).toBe('fp-courier')
+  })
+
+  it('replaces the form with a confirmation carrying the ORDER NUMBER', async () => {
+    payRoute(201, ORDER)
+    renderPage()
+    await fillAndPay()
+    expect(await screen.findByText(/VS-20260813-ABC123/)).toBeTruthy()
+    // 🔴 The pay button is GONE — leaving it beside a placed order invites a
+    // second press.
+    expect(screen.queryByRole('button', { name: /confirm and pay/i })).toBeNull()
+  })
+
+  it('🔴 a REPLAY says the order exists and was not charged twice', async () => {
+    payRoute(200, { ...ORDER, replayed: true, status: 'paid' })
+    renderPage()
+    await fillAndPay()
+    expect(await screen.findByText(/repeat confirmation, not a second charge/i)).toBeTruthy()
+    expect(screen.getByText(/VS-20260813-ABC123/)).toBeTruthy()
+  })
+
+  it('🔴 a DROPPED CONNECTION never says the order failed', async () => {
+    // The §8.12 defect, four times in Checkpoint D. The order may exist, and
+    // pressing again is safe because the key is unchanged.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/api/account/profile')) {
+          return { status: 200, json: async () => PROFILE_NONE } as unknown as Response
+        }
+        if (String(url).includes('/api/checkout/pay')) throw new TypeError('network')
+        return { status: 200, json: async () => quote() } as unknown as Response
+      }),
+    )
+    renderPage()
+    await fillAndPay()
+    expect(await screen.findByText(/may still have gone through/i)).toBeTruthy()
+  })
+
+  it('🔴 RETRYING reuses the SAME idempotency key — INV-05', async () => {
+    const calls = payRoute(402, { error: { code: 'PAYMENT_DECLINED' } })
+    renderPage()
+    await fillAndPay()
+    await waitFor(() => expect(calls).toHaveLength(1))
+    fireEvent.click(screen.getByRole('button', { name: /confirm and pay/i }))
+    await waitFor(() => expect(calls).toHaveLength(2))
+
+    const first = JSON.parse(String(calls[0]!.body)).idempotencyKey
+    const second = JSON.parse(String(calls[1]!.body)).idempotencyKey
+    // A key regenerated per press turns one order into two.
+    expect(second).toBe(first)
+    expect(String(first).length).toBeGreaterThan(0)
+  })
+
+  it('a DECLINED payment says the cart is unchanged, and leaves the button', async () => {
+    payRoute(402, { error: { code: 'PAYMENT_DECLINED' } })
+    renderPage()
+    await fillAndPay()
+    expect(await screen.findByText(/no order was placed/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /confirm and pay/i })).toBeTruthy()
+  })
+
+  it('🔴 CHECKOUT_CHANGED re-renders the NEW figures rather than just complaining', async () => {
+    const changed = quote({ totalAmount: '999.00', fingerprint: 'fp-second' })
+    payRoute(409, { error: { code: 'CHECKOUT_CHANGED' }, quote: changed })
+    renderPage()
+    await fillAndPay()
+    // REQ-F-042 requires the updated values to be SHOWN and confirmed again.
+    expect(await screen.findByText(/please confirm them again/i)).toBeTruthy()
+    expect(screen.getByText(/999\.00/)).toBeTruthy()
+  })
+
+  it('a CANCELLED order names it instead of reporting a payment failure', async () => {
+    payRoute(409, { error: { code: 'ORDER_CANCELLED' }, orderNumber: 'VS-20260813-ZZZ999' })
+    renderPage()
+    await fillAndPay()
+    expect(await screen.findByText(/VS-20260813-ZZZ999 was cancelled/i)).toBeTruthy()
+  })
+
+  it('ISSUE-093 — the save-address box is OFF unless ticked', async () => {
+    const calls = payRoute(201, ORDER)
+    renderPage()
+    const box = await screen.findByRole('checkbox', { name: /save this address/i })
+    expect((box as HTMLInputElement).checked).toBe(false)
+    await fillAndPay()
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(JSON.parse(String(calls[0]!.body)).saveAddress).toBe(false)
+  })
+
+  it('ISSUE-093 — and travels as true once it is', async () => {
+    const calls = payRoute(201, ORDER)
+    renderPage()
+    fireEvent.click(await screen.findByRole('checkbox', { name: /save this address/i }))
+    await fillAndPay()
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(JSON.parse(String(calls[0]!.body)).saveAddress).toBe(true)
+  })
+
+  it('REQ-F-043 — BOTH outcomes are triggerable, and the choice travels', async () => {
+    const calls = payRoute(402, { error: { code: 'PAYMENT_DECLINED' } })
+    renderPage()
+    fireEvent.click(await screen.findByRole('radio', { name: /declined payment/i }))
+    await fillAndPay()
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(JSON.parse(String(calls[0]!.body)).simulatedOutcome).toBe('failure')
+  })
+
+  it('🔴 THE CONTROL — the button is DISABLED while the address is incomplete', async () => {
+    // Without this, every test above could pass against a screen that never
+    // guarded the address at all.
+    payRoute(201, ORDER)
+    renderPage()
+    const button = await screen.findByRole('button', { name: /confirm and pay/i })
+    expect((button as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
 describe('the failure branches that had no way out', () => {
   it('an expired session offers a LINK, not just a sentence', async () => {
     vi.stubGlobal(
