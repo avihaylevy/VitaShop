@@ -108,7 +108,7 @@ describe('i18n namespace-registration drift guard — the real repository state'
     expect([...registeredNamespaces.he].sort()).toEqual([...registeredNamespaces.en].sort())
   })
 
-  it('the current shipped namespace set is exactly auth/common/layout/catalog/cart/orders/checkout (confirmation, not the source of truth)', () => {
+  it('the current shipped namespace set is exactly admin/auth/common/layout/catalog/cart/orders/checkout (confirmation, not the source of truth)', () => {
     // Updated at MILESTONE-006 Checkpoint H, when `auth` was added, and again
     // at MILESTONE-008 Checkpoint F0, when `orders` was added for REQ-F-046's
     // six status labels. This
@@ -117,6 +117,7 @@ describe('i18n namespace-registration drift guard — the real repository state'
     // guard asks for, not a nuisance to be loosened.
     const disk = discoverDiskNamespaces()
     expect([...disk.he].sort()).toEqual([
+      'admin',
       'auth',
       'cart',
       'catalog',

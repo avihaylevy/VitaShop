@@ -75,7 +75,17 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
    */
   router.get('/', limiters.list, requireShopper, requireAdmin, async (req, res) => {
     const rawPage = Number.parseInt(String(req.query.page ?? '1'), 10)
-    const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1
+    /*
+     * 🔴 CAPPED, NOT MERELY POSITIVE. `skip: (page - 1) * 25` overflows
+     * Prisma's Int for a large page — `?page=100000000` becomes a skip of
+     * 2.5e9, the query throws, and the catch below answers 503. That
+     * contradicts this route's own contract (a page past the end is an EMPTY
+     * page, not an error) and spends the 503 reserved for "we could not read
+     * the orders" on a request that was merely silly.
+     */
+    const MAX_PAGE = 1_000_000
+    const page =
+      Number.isFinite(rawPage) && rawPage > 0 ? Math.min(rawPage, MAX_PAGE) : 1
 
     // An unknown status is ignored rather than refused: it filters nothing, and
     // a 400 here would break a bookmarked URL after a status is ever renamed.
@@ -92,9 +102,24 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
         prisma.order.count({ where }),
         prisma.order.findMany({
           where,
-          // 🔴 NEWEST FIRST. An admin opens this to see what just arrived, and
-          // `id` is a uuid — ordering by it would be arbitrary, not stable.
-          orderBy: { createdAt: 'desc' },
+          /*
+           * 🔴 NEWEST FIRST, WITH A UNIQUE TIEBREAKER — and the tiebreaker is
+           * not decoration. Prisma's `@default(now())` maps to Postgres
+           * CURRENT_TIMESTAMP, which is TRANSACTION-START time, so every order
+           * created inside one transaction (a seed script, a fixture batch)
+           * carries a byte-identical `createdAt`. With ties, `skip`/`take`
+           * ordering is undefined BETWEEN QUERIES: page 1 and page 2 can show
+           * the same order twice and omit another entirely.
+           *
+           * `id` alone would be arbitrary; `id` after `createdAt` is only ever
+           * consulted when the timestamps are equal.
+           *
+           * ⚠️ NO INDEX SUPPORTS THIS SORT. `Order` carries
+           * `@@index([userId, createdAt])`, which a global ordering cannot
+           * use, so every list request sorts the table. Fine at this size,
+           * recorded rather than discovered later.
+           */
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           skip: (page - 1) * ADMIN_ORDERS_PAGE_SIZE,
           take: ADMIN_ORDERS_PAGE_SIZE,
           select: {

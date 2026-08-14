@@ -1,0 +1,46 @@
+{
+  "page": {
+    "title": "Order management",
+    "empty": "No orders to show.",
+    "count_one": "One order",
+    "count_other": "{{count}} orders",
+    "refresh": "Refresh the list"
+  },
+  "row": {
+    "placed": "Placed {{date}}",
+    "items": "Products: {{count}}",
+    "noActions": "No moves available",
+    "move": "Move to {{status}}",
+    "cancelAsk": "Cancel this order? This cannot be undone, and the stock is returned.",
+    "cancelConfirm": "Yes, cancel it",
+    "cancelAbort": "No"
+  },
+  "state": {
+    "loading": "Loading orders…",
+    "retry": "Try again",
+    "unauthenticated": "Sign in to view this page.",
+    "signIn": "Go to sign in",
+    "notAdmin": "This page is for administrators only.",
+    "unavailable": "The orders could not be loaded.",
+    "offline": "We could not reach the server. Check your connection and try again.",
+    "rateLimited": "Too many actions in a short time. Wait a moment and try again."
+  },
+  "result": {
+    "moved": "Order moved to {{status}}.",
+    "unchanged": "The order was already in that status.",
+    "stockRestored": "Stock was returned."
+  },
+  "failure": {
+    "terminal": "This order is already complete and cannot be moved. Refresh the list.",
+    "notATransition": "The order changed status since the list loaded. Refresh and try again.",
+    "concurrent": "Someone else updated this order at the same moment. Refresh to see where it stands.",
+    "forbiddenMove": "That is not a move an administrator can make.",
+    "gone": "That order was not found. The list may be out of date.",
+    "server": "The update failed. The order was not changed."
+  },
+  "pager": {
+    "previous": "Previous",
+    "next": "Next",
+    "position": "Page {{page}} of {{total}}"
+  }
+}

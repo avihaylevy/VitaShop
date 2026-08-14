@@ -78,5 +78,20 @@
     "invalidRequest": "Something in the request was wrong ({{code}}). That is a fault on our side — reload the page and try again.",
     "offline": "The connection dropped before we heard back. Your order may still have gone through — press Confirm and pay again; it cannot create a second order.",
     "orderCancelledUnnamed": "That earlier order was cancelled. Start a new checkout to order again."
+  },
+  "card": {
+    "legend": "Card details (demo)",
+    "notice": "Demo form. Nothing is charged, and the card details are never sent to the server or stored anywhere.",
+    "number": "Card number",
+    "expiry": "Expiry (MM/YY)",
+    "cvv": "Security code",
+    "REQUIRED": "Fill in this field.",
+    "NOT_DIGITS": "Digits only.",
+    "WRONG_LENGTH_number": "A card number has between 13 and 19 digits.",
+    "WRONG_LENGTH_cvv": "The security code has {{count}} digits.",
+    "FAILS_CHECKSUM": "That card number is not valid. Check the digits.",
+    "BAD_FORMAT": "Use the format MM/YY.",
+    "EXPIRED": "That date has already passed.",
+    "expiryPlaceholder": "MM/YY"
   }
 }

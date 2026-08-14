@@ -12,6 +12,8 @@ import ordersHe from '../locales/he/orders.json'
 import ordersEn from '../locales/en/orders.json'
 import checkoutHe from '../locales/he/checkout.json'
 import checkoutEn from '../locales/en/checkout.json'
+import adminHe from '../locales/he/admin.json'
+import adminEn from '../locales/en/admin.json'
 
 /**
  * The i18next resource map — pure data, no side effects. Extracted from
@@ -34,6 +36,7 @@ export const resources = {
     auth: authHe,
     orders: ordersHe,
     checkout: checkoutHe,
+    admin: adminHe,
   },
   en: {
     common: commonEn,
@@ -43,6 +46,7 @@ export const resources = {
     auth: authEn,
     orders: ordersEn,
     checkout: checkoutEn,
+    admin: adminEn,
   },
 } as const
 

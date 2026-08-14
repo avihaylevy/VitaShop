@@ -7,6 +7,7 @@ import { CatalogPage } from './pages/CatalogPage'
 import { ProductDetailsPage } from './pages/ProductDetailsPage'
 import { CartPage } from './components/cart'
 import { CheckoutPage } from './pages/CheckoutPage'
+import { AdminOrdersPage } from './pages/AdminOrdersPage'
 import { RequireAuth } from './components/auth/RequireAuth'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -46,6 +47,23 @@ function App() {
           element={
             <RequireAuth>
               <CheckoutPage />
+            </RequireAuth>
+          }
+        />
+        {/*
+          MILESTONE-008 Checkpoint F3 — ISSUE-083's remaining half.
+          🔴 `RequireAuth` HERE IS UX, NOT SECURITY. It keeps a signed-out
+          visitor from a page that could only 401, and nothing more: the role
+          is read from the database on every request by `requireAdmin`
+          (DEC-065), so a signed-in non-admin reaching this route is answered
+          403 by the server and the screen says so honestly rather than
+          pretending the page does not exist.
+        */}
+        <Route
+          path="/admin/orders"
+          element={
+            <RequireAuth>
+              <AdminOrdersPage />
             </RequireAuth>
           }
         />
