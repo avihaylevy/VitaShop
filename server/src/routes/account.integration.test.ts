@@ -203,6 +203,49 @@ describe('who may read a profile', () => {
       await prisma.user.update({ where: { id: aliceId }, data: { status: 'active' } })
     }
   })
+
+  it('🔴 and the refusal DESTROYS the session, so re-enabling does not revive it', async () => {
+    // Refusing this one request while the same cookie still opens
+    // /checkout/pay would leave a disabled shopper creating orders.
+    const cookie = await signIn(ALICE)
+    try {
+      await prisma.user.update({ where: { id: aliceId }, data: { status: 'disabled' } })
+      expect((await getProfile(cookie)).status).toBe(401)
+      await prisma.user.update({ where: { id: aliceId }, data: { status: 'active' } })
+      // The account is fine again; the SESSION is not, because it was
+      // destroyed rather than merely refused.
+      expect((await getProfile(cookie)).status).toBe(401)
+    } finally {
+      await prisma.user.update({ where: { id: aliceId }, data: { status: 'active' } })
+    }
+  })
+
+  /**
+   * 🔴 THE CASE WITH NO CONTROL ON IT, and it was a defect. The branch read
+   * `status !== 'active'`, which refused `pending_verification` too — while
+   * `attemptLogin` blocks only `disabled` and checkout gates on
+   * `requireShopper` alone. An unverified shopper could sign in, fill a cart
+   * and pay, and this read answered 401, which the client takes for an expired
+   * session and bounces to a login that immediately succeeds.
+   *
+   * ⚠️ REQ-F-031's "an unverified account cannot complete an order" is real
+   * and is NOT this route's job — it is O3, it belongs on the order, and
+   * ISSUE-091 tracks that it is unenforced anywhere.
+   */
+  it('a PENDING_VERIFICATION account gets its profile — the gate is on the order, not here', async () => {
+    try {
+      await prisma.user.update({
+        where: { id: aliceId },
+        data: { status: 'pending_verification' },
+      })
+      const cookie = await signIn(ALICE)
+      const response = await getProfile(cookie)
+      expect(response.status).toBe(200)
+      expect(((await response.json()) as { firstName: string }).firstName).toBe('Alice')
+    } finally {
+      await prisma.user.update({ where: { id: aliceId }, data: { status: 'active' } })
+    }
+  })
 })
 
 describe('how long the response is allowed to live', () => {

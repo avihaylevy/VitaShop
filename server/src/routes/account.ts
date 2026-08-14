@@ -82,11 +82,19 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
           phone: true,
           status: true,
           /*
-           * ⚠️ `isDefault` ORDERS the result rather than filtering it: a
-           * shopper whose addresses all carry `isDefault: false` — which every
-           * address does today, since nothing writes the flag yet — would
-           * otherwise get nothing back while having an address on file.
-           * Ordering degrades to "the oldest one"; filtering degrades to null.
+           * ⚠️ `isDefault` ORDERS the result rather than filtering it, so a
+           * shopper whose addresses all carry `isDefault: false` still gets
+           * one back. Ordering degrades to "the oldest one"; filtering
+           * degrades to null.
+           *
+           * 🔴 AND TODAY THAT DISTINCTION IS THEORETICAL, WHICH IS WORTH
+           * SAYING OUT LOUD: **no application code writes an `Address` row at
+           * all.** Checkout stores the address as free text on the `Order` and
+           * never saves it to the user, so `defaultAddress` is `null` for
+           * every real shopper and the only rows that exist were inserted by
+           * this route's own tests. REQ-F-041's pre-fill therefore delivers
+           * the NAME and PHONE today and nothing more — ISSUE-093, and F2c is
+           * where the address gets persisted.
            */
           addresses: {
             select: { line1: true, city: true, zipCode: true },
@@ -107,7 +115,39 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
       return
     }
 
-    if (!user || user.status !== 'active') {
+    /*
+     * 🔴 `disabled`, NOT `!== 'active'`. THIS BRANCH WAS WRONG AND SHIPPED IN
+     * `4167765`.
+     *
+     * `!== 'active'` also refused `pending_verification`, and NOTHING ELSE in
+     * this codebase does: `attemptLogin` blocks only `disabled`, and
+     * `/checkout/validate`, `/checkout/pay` and `/orders/:id/cancel` gate on
+     * `requireShopper` with no status lookup at all. So an unverified shopper
+     * could sign in, fill a cart and pay — while this one read answered 401,
+     * which the client reads as an expired session and bounces to a login that
+     * immediately succeeds. A loop, for the one account that could otherwise
+     * complete a purchase.
+     *
+     * ⚠️ REQ-F-031 DOES say "an unverified account cannot complete an order",
+     * and that gate is real — but it is **O3**, it belongs on the ORDER, and
+     * no code implements it yet. Enforcing it here would have been the gate in
+     * the wrong place: it blocks a profile read, not an order. Recorded as
+     * ISSUE-091 rather than smuggled in through a pre-fill endpoint.
+     */
+    if (!user || user.status === 'disabled') {
+      /*
+       * 🔴 DESTROY THE SESSION, don't merely refuse this request. The account
+       * is disabled and the cookie is still valid for everything else —
+       * `/checkout/pay` and `/orders/:id/cancel` accept it, so a disabled
+       * shopper can still create orders and move stock while only this read
+       * says no. Destroying it here closes that window for this session.
+       *
+       * ⚠️ PARTIAL BY ADMISSION. It only fires if the disabled account happens
+       * to hit THIS route. The whole answer is a status check beside
+       * `requireShopper`, which touches every authenticated route and is not
+       * this slice's to decide — ISSUE-092.
+       */
+      req.session?.destroy(() => {})
       // ⚠️ 401, not 404. The session names an account that cannot act, so the
       // shopper's answer is to sign in again — and the response says nothing
       // about whether the row exists.
