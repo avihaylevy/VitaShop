@@ -105,6 +105,13 @@ export type CheckoutQuoteFailure =
   | { kind: 'emptyCart' }
   | { kind: 'unauthenticated' }
   /**
+   * 🔴 REQ-F-031 / DEC-067 — the account exists and is signed in, but has not
+   * verified its email, so it may not COMPLETE an order. Its own kind because
+   * the shopper's next action is neither "sign in" nor "retry": it is to open
+   * the verification mail.
+   */
+  | { kind: 'emailNotVerified' }
+  /**
    * 🔴 ITS OWN KIND, because the generic failure's UI is a Retry button and
    * retrying a 429 immediately re-hits the limiter. The one branch closes the
    * loop.

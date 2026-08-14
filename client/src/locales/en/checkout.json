@@ -28,7 +28,8 @@
     "emptyCart": "Your cart is empty, so there is nothing to pay for.",
     "unauthenticated": "Sign in to complete your order.",
     "signIn": "Go to sign in",
-    "rateLimited": "Too many attempts. Wait a moment, then refresh the page."
+    "rateLimited": "Too many attempts. Wait a moment, then refresh the page.",
+    "emailNotVerified": "Verify your email address before completing this order. We sent a verification link when you registered — check your inbox, including the spam folder."
   },
   "blocked": {
     "heading": "This order cannot be completed",
@@ -36,5 +37,19 @@
     "WITHDRAWN": "This product is no longer sold. Remove it.",
     "SOLD_OUT": "This product is sold out. Remove it.",
     "SHORT_STOCK": "Only {{available}} left in stock. Lower the quantity to {{available}}."
+  },
+  "address": {
+    "legend": "Delivery details",
+    "line1": "Street and number",
+    "city": "City",
+    "zipCode": "Postcode (optional)",
+    "notNeeded": "Self pickup needs no address.",
+    "prefilled": "Filled in from your account. You can change it.",
+    "noSavedAddress": "No address is saved on your account, so please enter one here.",
+    "line1Required": "Enter a street and number.",
+    "cityRequired": "Enter a city.",
+    "deliveringTo": "Ordering as {{name}}",
+    "contactPhone": "Contact phone: {{phone}}",
+    "unavailable": "We could not load your saved details. You can enter them here."
   }
 }

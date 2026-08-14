@@ -161,6 +161,18 @@ export async function requestCheckoutQuote(
   if (status === 429) return { ok: false, failure: { kind: 'rateLimited' } }
 
   const code = errorCodeOf(body)
+
+  // 🔴 403 EMAIL_NOT_VERIFIED — DEC-067's gate. Folding it into the generic
+  // server failure would show a Retry button for a state no retry can clear.
+  //
+  // ⚠️ THE STATUS IS CHECKED TOO, unlike the first version. `requireVerified
+  // Shopper` is the only emitter and always pairs the code with 403, so there
+  // was no reachable misbehaviour — but the comment said "403" while the code
+  // agreed to trust any status that carried the string, which is the kind of
+  // gap that stops being theoretical the day a second emitter appears.
+  if (status === 403 && code === 'EMAIL_NOT_VERIFIED') {
+    return { ok: false, failure: { kind: 'emailNotVerified' } }
+  }
   // 409, never 400, for both of these — the request was well formed and the
   // WORLD moved. The server's own comment says so; the client agrees rather
   // than inventing a second opinion.
