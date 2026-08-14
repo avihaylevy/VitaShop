@@ -16,6 +16,9 @@
     "allProducts": "All products"
   },
   "home": {
+    "tagline": "Vitamins and dietary supplements in one place — a catalogue organised by categories and health goals.",
+    "browseCatalog": "Browse all products",
+    "shopByGoalTitle": "Shop by goal",
     "loading": "Loading categories…",
     "error": "Categories could not be loaded right now.",
     "retry": "Try again",

@@ -14,6 +14,7 @@
     "emptyCta": "למעבר לקטלוג",
     "retry": "נסה שוב",
     "placed": "בוצעה ב-{{date}}",
+    "total": "סה\"כ לתשלום:",
     "quantity_one": "יחידה אחת",
     "quantity_two": "שתי יחידות",
     "quantity_other": "{{count}} יחידות",

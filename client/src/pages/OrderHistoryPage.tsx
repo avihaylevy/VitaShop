@@ -60,6 +60,26 @@ function isCancellable(status: string): boolean {
 }
 
 /**
+ * Wave 4, the "my-orders look" item — the status is a tinted OUTLINE PILL,
+ * not a muted afterthought. Colour accompanies the translated label, never
+ * replaces it, and an unknown status falls back to the neutral pill rather
+ * than crashing or vanishing. ⚠️ `state-commerce` is deliberately absent —
+ * DEC-038 reserves it for sale badges and product-level promotion.
+ */
+const STATUS_BADGE_CLASS: Record<string, string> = {
+  pending_payment: 'border-state-lowstock text-state-lowstock',
+  paid: 'border-brand-teal text-brand-teal',
+  processing: 'border-brand-teal text-brand-teal',
+  shipped: 'border-brand-teal-strong text-brand-teal-strong',
+  delivered: 'border-brand-teal-strong text-brand-teal-strong',
+  cancelled: 'border-state-error text-state-error',
+}
+
+function statusBadgeClass(status: string): string {
+  return STATUS_BADGE_CLASS[status] ?? 'border-border-control text-text-muted'
+}
+
+/**
  * One sentence per outcome, used BOTH visibly in the row and by the page's live
  * region — written once so the two can never disagree about what happened.
  */
@@ -229,7 +249,9 @@ export function OrderHistoryPage() {
                     the row — but the null branch is rendered rather than
                     asserted away.
                   */}
-                  <span className="text-sm text-text-muted">
+                  <span
+                    className={`inline-flex items-center rounded-round border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(order.status)}`}
+                  >
                     {statusKey === null ? order.status : t(statusKey)}
                   </span>
                 </div>
@@ -241,7 +263,7 @@ export function OrderHistoryPage() {
                 </p>
 
                 {/* REQ-F-050's item breakdown, on the history itself. */}
-                <ul className="mt-3 flex flex-col gap-1">
+                <ul className="mt-3 flex flex-col gap-1 border-t border-border-hairline pt-3">
                   {order.items.map((item) => (
                     <li key={item.productId} className="flex flex-wrap items-baseline gap-2 text-sm">
                       <Link
@@ -259,8 +281,11 @@ export function OrderHistoryPage() {
                   ))}
                 </ul>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <PriceBlock price={order.totalAmount} />
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border-hairline pt-3">
+                  <p className="flex items-baseline gap-2 text-sm">
+                    <span className="text-text-muted">{t('history.total')}</span>
+                    <PriceBlock price={order.totalAmount} />
+                  </p>
 
                   {isCancellable(order.status) &&
                     (confirming === order.id ? (

@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import { useCatalogCategories } from '../hooks/useCatalogCategories'
+import { useCatalogFacets } from '../hooks/useCatalogFacets'
 import { useNewArrivals } from '../hooks/useNewArrivals'
 import { CategoryShelf } from '../components/catalog'
 import { ProductGrid } from '../components/catalog/ProductGrid'
@@ -8,6 +10,7 @@ import { CartDrawer } from '../components/cart/CartDrawer'
 import { useAddToCart } from '../hooks/useAddToCart'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
+import type { SupportedLanguage } from '../i18n'
 
 /**
  * Production home page.
@@ -33,6 +36,23 @@ export function HomePage() {
     <div className="px-7 py-8">
       <h1 className="text-2xl font-semibold text-text-ink">{t('app.name', { ns: 'common' })}</h1>
 
+      {/*
+        ISSUE-105's "home page content" half (Wave 4). An intro strip: one
+        tagline sentence and a real LINK to the catalogue styled as the
+        primary action — navigation is a link, never a button pretending.
+        No medical claims, no invented copy beyond store positioning
+        (DESIGN_BRIEF: warm + serious, guidance over density).
+      */}
+      <p className="mt-2 max-w-xl text-base text-text-muted">{t('home.tagline', { ns: 'catalog' })}</p>
+      <div className="mt-4">
+        <Link
+          to="/catalog"
+          className={`${FOCUS_RING} inline-flex h-11 items-center rounded-card bg-brand-teal px-5 text-sm font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
+        >
+          {t('home.browseCatalog', { ns: 'catalog' })}
+        </Link>
+      </div>
+
       {loading && (
         <p className="mt-6 text-sm text-text-muted" role="status">
           {t('home.loading', { ns: 'catalog' })}
@@ -54,8 +74,53 @@ export function HomePage() {
         <CategoryShelf categories={categories} className="mt-6" />
       )}
 
+      <ShopByGoal />
+
       <NewArrivals />
     </div>
+  )
+}
+
+/**
+ * ISSUE-105's content half, second piece — the DESIGN_BRIEF's answer 1 made
+ * concrete: "the customer shops by 'what do I need this for', not by
+ * compound name", so health goals get a browsing entry point on the home
+ * page. Every chip is a real link into the catalogue's spec-required
+ * healthGoal filter (REQ-F-011, ID-valued per §4b) — arriving there
+ * auto-opens the filter rail on the applied state.
+ *
+ * 🔴 NOT a "popular products" shelf, deliberately: DEC-064 rejected that
+ * label while the store has essentially no orders — popularity would be
+ * tie-break order wearing a meaningful name. Goals are real data.
+ *
+ * A facets failure hides the section silently — it is a convenience on top
+ * of the page's navigation, the same rule NewArrivals states.
+ */
+function ShopByGoal() {
+  const { t, i18n } = useTranslation('catalog')
+  const language = i18n.language as SupportedLanguage
+  const { facets } = useCatalogFacets()
+
+  if (facets.healthGoals.length === 0) return null
+
+  return (
+    <section aria-labelledby="shop-by-goal-heading" className="mt-10">
+      <h2 id="shop-by-goal-heading" className="text-lg font-semibold text-text-ink">
+        {t('home.shopByGoalTitle')}
+      </h2>
+      <ul className="mt-4 flex flex-wrap gap-2">
+        {facets.healthGoals.map((goal) => (
+          <li key={goal.id}>
+            <Link
+              to={`/catalog?healthGoal=${encodeURIComponent(goal.id)}`}
+              className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-card border border-border-control bg-well px-4 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:bg-surface-sunken md:min-h-9 md:px-3`}
+            >
+              {language === 'he' ? goal.labelHe : goal.labelEn}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
