@@ -86,6 +86,10 @@
     "availability": "Availability",
     "inStock": "In stock only",
     "ceilingHint": "Up to {{max}} values can be selected in this group.",
+    "searchGroup": "Search this list",
+    "searchNoMatch": "No matching options",
+    "groupSelectedCount_one": "1 value selected",
+    "groupSelectedCount_other": "{{count}} values selected",
     "activeCount_one": "1 active filter",
     "activeCount_other": "{{count}} active filters"
   },

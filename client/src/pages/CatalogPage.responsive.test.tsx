@@ -306,23 +306,44 @@ describe('physicalDirectionClasses — detector contract', () => {
  */
 describe('CatalogPage responsive — filter surface breakpoint parity (Checkpoint I)', () => {
   it('hides the mobile filter trigger and shows the rail at exactly the same breakpoint useCloseAboveBreakpoint uses', async () => {
-    setCatalogData({ products: [product()], totalItems: 1 })
-    const html = await renderCatalog()
+    // ISSUE-052: the rail mounts only when open — closed by default, opened
+    // by its toggle, or (as here) auto-opened because the URL already
+    // carries a panel filter. The breakpoint-parity contract is unchanged.
+    setCatalogData({
+      products: [product()],
+      totalItems: 1,
+      hasNarrowingQuery: true,
+      urlState: { ...EMPTY_CATALOG_URL_STATE, inStock: 'true' },
+    })
+    const html = await renderCatalog('/catalog?inStock=true')
 
     // The trigger: visible below md, hidden from md up.
     expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*class="[^"]*md:hidden/)
     // The rail: hidden below md, shown from md up — the exact complement.
     expect(html).toMatch(/<aside[^>]*class="hidden [^"]*md:block/)
+    // The desktop toggle exists and reports the rail expanded.
+    expect(html).toMatch(/<button[^>]*aria-expanded="true"/)
   })
 
-  it('renders the filter panel exactly once in the accessibility tree (the drawer copy is unmounted while closed)', async () => {
+  it('renders the filter panel exactly once in the accessibility tree, and NOT AT ALL while closed (ISSUE-052)', async () => {
+    // Closed by default on a bare /catalog: no rail, no drawer, zero copies.
     setCatalogData({ products: [product()], totalItems: 1 })
-    const html = await renderCatalog()
+    const closed = await renderCatalog()
+    expect(closed.split('רק מוצרים במלאי').length - 1).toBe(0)
+    expect(closed).not.toContain('role="dialog"')
+    expect(closed).toMatch(/<button[^>]*aria-expanded="false"/)
 
-    // Only the rail's copy exists; Drawer mounts nothing while closed, so
-    // the availability fieldset — present in every panel — appears once.
-    expect(html.split('רק מוצרים במלאי').length - 1).toBe(1)
-    expect(html).not.toContain('role="dialog"')
+    // Open (via an arriving panel filter): exactly the rail's copy; Drawer
+    // still mounts nothing while closed.
+    setCatalogData({
+      products: [product()],
+      totalItems: 1,
+      hasNarrowingQuery: true,
+      urlState: { ...EMPTY_CATALOG_URL_STATE, inStock: 'true' },
+    })
+    const open = await renderCatalog('/catalog?inStock=true')
+    expect(open.split('רק מוצרים במלאי').length - 1).toBe(1)
+    expect(open).not.toContain('role="dialog"')
   })
 
   it('renders fallback suggestions through the same grid as the primary results', async () => {

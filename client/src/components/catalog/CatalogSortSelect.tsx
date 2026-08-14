@@ -35,7 +35,12 @@ export function CatalogSortSelect({ value, onChange, className = '' }: CatalogSo
         id={selectId}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={`${FOCUS_RING} h-11 rounded-compact border border-border-control bg-well px-3 text-base text-text-ink`}
+        /*
+         * ISSUE-055 (🔴 reconfirmed: "גדולה מידי") — compact from md up
+         * (h-9, text-sm); below md the full 44px touch target stays, since
+         * that is where fingers are. Same control, no custom listbox.
+         */
+        className={`${FOCUS_RING} h-11 rounded-compact border border-border-control bg-well px-3 text-base text-text-ink md:h-9 md:text-sm`}
       >
         {CATALOG_SORT_VALUES.map((sortValue) => (
           <option key={sortValue} value={sortValue}>

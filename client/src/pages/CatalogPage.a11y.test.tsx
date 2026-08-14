@@ -244,11 +244,12 @@ describe('CatalogPage accessibility — invalid-category', () => {
     // substitute for the removed heading. A landmark does not need an
     // accessible name to be usable; CatalogEmptyState's own <h2> is
     // sufficient on its own.
-    // The desktop filter rail adds its own <h2> ("Filters") at Checkpoint I,
-    // so the count is now 2 — the invariant this test exists for is
-    // unchanged: exactly ONE heading inside the results section, i.e. no
-    // duplicated "Category not found".
-    expect(count(html, '<h2')).toBe(2)
+    // The desktop filter rail added its own <h2> ("Filters") at Checkpoint I;
+    // ISSUE-052 made the rail CLOSED by default (this URL carries no panel
+    // filters), so the count is back to 1 — the invariant this test exists
+    // for is unchanged: exactly ONE heading inside the results section, i.e.
+    // no duplicated "Category not found".
+    expect(count(html, '<h2')).toBe(1)
     expect(count(html, 'הקטגוריה לא נמצאה')).toBe(1)
     expect(html).not.toContain('aria-label="הקטגוריה לא נמצאה"')
     expect(html).not.toContain('aria-labelledby="catalog-grid-heading"')
@@ -354,8 +355,17 @@ describe('CatalogPage accessibility — query controls (Checkpoint I)', () => {
       brands: [{ id: 'brand-uuid-1', label: 'Solgar' }],
       dosageForms: [{ value: 'CAPSULE', labelHe: 'כמוסות', labelEn: 'Capsules' }],
     })
-    setCatalogData({ products: [product()], totalItems: 1 })
-    const html = await renderCatalog()
+    // ISSUE-052: the rail is closed by default, so this test arrives by a
+    // URL that already selects a brand — the one case the rail auto-opens
+    // (arriving state is never hidden). The semantics assertions below are
+    // unchanged.
+    setCatalogData({
+      products: [product()],
+      totalItems: 1,
+      hasNarrowingQuery: true,
+      urlState: { ...EMPTY_CATALOG_URL_STATE, brand: ['brand-uuid-1'] },
+    })
+    const html = await renderCatalog('/catalog?brand=brand-uuid-1')
 
     // Brand + dosage form + price + availability = 4 fieldsets; the two
     // facet groups with no options render no fieldset at all (§9d — never

@@ -1,12 +1,145 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/Button'
+import { Icon } from '../ui/Icon'
+import { ChevronDownIcon } from '../icons'
+import { VisuallyHidden } from '../ui/VisuallyHidden'
 import { FOCUS_RING } from '../ui/focusRing'
 import {
   MAX_VALUES_PER_REPEATABLE_PARAMETER,
   type FilterGroupModel,
   type RepeatableFilterKey,
 } from '../../features/catalog/catalogQueryControls'
+
+/*
+ * ISSUE-050 / ISSUE-051 — a big group is a DISCLOSURE, not a wall.
+ *
+ * Measured (2026-08-13): the active-ingredient group was 2776px tall at 49
+ * products — taller than every other group combined, twice over — and it
+ * buried the dosage-form/brand groups the user then reported as "missing".
+ * REQ-F-011 forbids REMOVING either spec-required group, so the redesign is
+ * containment: a group whose option count reaches COLLAPSED_GROUP_MIN_OPTIONS
+ * renders collapsed behind its own expand button (auto-open when the URL
+ * already selects in it — arriving state is never hidden), and a group big
+ * enough to need it (SEARCHABLE_GROUP_MIN_OPTIONS) gets a typeahead that
+ * narrows the checkbox list client-side. Filtering the LIST display only —
+ * the submitted values are untouched, §3.4 unthreatened.
+ *
+ * Thresholds: brand (8) and dosage form (5) stay open — they were never the
+ * problem; health goal (9) and active ingredient (53) collapse; only the
+ * ingredient list is big enough to warrant the typeahead.
+ */
+const COLLAPSED_GROUP_MIN_OPTIONS = 9
+const SEARCHABLE_GROUP_MIN_OPTIONS = 16
+
+function FilterGroup({
+  group,
+  onToggleValue,
+}: {
+  group: FilterGroupModel
+  onToggleValue: (key: RepeatableFilterKey, value: string) => void
+}) {
+  const { t } = useTranslation('catalog')
+  const regionId = useId()
+  const collapsible = group.options.length >= COLLAPSED_GROUP_MIN_OPTIONS
+  // Auto-open when the URL already selects here: a shared/bookmarked filter
+  // link must land with its own state visible, not folded away.
+  const [open, setOpen] = useState(!collapsible || group.selectedCount > 0)
+  const searchable = group.options.length >= SEARCHABLE_GROUP_MIN_OPTIONS
+  const [query, setQuery] = useState('')
+
+  const trimmed = query.trim().toLowerCase()
+  const visibleOptions =
+    searchable && trimmed.length > 0
+      ? group.options.filter((option) => option.label.toLowerCase().includes(trimmed))
+      : group.options
+
+  const label = t(`filters.${group.key}`)
+
+  const options = (
+    <>
+      {group.atCeiling && (
+        <p className="mb-2 text-xs text-text-muted">
+          {t('filters.ceilingHint', { max: MAX_VALUES_PER_REPEATABLE_PARAMETER })}
+        </p>
+      )}
+
+      {searchable && (
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t('filters.searchGroup')}
+          aria-label={t('filters.searchGroup')}
+          className={`${FOCUS_RING} mb-2 h-9 w-full rounded-compact border border-border-control bg-well px-3 text-sm text-text-ink`}
+        />
+      )}
+
+      <div className="flex flex-col gap-2">
+        {visibleOptions.map((option) => (
+          <label
+            key={option.value}
+            className={`flex min-h-11 items-center gap-2 text-sm ${
+              option.disabled ? 'text-text-muted' : 'text-text-ink'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={option.checked}
+              disabled={option.disabled}
+              onChange={() => onToggleValue(group.key, option.value)}
+              className={`${FOCUS_RING} size-4 shrink-0 rounded-compact border border-border-control accent-brand-teal`}
+            />
+            <span className="min-w-0 break-words">{option.label}</span>
+          </label>
+        ))}
+        {searchable && visibleOptions.length === 0 && (
+          <p className="text-sm text-text-muted">{t('filters.searchNoMatch')}</p>
+        )}
+      </div>
+    </>
+  )
+
+  if (!collapsible) {
+    return (
+      <fieldset className="min-w-0 border-0 p-0">
+        <legend className="mb-2 text-sm font-semibold text-text-ink">{label}</legend>
+        {options}
+      </fieldset>
+    )
+  }
+
+  return (
+    <div className="min-w-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={open ? regionId : undefined}
+        onClick={() => setOpen((value) => !value)}
+        className={`${FOCUS_RING} flex min-h-11 w-full items-center justify-between gap-2 rounded-compact text-sm font-semibold text-text-ink`}
+      >
+        <span>
+          {label}
+          {group.selectedCount > 0 && <span aria-hidden="true"> ({group.selectedCount})</span>}
+          {group.selectedCount > 0 && (
+            <VisuallyHidden>{t('filters.groupSelectedCount', { count: group.selectedCount })}</VisuallyHidden>
+          )}
+        </span>
+        <Icon size={14} className={`transition-transform duration-150 ease-standard ${open ? 'rotate-180' : ''}`}>
+          <ChevronDownIcon />
+        </Icon>
+      </button>
+      {open && (
+        <fieldset id={regionId} className="mt-2 min-w-0 border-0 p-0">
+          {/* The group name still reaches assistive tech as the FIELDSET's
+              name — the disclosure button above is chrome, not the group. */}
+          <legend className="sr-only">{label}</legend>
+          {options}
+        </fieldset>
+      )}
+    </div>
+  )
+}
 
 /*
  * ISSUE-048 — constraint attributes for the price inputs.
@@ -122,35 +255,7 @@ export function CatalogFilterPanel({
     <div className={`flex flex-col gap-6 ${className}`}>
       {groups.map((group) =>
         group.options.length === 0 ? null : (
-          <fieldset key={group.key} className="min-w-0 border-0 p-0">
-            <legend className="mb-2 text-sm font-semibold text-text-ink">{t(`filters.${group.key}`)}</legend>
-
-            {group.atCeiling && (
-              <p className="mb-2 text-xs text-text-muted">
-                {t('filters.ceilingHint', { max: MAX_VALUES_PER_REPEATABLE_PARAMETER })}
-              </p>
-            )}
-
-            <div className="flex flex-col gap-2">
-              {group.options.map((option) => (
-                <label
-                  key={option.value}
-                  className={`flex min-h-11 items-center gap-2 text-sm ${
-                    option.disabled ? 'text-text-muted' : 'text-text-ink'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={option.checked}
-                    disabled={option.disabled}
-                    onChange={() => onToggleValue(group.key, option.value)}
-                    className={`${FOCUS_RING} size-4 shrink-0 rounded-compact border border-border-control accent-brand-teal`}
-                  />
-                  <span className="min-w-0 break-words">{option.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <FilterGroup key={group.key} group={group} onToggleValue={onToggleValue} />
         ),
       )}
 

@@ -179,6 +179,18 @@ export function CatalogPage() {
   // display:none while inert/scroll-lock were still in force.
   useCloseAboveBreakpoint(filtersOpen, closeFilters)
 
+  /*
+   * ISSUE-052 (🔴 reconfirmed by the user, 2026-08-14: the panel "must not
+   * open without the user's decision — זה יהיה נחשב כבאג") — the desktop
+   * rail is CLOSED by default and toggled by its own button beside the sort
+   * control. One exception, and it is the user's own decision arriving by
+   * URL: when the address already carries panel filters (a bookmark, a
+   * shared link, a back-navigation), the rail opens so the state applied is
+   * the state shown. The rail sits BESIDE the grid (md:flex-row), so open
+   * or closed it never pushes products down.
+   */
+  const [railOpen, setRailOpen] = useState(() => activeFilterCount(urlState) > 0)
+
   const filterGroups = buildFilterGroups(facets, urlState, language)
   const filtersActive = hasActiveFilters(urlState)
   const activeCount = activeFilterCount(urlState)
@@ -301,6 +313,33 @@ export function CatalogPage() {
             </VisuallyHidden>
           </Button>
 
+          {/*
+            ISSUE-052 — the desktop rail's own toggle. A separate button from
+            the mobile one because the semantics differ: this one is a plain
+            expanded/collapsed toggle for an inline region (aria-expanded),
+            the mobile one opens a dialog (aria-haspopup). The wrapper div
+            carries the visibility split so Button's own display class is
+            never fought at the same specificity.
+          */}
+          <div className="hidden md:block">
+            <Button
+              type="button"
+              variant="secondary"
+              aria-expanded={railOpen}
+              onClick={() => setRailOpen((value) => !value)}
+            >
+              <span aria-hidden="true">
+                {t('filters.openLabel', { ns: 'catalog' })}
+                {activeCount > 0 ? ` (${activeCount})` : ''}
+              </span>
+              <VisuallyHidden>
+                {activeCount > 0
+                  ? `${t('filters.openLabel', { ns: 'catalog' })} — ${t('filters.activeCount', { ns: 'catalog', count: activeCount })}`
+                  : t('filters.openLabel', { ns: 'catalog' })}
+              </VisuallyHidden>
+            </Button>
+          </div>
+
           <CatalogSortSelect value={urlState.sort} onChange={handleSortChange} />
         </div>
       </div>
@@ -319,10 +358,15 @@ export function CatalogPage() {
           copy) and the Drawer at the end of this page owns the same panel.
           One panel component, two mountings — no second filter design.
         */}
-        <aside aria-label={t('filters.heading', { ns: 'catalog' })} className="hidden w-60 shrink-0 md:block">
-          <h2 className="mb-4 text-lg font-semibold text-text-ink">{t('filters.heading', { ns: 'catalog' })}</h2>
-          {filterPanel}
-        </aside>
+        {/* ISSUE-052 — mounted only while the user holds it open (or arrived
+            with panel filters in the URL); closing it via the toggle keeps
+            focus on the toggle button, so no focus is orphaned. */}
+        {railOpen && (
+          <aside aria-label={t('filters.heading', { ns: 'catalog' })} className="hidden w-60 shrink-0 md:block">
+            <h2 className="mb-4 text-lg font-semibold text-text-ink">{t('filters.heading', { ns: 'catalog' })}</h2>
+            {filterPanel}
+          </aside>
+        )}
 
         {/*
           `gridRef` scopes the add-to-cart return-focus lookup (Slice 8,
@@ -495,7 +539,18 @@ export function CatalogPage() {
                     <p role="status" className={addedToCartMessage ? 'mt-4 text-sm text-text-ink' : ''}>
                       {addedToCartMessage}
                     </p>
-                    <ProductGrid products={viewState.products} onAddToCart={handleAddToCart} />
+                    {/*
+                      ISSUE-053 — the settled grid FADES IN (180ms, opacity
+                      only) so a page/filter change visibly hands over to new
+                      results instead of swapping in one frame. The branch
+                      remounts on every loading -> ready transition, which is
+                      what restarts the animation; motion-safe removes it
+                      entirely under prefers-reduced-motion, and content is
+                      never delayed — opacity starts at .3, not 0.
+                    */}
+                    <div className="motion-safe:animate-[catalog-grid-fade_180ms_ease-out]">
+                      <ProductGrid products={viewState.products} onAddToCart={handleAddToCart} />
+                    </div>
                     <CatalogPagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
                   </>
                 )}

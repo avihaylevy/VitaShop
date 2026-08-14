@@ -258,3 +258,18 @@ body {
     transform: scale(1);
   }
 }
+
+/*
+ * ISSUE-053 — the catalogue grid fades in when a settled query renders
+ * (page change, filter change, first load). Opacity only, from .3 so the
+ * products are readable from the first frame; motion-safe-gated at the
+ * call site in CatalogPage.
+ */
+@keyframes catalog-grid-fade {
+  0% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 1;
+  }
+}

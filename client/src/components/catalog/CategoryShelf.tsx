@@ -11,8 +11,15 @@ type CategoryShelfProps = {
   className?: string
 }
 
+/*
+ * ISSUE-056 — the shelf is ONE row at every width: chips never wrap (the
+ * list scrolls horizontally inside its own overflow container instead —
+ * never the page), and from md up they compact to min-h-9/px-3. Below md
+ * the 44px touch target stays. whitespace-nowrap keeps a two-word category
+ * from wrapping inside its own chip.
+ */
 const LINK_CLASS =
-  'inline-flex min-h-11 min-w-11 items-center justify-center rounded-compact px-4 text-sm text-text-ink transition-colors duration-150 ease-standard'
+  'inline-flex min-h-11 min-w-11 items-center justify-center whitespace-nowrap rounded-compact px-4 text-sm text-text-ink transition-colors duration-150 ease-standard md:min-h-9 md:px-3'
 
 /**
  * Category navigation only — REQ-F-001's six canonical categories plus
@@ -27,7 +34,7 @@ export function CategoryShelf({ categories, activeCategorySlug, className = '' }
 
   return (
     <nav aria-label={t('categoryShelf.navLabel')} className={className}>
-      <ul className="flex flex-wrap gap-2">
+      <ul className="flex gap-2 overflow-x-auto pb-1">
         <li>
           <Link
             to="/catalog"

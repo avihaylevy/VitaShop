@@ -88,6 +88,11 @@
     "availability": "זמינות",
     "inStock": "רק מוצרים במלאי",
     "ceilingHint": "אפשר לבחור עד {{max}} ערכים בקבוצה זו.",
+    "searchGroup": "חיפוש ברשימה",
+    "searchNoMatch": "לא נמצאו ערכים תואמים",
+    "groupSelectedCount_one": "ערך אחד נבחר",
+    "groupSelectedCount_two": "שני ערכים נבחרו",
+    "groupSelectedCount_other": "{{count}} ערכים נבחרו",
     "activeCount_one": "מסנן אחד פעיל",
     "activeCount_two": "שני מסננים פעילים",
     "activeCount_other": "{{count}} מסננים פעילים"
