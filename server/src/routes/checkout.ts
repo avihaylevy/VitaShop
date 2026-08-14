@@ -9,6 +9,7 @@ import { emailStrings, deliveryPromiseHe } from '../lib/emailStrings.js'
 import type { EmailService } from '../lib/emailService.js'
 import type { DeliveryMethodName } from '../lib/shipping.js'
 import { requireShopper } from './requireShopper.js'
+import { createRequireVerifiedShopper } from './requireActiveShopper.js'
 
 /**
  * MILESTONE-008 Checkpoint D2 — `POST /api/checkout/validate` and
@@ -69,12 +70,24 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
   const { prisma } = deps
   const limiters = deps.rateLimiters ?? createCheckoutRateLimiters()
   const router = Router()
+  /*
+   * 🔴 REQ-F-031's gate — O3, enforced for the first time. "An unverified
+   * account cannot complete an order" is `Approved` from the specification and
+   * A9 handed it to this milestone; until now NOTHING implemented it, so an
+   * account that never opened its verification mail could sign in and pay.
+   * ISSUE-091.
+   *
+   * ⚠️ It gates `/validate` as well as `/pay`, deliberately: refusing only at
+   * the payment lets a shopper fill in an address and choose a delivery method
+   * before being told they cannot order at all.
+   */
+  const requireVerifiedShopper = createRequireVerifiedShopper(deps.prisma)
 
   /**
    * REQ-F-042's re-check, as a READ. It creates nothing: a shopper may call it
    * as often as the screen needs.
    */
-  router.post('/validate', limiters.validate, requireShopper, async (req, res) => {
+  router.post('/validate', limiters.validate, requireShopper, requireVerifiedShopper, async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>
     const result = await quoteCheckout(prisma, {
       userId: req.session!.userId!,
@@ -103,7 +116,7 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
    *   2. compare the fingerprint — a mismatch HALTS and returns the NEW quote
    *   3. simulate the payment, and only then create the order
    */
-  router.post('/pay', limiters.pay, requireShopper, async (req, res) => {
+  router.post('/pay', limiters.pay, requireShopper, requireVerifiedShopper, async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>
     const userId = req.session!.userId!
 

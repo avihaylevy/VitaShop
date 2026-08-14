@@ -2,6 +2,7 @@ import { Router } from 'express'
 import type { PrismaClient } from '@prisma/client'
 import { createAccountRateLimiters, type AccountRateLimiters } from '../lib/rateLimit.js'
 import { requireShopper } from './requireShopper.js'
+import { createRequireActiveShopper } from './requireActiveShopper.js'
 
 /**
  * MILESTONE-008 Checkpoint F2b — REQ-F-041's pre-filled details.
@@ -38,6 +39,13 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
   const { prisma } = deps
   const limiters = deps.rateLimiters ?? createAccountRateLimiters()
   const router = Router()
+  /*
+   * ISSUE-092 — the shared guard, replacing this route's own inline status
+   * check. ⚠️ ACTIVE, not VERIFIED: an unverified shopper reads their own name
+   * and phone. Refusing that is what produced the login loop this route
+   * shipped with — 401, the client reads "expired", the login succeeds.
+   */
+  const requireActiveShopper = createRequireActiveShopper(deps.prisma)
 
   /*
    * 🔴 `no-store` ON EVERYTHING THIS ROUTER ANSWERS, set at the ROUTER level
@@ -63,14 +71,13 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
    * authenticated route here: limiter, then guard. Guarding first would leave
    * an unauthenticated flood hitting the session store with no ceiling.
    */
-  router.get('/profile', limiters.profile, requireShopper, async (req, res) => {
+  router.get('/profile', limiters.profile, requireShopper, requireActiveShopper, async (req, res) => {
     const userId = req.session!.userId!
 
     let user: {
       firstName: string
       lastName: string
       phone: string | null
-      status: string
       addresses: { line1: string; city: string; zipCode: string | null }[]
     } | null
     try {
@@ -80,7 +87,6 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
           firstName: true,
           lastName: true,
           phone: true,
-          status: true,
           /*
            * ⚠️ `isDefault` ORDERS the result rather than filtering it, so a
            * shopper whose addresses all carry `isDefault: false` still gets
@@ -134,7 +140,17 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
      * the wrong place: it blocks a profile read, not an order. Recorded as
      * ISSUE-091 rather than smuggled in through a pre-fill endpoint.
      */
-    if (!user || user.status === 'disabled') {
+    /*
+     * 🔴 ONLY `!user` REMAINS. The disabled check and the session destroy that
+     * used to live here moved into `requireActiveShopper`, which runs before
+     * this handler and is mounted on every authenticated route — ISSUE-092.
+     * Keeping a second copy here would be an unreachable branch that reads as
+     * load-bearing, and two places that must agree about a refusal.
+     *
+     * This one stays because the row can vanish between the guard's read and
+     * this one, and `findUnique` returning null must not become a 200.
+     */
+    if (!user) {
       /*
        * 🔴 DESTROY THE SESSION, don't merely refuse this request. The account
        * is disabled and the cookie is still valid for everything else —
@@ -147,7 +163,6 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
        * `requireShopper`, which touches every authenticated route and is not
        * this slice's to decide — ISSUE-092.
        */
-      req.session?.destroy(() => {})
       // ⚠️ 401, not 404. The session names an account that cannot act, so the
       // shopper's answer is to sign in again — and the response says nothing
       // about whether the row exists.

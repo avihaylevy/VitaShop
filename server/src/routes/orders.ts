@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client'
 import { applyTransition } from '../lib/orderTransitionService.js'
 import { createOrderRateLimiters, type OrderRateLimiters } from '../lib/rateLimit.js'
 import { requireShopper } from './requireShopper.js'
+import { createRequireActiveShopper } from './requireActiveShopper.js'
 
 /**
  * MILESTONE-008 Checkpoint E3 — the shopper's own order actions.
@@ -36,6 +37,12 @@ export function createOrderRouter(deps: OrderRouterDeps): ReturnType<typeof Rout
   const { prisma } = deps
   const limiters = deps.rateLimiters ?? createOrderRateLimiters()
   const router = Router()
+  /*
+   * ISSUE-092 — a disabled account kept a working session here. ⚠️ ACTIVE, not
+   * VERIFIED: cancelling is not completing an order, and an unverified shopper
+   * holding a pending order must be able to get out of it.
+   */
+  const requireActiveShopper = createRequireActiveShopper(deps.prisma)
 
   /**
    * REQ-F-045's sibling: the shopper withdrawing an order they placed.
@@ -43,7 +50,7 @@ export function createOrderRouter(deps: OrderRouterDeps): ReturnType<typeof Rout
    * §8.9 permits `pending_payment -> cancelled` and `paid -> cancelled` for a
    * shopper, and stops there — fulfilment begins at `processing`.
    */
-  router.post('/:id/cancel', limiters.cancel, requireShopper, async (req, res) => {
+  router.post('/:id/cancel', limiters.cancel, requireShopper, requireActiveShopper, async (req, res) => {
     const userId = req.session!.userId!
     // ⚠️ Narrowed rather than asserted. Express types a path parameter as
     // possibly an array, and an array reaching a Prisma `where` is a type error
