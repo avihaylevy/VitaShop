@@ -5,7 +5,6 @@ import { useCatalogData } from '../hooks/useCatalogData'
 import { useCatalogCategories } from '../hooks/useCatalogCategories'
 import { useCatalogFacets } from '../hooks/useCatalogFacets'
 import { useCloseAboveBreakpoint } from '../hooks/useCloseAboveBreakpoint'
-import { useCart } from '../state/CartContext'
 import { CategoryShelf, CatalogLoadingState, CatalogErrorState, CatalogEmptyState } from '../components/catalog'
 import { ProductGrid } from '../components/catalog/ProductGrid'
 import { CatalogSearchField } from '../components/catalog/CatalogSearchField'
@@ -13,8 +12,8 @@ import { CatalogSortSelect } from '../components/catalog/CatalogSortSelect'
 import { CatalogFilterPanel } from '../components/catalog/CatalogFilterPanel'
 import { CatalogPagination } from '../components/catalog/CatalogPagination'
 import { CatalogFallbackSection } from '../components/catalog/CatalogFallbackSection'
-import { ADD_TO_CART_ATTRIBUTE } from '../components/catalog/ProductCard'
 import { CartDrawer } from '../components/cart/CartDrawer'
+import { useAddToCart } from '../hooks/useAddToCart'
 import { Button } from '../components/ui/Button'
 import { Drawer } from '../components/ui/Drawer'
 import { VisuallyHidden } from '../components/ui/VisuallyHidden'
@@ -60,28 +59,25 @@ export function CatalogPage() {
   } = useCatalogData(language)
   const categorySlug = urlState.category
   const [, setSearchParams] = useSearchParams()
-  const { addItem } = useCart()
-  const mountedRef = useRef(true)
-  const [announced, setAnnounced] = useState<{ slug: string; count: number } | null>(null)
-
   /**
-   * 🔴 Slice 8 (DEC-047, technical/SLICE_8_PLAN.md §5). Owned locally by
-   * CatalogPage — never in CartContext, the reducer, App or a global UI
-   * context — since CatalogPage is the only add-to-cart surface today.
+   * 🔴 Slice 8 (DEC-047, technical/SLICE_8_PLAN.md §5). THE CHOREOGRAPHY MOVED
+   * INTO `hooks/useAddToCart.ts` AT ISSUE-105 — it is no longer owned here,
+   * because CatalogPage is no longer the only add-to-cart surface.
    *
-   * Parent invariant: drawerSlug === null <=> drawer closed. `open` is
-   * always DERIVED as drawerSlug !== null at the render below, so the two
-   * can never disagree.
+   * ⚠️ The header above used to say "owned locally by CatalogPage since it is
+   * the only add-to-cart surface today". The user asked to buy from the home
+   * page, so that premise ended — and Checkpoint F4's whole reason for making
+   * those cards navigational was to avoid a SECOND copy of this. Moving it
+   * keeps that promise; copying it would have broken it.
+   *
+   * Every rule these defects earned lives in the hook, unchanged: the trigger
+   * resolved BEFORE the await, the grid-scoped lookup, the closed -> open focus
+   * owner (DEC-047-A R1), the response's cart-wide count, and nothing
+   * publishing after unmount. Parent invariant is still
+   * `drawerSlug === null <=> drawer closed`, derived at the render below.
    */
-  const [drawerSlug, setDrawerSlug] = useState<string | null>(null)
-  // The exact control that opened the drawer (DEC-047-A, R1) — written ONLY
-  // on the closed->open transition inside the reconciliation effect below,
-  // never on a later successful add while the drawer is already open.
-  const returnFocusRef = useRef<HTMLElement>(null)
-  // Scopes the return-focus lookup to this page's own grid — never a
-  // document-wide query, never by translated text (SLICE_8_PLAN.md §3.1).
-  const gridRef = useRef<HTMLDivElement>(null)
-  const closeDrawer = useCallback(() => setDrawerSlug(null), [])
+  const { handleAddToCart, drawerSlug, closeDrawer, returnFocusRef, gridRef, announced } =
+    useAddToCart()
 
   // Still owned by CatalogPage per §8 — the resolver's output does not
   // always carry activeCategory (e.g. 'loading', 'error', 'invalid-category',
@@ -221,46 +217,10 @@ export function CatalogPage() {
    * 🔴 THE DRAWER OPENS ONLY ON A CONFIRMED SERVER SUCCESS (DEC-047 D1) —
    * never from the click handler, never optimistically, never on a refusal.
    */
-  const handleAddToCart = useCallback(
-    (slug: string) => {
-      // The trigger is resolved BEFORE the await: after it, focus may have
-      // moved and the grid may have re-rendered. The lookup is scoped to this
-      // page's own grid, keyed by slug — never document-wide, never by
-      // translated text. A miss is left null and Modal's #main fallback applies.
-      const trigger =
-        gridRef.current?.querySelector<HTMLElement>(
-          `[${ADD_TO_CART_ATTRIBUTE}="${CSS.escape(slug)}"]`,
-        ) ?? null
-
-      void addItem(slug, 1).then((result) => {
-        if (!result || !mountedRef.current) return
-
-        // The count stays the cart-wide committed total FROM THE RESPONSE, so
-        // the spoken number always matches the Header badge.
-        setAnnounced({ slug, count: result.cart.totalQuantity })
-
-        setDrawerSlug((current) => {
-          // Closed -> open. This transition, and only this one, establishes
-          // the return-focus owner (DEC-047-A, R1). While the drawer is
-          // already open a later add changes CONTENT only (D8): no target
-          // resolved, no re-key, no close/reopen, no replayed focus entry.
-          if (current === null) returnFocusRef.current = trigger
-          return slug
-        })
-      })
-    },
-    [addItem],
-  )
-
-  // Set in the effect body, not just at ref init, so StrictMode's
-  // mount/unmount/remount cycle restores the mounted flag. Nothing publishes
-  // after unmount: a response that lands late finds this false and stops.
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
+  // 🔴 `handleAddToCart`, the mounted flag and the drawer transition all live
+  // in `useAddToCart` now — see the note at the top of this component. The
+  // comment block above still describes exactly what the hook does, and is
+  // kept because it records WHY each rule exists.
 
   // Stored as slug + count, not as a rendered string, so the sentence
   // re-resolves through i18n on a language toggle instead of freezing in the

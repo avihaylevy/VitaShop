@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../i18n'
+import { CartProvider } from '../state/CartContext'
 import { HomePage } from './HomePage'
 import { NEW_ARRIVALS_COUNT } from '../hooks/useNewArrivals'
 
@@ -75,7 +76,14 @@ function ok(items: unknown[]) {
 function renderHome() {
   return render(
     <MemoryRouter>
-      <HomePage />
+      {/*
+        ISSUE-105 — the shelf now adds to cart, so it needs the cart context.
+        `main.tsx` wraps the whole app in this provider, so production has it;
+        this mirrors that rather than inventing a lighter one.
+      */}
+      <CartProvider>
+        <HomePage />
+      </CartProvider>
     </MemoryRouter>,
   )
 }
@@ -113,15 +121,23 @@ describe('the New Arrivals shelf', () => {
     expect(screen.queryByText(`Product ${NEW_ARRIVALS_COUNT + 1}`)).toBeNull()
   })
 
-  it('🔴 the cards LINK and do not add to cart', async () => {
-    // Buying belongs to the catalogue, which owns the drawer and the
-    // return-focus choreography. A second copy here would be two
-    // implementations of one behaviour.
+  it('🔴 the cards BOTH link and add to cart — ISSUE-105', async () => {
+    /*
+     * ⚠️ THIS TEST ASSERTED THE OPPOSITE UNTIL 2026-08-14. Checkpoint F4 made
+     * the cards navigational so the drawer, the return-focus choreography and
+     * the announcement would not exist twice — then the USER checked the site
+     * and asked to buy from the home page, which is their call.
+     *
+     * 🔴 F4'S REASON IS HONOURED DIFFERENTLY, NOT DISCARDED: the choreography
+     * moved into `useAddToCart`, which the catalogue uses too. Still one
+     * implementation — and the link stays, so the card does both.
+     */
     routed(ok([product(1)]))
     renderHome()
+
     const link = await screen.findByRole('link', { name: 'Product 1' })
     expect(link.getAttribute('href')).toBe('/product/product-1')
-    expect(screen.queryByRole('button', { name: /add to cart/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /add to cart/i })).toBeTruthy()
   })
 
   it('🔴 A FAILED SHELF DOES NOT BREAK THE PAGE — the categories still render', async () => {

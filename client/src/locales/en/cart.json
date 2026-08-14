@@ -3,7 +3,8 @@
     "title": "Shopping cart",
     "summary_one": "1 item in cart",
     "summary_other": "{{count}} items in cart",
-    "backToCatalog": "Continue shopping"
+    "backToCatalog": "Continue shopping",
+    "checkoutCta": "Proceed to checkout"
   },
   "state": {
     "loading": "Loading your cart…",

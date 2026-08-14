@@ -325,6 +325,32 @@ export function CartPage() {
                 )}
               </div>
 
+              {/*
+                🔴 ISSUE-104 — THE WAY IN TO CHECKOUT, ABSENT SINCE F2c.
+                `/checkout` shipped four checkpoints ago and NOTHING IN THIS
+                CLIENT LINKED TO IT: a grep found the string only in comments.
+                The screen worked, the flow behind it was tested end to end, and
+                the only way in was to type the URL — while the commit that
+                shipped it, and STATUS.md, both claimed a shopper could place an
+                order by clicking. The USER found it in a browser in minutes.
+
+                ⚠️ HIDDEN WHILE A LINE BLOCKS CHECKOUT, not disabled. The cart
+                already explains the reason beside the offending row (C3 above),
+                and `hasBlockingLine` is the SERVER's flag — the client never
+                re-derives it. Offering a control the checkout screen would
+                refuse just sends the shopper somewhere to be told no.
+              */}
+              {!cart.hasBlockingLine && (
+                <p className="mt-6">
+                  <Link
+                    to="/checkout"
+                    className={`${FOCUS_RING} inline-flex min-h-11 items-center justify-center rounded-card border border-transparent bg-brand-teal px-4 text-sm font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
+                  >
+                    {t('page.checkoutCta')}
+                  </Link>
+                </p>
+              )}
+
               {/* Quiet link, never styled to compete (DESIGN_SYSTEM.md §8). */}
               <p className="mt-6">
                 <Link

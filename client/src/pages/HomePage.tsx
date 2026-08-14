@@ -4,6 +4,8 @@ import { useCatalogCategories } from '../hooks/useCatalogCategories'
 import { useNewArrivals } from '../hooks/useNewArrivals'
 import { CategoryShelf } from '../components/catalog'
 import { ProductGrid } from '../components/catalog/ProductGrid'
+import { CartDrawer } from '../components/cart/CartDrawer'
+import { useAddToCart } from '../hooks/useAddToCart'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
 
@@ -65,6 +67,17 @@ export function HomePage() {
 function NewArrivals() {
   const { t } = useTranslation('catalog')
   const state = useNewArrivals()
+  const { handleAddToCart, drawerSlug, closeDrawer, returnFocusRef, gridRef, announced } =
+    useAddToCart()
+
+  const announcedProduct =
+    announced && state.status === 'ready'
+      ? state.products.find((product) => product.slug === announced.slug)
+      : undefined
+  const addedToCartMessage =
+    announced && announcedProduct
+      ? t('addedToCart', { product: announcedProduct.name, count: announced.count })
+      : ''
 
   /**
    * 🔴 ISSUE-098 — WHAT PRESSING RETRY DID TO THE USER, which the suite could
@@ -236,20 +249,46 @@ function NewArrivals() {
       )}
 
       {state.status === 'ready' && (
-        <div className="mt-4">
+        <div ref={gridRef} className="mt-4">
           {/*
-            🔴 `navigational` — the cards LINK and do not add to cart. The
-            union makes that a choice a caller must state, not a prop it can
-            forget.
+            🔴 THE CARDS ADD TO CART — ISSUE-105, and this REVERSES Checkpoint
+            F4's navigational-only design at the user's instruction, after they
+            checked the site and asked to buy from the home page.
 
-            ⚠️ NO `emptyState` — it moved into the live region above, so the
-            empty sentence is ANNOUNCED and not merely drawn. With no products
-            and no `emptyState`, `ProductGrid` renders nothing at all, which is
-            what should happen when the message is already on the page.
+            ⚠️ F4's REASON STILL HOLDS AND IS HONOURED DIFFERENTLY. It made the
+            cards links so the drawer, the return-focus choreography and the
+            announcement would not exist twice. Rather than copy them here, the
+            whole choreography moved into `useAddToCart`, which the catalogue
+            now uses too — so there is still exactly ONE implementation.
+
+            ⚠️ NO `emptyState` — it lives in the live region above, so the empty
+            sentence is ANNOUNCED and not merely drawn.
           */}
-          <ProductGrid products={state.products} navigational />
+          <ProductGrid products={state.products} onAddToCart={handleAddToCart} />
         </div>
       )}
+
+      {/*
+        🔴 ONE DRAWER, rendered unconditionally, exactly as the catalogue does.
+        Its own internal lifecycle governs everything else; this page owns only
+        the slug, the return-focus owner and a stable close identity.
+      */}
+      <CartDrawer
+        open={drawerSlug !== null}
+        slug={drawerSlug}
+        onClose={closeDrawer}
+        returnFocusRef={returnFocusRef}
+      />
+
+      {/*
+        Announced as slug + count so the sentence re-resolves through i18n on a
+        language toggle instead of freezing in the language it was spoken in.
+        The NAME comes from this page's own list — nothing is invented if the
+        product is not in it.
+      */}
+      <p role="status" className="sr-only">
+        {addedToCartMessage}
+      </p>
 
     </section>
   )
