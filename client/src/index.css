@@ -273,3 +273,19 @@ body {
     opacity: 1;
   }
 }
+
+/*
+ * ISSUE-112 — the welcome toast slides in just under the header. Entrance
+ * only; the exit is an unmount (a six-second status message needs no exit
+ * choreography). motion-safe-gated at the call site.
+ */
+@keyframes welcome-toast-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

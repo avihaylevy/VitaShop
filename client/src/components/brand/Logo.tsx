@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import logoTransparent from '../../assets/brand/vitashop-logo-transparent.png'
-import justLogo from '../../assets/brand/just-logo.png'
+import markTransparent from '../../assets/brand/vitashop-mark-transparent.png'
 import { DESKTOP_LOGO_FRAME, MOBILE_LOGO_FRAME, type LogoFrame } from './logoFrame'
 
 type LogoProps = {
@@ -55,9 +55,12 @@ function Lockup({ frame, className }: { frame: LogoFrame; className: string }) {
  * Brand mark. `variant="full"` is the lockup (mark + wordmark) — one
  * markup pair per breakpoint (26px desktop, 21px mobile — DESIGN_SYSTEM.md
  * §5's approved visible logo height), toggled with Tailwind responsive
- * display. `variant="mark"` is the standalone symbol (`just-logo.png`) —
- * no transparent variant of it exists yet (ISSUE-018 / TASK-011 still
- * open for that), so it keeps the plain contain-fit rendering.
+ * display. `variant="mark"` is the standalone symbol — since 2026-08-15
+ * the TRANSPARENT derived variant (vitashop-mark-transparent.png, made by
+ * scripts/make-mark-transparent.py under the user's ISSUE-018 approval),
+ * so it no longer shows an off-white box on tinted surfaces. Contain-fit
+ * rendering unchanged. Still open in TASK-011: an SVG (must not be
+ * auto-derived from a PNG) and the Hebrew-wordmark decision.
  *
  * The accessible name lives on this component (not the caller): the
  * lockup's pixels spell out the brand name, so it needs real alt text,
@@ -70,7 +73,7 @@ export function Logo({ variant = 'full', size = 28, className = '' }: LogoProps)
   if (variant === 'mark') {
     return (
       <img
-        src={justLogo}
+        src={markTransparent}
         alt={alt}
         style={{ width: size, height: size, maxWidth: 'none', objectFit: 'contain' }}
         className={className}

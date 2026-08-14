@@ -29,6 +29,9 @@
     "myOrders": "My orders",
     "adminOrders": "Manage orders"
   },
+  "welcome": {
+    "message": "Welcome, {{name}}"
+  },
   "favourites": {
     "label": "Favourites",
     "ariaLabelEmpty": "Favourites, empty",

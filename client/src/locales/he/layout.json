@@ -29,6 +29,9 @@
     "myOrders": "ההזמנות שלי",
     "adminOrders": "ניהול הזמנות"
   },
+  "welcome": {
+    "message": "ברוכים הבאים, {{name}}"
+  },
   "favourites": {
     "label": "מועדפים",
     "ariaLabelEmpty": "מועדפים, ריק",
