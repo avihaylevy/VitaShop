@@ -70,23 +70,23 @@ describe('mapCatalogProduct', () => {
     expect(result.imageFile).toBeNull()
   })
 
-  it('passes brandName and packageQuantity through unchanged', () => {
-    const result = mapCatalogProduct(buildDto({ brandName: 'סופהרב', packageQuantity: 60 }), 'he')
-    expect(result.brandName).toBe('סופהרב')
+  it('passes packageQuantity through unchanged', () => {
+    const result = mapCatalogProduct(buildDto({ brandName: 'סופהרב', brandNameEn: null, packageQuantity: 60 }), 'he')
     expect(result.packageQuantity).toBe(60)
   })
 
-  // ISSUE-127a — the English UI shows the manufacturer-verified Latin form;
-  // the Hebrew UI keeps the stored name; a brand without a sourced Latin
-  // form falls back rather than inventing one.
-  it('picks brandNameEn for the English UI and keeps the stored name in Hebrew', () => {
+  // DEC-085 (user, 2026-08-15, amends ISSUE-127a) — the brand reads in its
+  // manufacturer-verified Latin form in BOTH languages; a brand without a
+  // sourced Latin form falls back rather than inventing one.
+  it('picks brandNameEn in BOTH languages', () => {
     const dto = buildDto({ brandName: 'סולגאר', brandNameEn: 'Solgar' })
     expect(mapCatalogProduct(dto, 'en').brandName).toBe('Solgar')
-    expect(mapCatalogProduct(dto, 'he').brandName).toBe('סולגאר')
+    expect(mapCatalogProduct(dto, 'he').brandName).toBe('Solgar')
   })
 
-  it('falls back to the stored brand name in English when no Latin form is sourced', () => {
+  it('falls back to the stored brand name in both languages when no Latin form is sourced', () => {
     const dto = buildDto({ brandName: 'סולגאר', brandNameEn: null })
     expect(mapCatalogProduct(dto, 'en').brandName).toBe('סולגאר')
+    expect(mapCatalogProduct(dto, 'he').brandName).toBe('סולגאר')
   })
 })

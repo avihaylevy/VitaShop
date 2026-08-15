@@ -31,21 +31,18 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
   } as CartLine
 }
 
-describe('ISSUE-129 — the brand language pick matches the catalogue (DEC-080)', () => {
+describe('DEC-085 — the brand reads Latin-first in BOTH languages (amends ISSUE-129)', () => {
   const bilingual = () => line({ brandName: 'סולגאר', brandNameEn: 'Solgar' })
 
-  it('the English UI prefers the manufacturer-verified Latin form', () => {
+  it('both UIs prefer the manufacturer-verified Latin form', () => {
     expect(toCartLineDisplay(bilingual(), 'en').brandName).toBe('Solgar')
+    expect(toCartLineDisplay(bilingual(), 'he').brandName).toBe('Solgar')
   })
 
-  it('the Hebrew UI keeps the stored name even when a Latin form exists', () => {
-    expect(toCartLineDisplay(bilingual(), 'he').brandName).toBe('סולגאר')
-  })
-
-  it('the English UI falls back to the stored name when no Latin form is sourced', () => {
-    expect(toCartLineDisplay(line({ brandName: 'סולגאר', brandNameEn: null }), 'en').brandName).toBe(
-      'סולגאר',
-    )
+  it('both UIs fall back to the stored name when no Latin form is sourced', () => {
+    const unsourced = () => line({ brandName: 'סולגאר', brandNameEn: null })
+    expect(toCartLineDisplay(unsourced(), 'en').brandName).toBe('סולגאר')
+    expect(toCartLineDisplay(unsourced(), 'he').brandName).toBe('סולגאר')
   })
 })
 

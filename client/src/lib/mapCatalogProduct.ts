@@ -33,7 +33,11 @@ export function mapCatalogProduct(dto: CatalogProductDto, language: SupportedLan
     // Latin form when one is sourced; the Hebrew UI keeps the stored name.
     // (Latin-in-Hebrew-UI for Latin-native brands needs per-brand sourcing
     // and rides the ISSUE-124 enrichment wave.)
-    brandName: (language === 'en' ? dto.brandNameEn : null) ?? dto.brandName,
+    // DEC-085 (user, 2026-08-15): the brand reads in its manufacturer Latin
+    // form in BOTH languages, everywhere it renders — cards, detail, home
+    // showcase. Fallback stays per product: no sourced Latin form, stored
+    // name. The PRODUCT name stays language-branched; only the brand flips.
+    brandName: dto.brandNameEn ?? dto.brandName,
     dosageForm: DOSAGE_FORM_LABELS[language][dto.dosageForm],
     packageQuantity: dto.packageQuantity,
     imageFile: dto.imageFile,
