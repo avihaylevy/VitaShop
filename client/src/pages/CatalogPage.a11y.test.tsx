@@ -364,7 +364,7 @@ describe('CatalogPage accessibility — query controls (Checkpoint I)', () => {
 
   it('conveys filter grouping semantically — fieldset/legend, ID-valued checkboxes, facet labels', async () => {
     setFacets({
-      brands: [{ id: 'brand-uuid-1', label: 'Solgar' }],
+      brands: [{ id: 'brand-uuid-1', label: 'Solgar', labelEn: null }],
       dosageForms: [{ value: 'CAPSULE', labelHe: 'כמוסות', labelEn: 'Capsules' }],
     })
     // ISSUE-052: the rail is closed by default, so this test arrives by a
@@ -440,6 +440,25 @@ describe('CatalogPage accessibility — query controls (Checkpoint I)', () => {
     const fallbackIndex = resultsSection.indexOf('מוצרים פופולריים בקטלוג')
     const sectionEnd = resultsSection.indexOf('</section>')
     expect(fallbackIndex).toBeGreaterThan(sectionEnd)
+  })
+
+  it('🔴 DEC-084 — the fallback is SUPPRESSED when a panel filter is active, even though the server sent one', async () => {
+    // The sixth defect list's item 2: a brand+vegan query with no matches
+    // surfaced other brands' popular products, which read as the filter
+    // "adding another company". The q-only test above is the CONTROL —
+    // same fallback payload, no panel filter, section renders.
+    setCatalogData({
+      products: [],
+      totalItems: 0,
+      hasNarrowingQuery: true,
+      urlState: { ...EMPTY_CATALOG_URL_STATE, vegan: 'true' },
+      fallback: { kind: 'popular', limit: 8, items: [product({ slug: 'suggested', name: 'Suggested Product' })] },
+    })
+    const html = await renderCatalog('/catalog?vegan=true')
+
+    expect(html).toContain('לא נמצאו מוצרים')
+    expect(html).not.toContain('מוצרים פופולריים בקטלוג')
+    expect(html).not.toContain('Suggested Product')
   })
 
   it('states what was searched in the zero-results copy (§10)', async () => {

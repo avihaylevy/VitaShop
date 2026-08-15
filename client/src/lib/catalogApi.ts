@@ -3,6 +3,7 @@ import { DIETARY_FACET_VALUES } from '../types/catalog.js'
 import type {
   CatalogApiErrorBody,
   CatalogBilingualFacetOptionDto,
+  CatalogBrandFacetOptionDto,
   CatalogCategoriesEnvelope,
   CatalogCategoryDto,
   CatalogDietaryFacetDto,
@@ -118,6 +119,12 @@ function isCatalogFacetOptionDto(value: unknown): value is CatalogFacetOptionDto
   return typeof value.id === 'string' && typeof value.label === 'string'
 }
 
+function isCatalogBrandFacetOptionDto(value: unknown): value is CatalogBrandFacetOptionDto {
+  if (!isCatalogFacetOptionDto(value)) return false
+  const { labelEn } = value as unknown as Record<string, unknown>
+  return labelEn === null || typeof labelEn === 'string'
+}
+
 function isCatalogBilingualFacetOptionDto(value: unknown): value is CatalogBilingualFacetOptionDto {
   if (!isPlainObject(value)) return false
   return typeof value.id === 'string' && typeof value.labelHe === 'string' && typeof value.labelEn === 'string'
@@ -148,7 +155,7 @@ function isCatalogFacetsDto(value: unknown): value is CatalogFacetsDto {
   if (!isPlainObject(value)) return false
   return (
     Array.isArray(value.brands) &&
-    value.brands.every(isCatalogFacetOptionDto) &&
+    value.brands.every(isCatalogBrandFacetOptionDto) &&
     Array.isArray(value.ingredients) &&
     value.ingredients.every(isCatalogFacetOptionDto) &&
     Array.isArray(value.healthGoals) &&

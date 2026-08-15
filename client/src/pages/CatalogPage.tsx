@@ -558,8 +558,17 @@ export function CatalogPage() {
                 merged into the grid above, never counted as results, and
                 rendered only for `filtered-empty`, which is the only state
                 that can carry fallback metadata.
+
+                🔴 DEC-084 (sixth defect list item 2) — SUPPRESSED when any
+                PANEL filter is active: a brand+vegan query with no matches
+                was surfacing other brands' popular products, which read as
+                the filter "adding another company" despite the section's
+                own suggestion labelling. `activeFilterCount` is exactly the
+                panel predicate (it deliberately excludes `q` and
+                `category`), so empty SEARCHES and empty CATEGORIES keep
+                their suggestions — there they help rather than mislead.
               */}
-              {viewState.state === 'filtered-empty' && viewState.fallback && (
+              {viewState.state === 'filtered-empty' && viewState.fallback && activeCount === 0 && (
                 <CatalogFallbackSection fallback={viewState.fallback} onAddToCart={handleAddToCart} />
               )}
             </>

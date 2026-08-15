@@ -21,7 +21,7 @@ import type { CatalogFacetsDto } from '../types/catalog'
 const BASE_URL = 'http://localhost:3000'
 
 const FACETS: CatalogFacetsDto = {
-  brands: [{ id: 'b1', label: 'Solgar' }],
+  brands: [{ id: 'b1', label: 'Solgar', labelEn: null }],
   ingredients: [],
   healthGoals: [],
   dosageForms: [{ value: 'CAPSULE', labelHe: 'כמוסות', labelEn: 'Capsules' }],

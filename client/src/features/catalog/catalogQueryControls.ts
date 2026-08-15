@@ -125,7 +125,13 @@ export function buildFilterGroups(
     toGroup(
       'brand',
       urlState.brand,
-      facets.brands.map((brand) => ({ value: brand.id, label: brand.label })),
+      // Sixth list item 1 — the same pick as everywhere nameEn travels
+      // (mapCatalogProduct, cartDisplay): the English UI prefers the Latin
+      // form, falling back to the stored name.
+      facets.brands.map((brand) => ({
+        value: brand.id,
+        label: (language === 'en' ? brand.labelEn : null) ?? brand.label,
+      })),
     ),
     toGroup(
       'dosageForm',

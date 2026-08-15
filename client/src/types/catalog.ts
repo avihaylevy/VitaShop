@@ -112,6 +112,17 @@ export interface CatalogFacetOptionDto {
   label: string
 }
 
+/**
+ * Sixth defect list item 1 — the brand facet carries the DEC-080 Latin form
+ * so the English UI's filter rail never lists a Hebrew brand name. Nullable:
+ * no sourced Latin form means the stored name serves both languages.
+ */
+export interface CatalogBrandFacetOptionDto {
+  id: string
+  label: string
+  labelEn: string | null
+}
+
 export interface CatalogBilingualFacetOptionDto {
   id: string
   labelHe: string
@@ -135,7 +146,7 @@ export interface CatalogDietaryFacetDto {
 }
 
 export interface CatalogFacetsDto {
-  brands: CatalogFacetOptionDto[]
+  brands: CatalogBrandFacetOptionDto[]
   ingredients: CatalogFacetOptionDto[]
   healthGoals: CatalogBilingualFacetOptionDto[]
   dosageForms: CatalogDosageFormFacetDto[]

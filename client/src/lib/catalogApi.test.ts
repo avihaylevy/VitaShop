@@ -289,7 +289,7 @@ describe('fetchProductDetail', () => {
 // MILESTONE-005 Checkpoint I — §9d.
 describe('fetchCatalogFacets', () => {
   const facets = {
-    brands: [{ id: 'b1', label: 'Solgar' }],
+    brands: [{ id: 'b1', label: 'סולגאר', labelEn: 'Solgar' }],
     ingredients: [{ id: 'i1', label: 'Omega 3' }],
     healthGoals: [{ id: 'g1', labelHe: 'חיזוק חיסוני', labelEn: 'Immune support' }],
     dosageForms: [{ value: 'CAPSULE', labelHe: 'כמוסות', labelEn: 'Capsules' }],

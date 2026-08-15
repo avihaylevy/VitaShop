@@ -13,6 +13,19 @@ export interface FacetOption {
   label: string
 }
 
+/**
+ * Sixth defect list item 1 — the brand facet carries the manufacturer-
+ * verified Latin form (Brand.nameEn, DEC-080) so the ENGLISH UI's filter
+ * rail does not list Hebrew brand names. Nullable exactly as everywhere
+ * else nameEn travels: no sourced Latin form means the stored name is all
+ * there is, in both languages.
+ */
+export interface BrandFacetOption {
+  id: string
+  label: string
+  labelEn: string | null
+}
+
 export interface BilingualFacetOption {
   id: string
   labelHe: string
@@ -39,7 +52,7 @@ export interface DietaryFacetOption {
 }
 
 export interface CatalogFacetsPayload {
-  brands: FacetOption[]
+  brands: BrandFacetOption[]
   ingredients: FacetOption[]
   healthGoals: BilingualFacetOption[]
   dosageForms: DosageFormFacetOption[]
@@ -79,7 +92,7 @@ export async function resolveCatalogFacets(prisma: PrismaClient): Promise<Catalo
   const [brands, ingredients, healthGoals, activeDosageForms] = await Promise.all([
     prisma.brand.findMany({
       where: { products: { some: { isActive: true } } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, nameEn: true },
       orderBy: { name: 'asc' },
     }),
     prisma.activeIngredient.findMany({
@@ -113,7 +126,7 @@ export async function resolveCatalogFacets(prisma: PrismaClient): Promise<Catalo
   )
 
   return {
-    brands: brands.map((brand) => ({ id: brand.id, label: brand.name })),
+    brands: brands.map((brand) => ({ id: brand.id, label: brand.name, labelEn: brand.nameEn ?? null })),
     ingredients: ingredients.map((ingredient) => ({ id: ingredient.id, label: ingredient.name })),
     healthGoals: healthGoals.map((goal) => ({ id: goal.id, labelHe: goal.nameHe, labelEn: goal.nameEn })),
     // Enum declaration order (DOSAGE_FORM_VALUES), filtered to what is

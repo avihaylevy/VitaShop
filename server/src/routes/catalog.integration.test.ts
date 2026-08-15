@@ -30,7 +30,7 @@ interface ApiErrorEnvelope {
 }
 
 interface FacetsEnvelope {
-  brands: { id: string; label: string }[]
+  brands: { id: string; label: string; labelEn: string | null }[]
   ingredients: { id: string; label: string }[]
   healthGoals: { id: string; labelHe: string; labelEn: string }[]
   dosageForms: { value: string; labelHe: string; labelEn: string }[]
@@ -1514,17 +1514,22 @@ describe('GET /api/catalog/facets', () => {
     expect(text).not.toMatch(/"count"/)
   })
 
-  it('brands — exactly the brands used by active products, with real ids and labels', async () => {
+  it('brands — exactly the brands used by active products, with real ids and BOTH label forms', async () => {
     const expected = await testPrisma.brand.findMany({
       where: { products: { some: { isActive: true } } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, nameEn: true },
     })
     const res = await fetch(`${baseUrl}/api/catalog/facets`)
     const body = (await res.json()) as FacetsEnvelope
     expect(new Set(body.brands.map((b) => b.id))).toEqual(new Set(expected.map((b) => b.id)))
     for (const brand of expected) {
-      expect(body.brands).toContainEqual({ id: brand.id, label: brand.name })
+      // Sixth list item 1: the Latin form rides the facet so the English
+      // UI's filter rail never lists a Hebrew brand name.
+      expect(body.brands).toContainEqual({ id: brand.id, label: brand.name, labelEn: brand.nameEn ?? null })
     }
+    // 🔴 Non-vacuity: DEC-080 converged nameEn for every seeded brand, so at
+    // least one facet entry must actually carry a Latin form.
+    expect(body.brands.some((b) => b.labelEn !== null)).toBe(true)
   })
 
   it('ingredients — exactly the active ingredients used by active products', async () => {

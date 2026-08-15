@@ -21,8 +21,8 @@ import type { CatalogFacetsDto } from '../../types/catalog'
 
 const FACETS: CatalogFacetsDto = {
   brands: [
-    { id: 'brand-1', label: 'Solgar' },
-    { id: 'brand-2', label: 'Altman' },
+    { id: 'brand-1', label: 'סולגאר', labelEn: 'Solgar' },
+    { id: 'brand-2', label: 'אלטמן', labelEn: null },
   ],
   ingredients: [{ id: 'ing-1', label: 'Omega 3' }],
   healthGoals: [{ id: 'goal-1', labelHe: 'חיזוק חיסוני', labelEn: 'Immune support' }],
@@ -86,9 +86,18 @@ describe('buildFilterGroups', () => {
   it('pairs each option with its STABLE ID as the value and the facet label as display text', () => {
     const [brands] = buildFilterGroups(FACETS, urlState(), 'he')
     expect(brands.options).toEqual([
-      { value: 'brand-1', label: 'Solgar', checked: false, disabled: false },
-      { value: 'brand-2', label: 'Altman', checked: false, disabled: false },
+      { value: 'brand-1', label: 'סולגאר', checked: false, disabled: false },
+      { value: 'brand-2', label: 'אלטמן', checked: false, disabled: false },
     ])
+  })
+
+  it('sixth list item 1 — the ENGLISH UI prefers the brand facet Latin form, falling back per option', () => {
+    const [brands] = buildFilterGroups(FACETS, urlState(), 'en')
+    // brand-1 carries a sourced Latin form; brand-2 does not and keeps its
+    // stored name — per option, never all-or-nothing.
+    expect(brands.options.map((option) => option.label)).toEqual(['Solgar', 'אלטמן'])
+    // The submitted value never changes with language.
+    expect(brands.options.map((option) => option.value)).toEqual(['brand-1', 'brand-2'])
   })
 
   it('resolves bilingual labels by language, and dosage forms by enum identifier', () => {
