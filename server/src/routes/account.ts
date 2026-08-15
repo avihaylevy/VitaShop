@@ -288,5 +288,79 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
     }
   })
 
+  /*
+   * MILESTONE-012 Checkpoint B / DEC-086 — the membership club. Same
+   * contract as everything above: the SESSION is the only identity, the
+   * shared guards run first, router-level no-store covers the answers.
+   *
+   * 🔴 The discount itself never touches these routes: pricing reads the
+   * user ROW per request (lib/clubPricing.ts), so joining here changes the
+   * very next cart read with no session state to refresh or invalidate.
+   */
+
+  /** The caller's own club status — what the account surface renders. */
+  router.get('/club', limiters.club, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isClubMember: true, clubJoinedAt: true },
+      })
+      if (!user) {
+        res.status(401).json({
+          error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in to continue.' },
+        })
+        return
+      }
+      res.json({ isClubMember: user.isClubMember, clubJoinedAt: user.clubJoinedAt })
+    } catch (error) {
+      // Fail closed, like /profile: a DB error must not render "not a member"
+      // to someone who is — the screen would offer a join button that
+      // silently re-joins.
+      console.error(`[account] club status failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'CLUB_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
+  /**
+   * Join or leave — one route, an explicit body action, both idempotent:
+   * joining twice is one membership (the ORIGINAL join date is kept — an
+   * accidental second press must not rewrite history), leaving twice is
+   * already the asked-for state.
+   */
+  router.post('/club', limiters.club, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    const action = (req.body as { action?: unknown } | undefined)?.action
+    if (action !== 'join' && action !== 'leave') {
+      res.status(400).json({
+        error: { code: 'INVALID_ACTION', message: 'action must be "join" or "leave".' },
+      })
+      return
+    }
+    try {
+      if (action === 'join') {
+        // updateMany carries the idempotence condition: only a NON-member's
+        // join stamps clubJoinedAt, so a repeat press cannot move the date.
+        await prisma.user.updateMany({
+          where: { id: userId, isClubMember: false },
+          data: { isClubMember: true, clubJoinedAt: new Date() },
+        })
+      } else {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { isClubMember: false, clubJoinedAt: null },
+        })
+      }
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { isClubMember: true, clubJoinedAt: true },
+      })
+      res.json({ isClubMember: user.isClubMember, clubJoinedAt: user.clubJoinedAt })
+    } catch (error) {
+      console.error(`[account] club ${action} failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'CLUB_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
   return router
 }

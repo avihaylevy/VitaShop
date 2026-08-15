@@ -363,17 +363,25 @@ export const ACCOUNT_RATE_LIMITS = {
    * split later if abuse patterns ever differ.
    */
   favourites: { windowMs: 15 * MINUTE, limit: 240 },
+  /*
+   * MILESTONE-012 Checkpoint B — club status reads share the account
+   * surface's budget; join/leave is a shopper pressing one button, bounded
+   * far below the ceiling in any honest session.
+   */
+  club: { windowMs: 15 * MINUTE, limit: 240 },
 } as const
 
 export interface AccountRateLimiters {
   profile: RequestHandler
   favourites: RequestHandler
+  club: RequestHandler
 }
 
 export function createAccountRateLimiters(): AccountRateLimiters {
   return {
     profile: rateLimit({ ...SHARED, ...ACCOUNT_RATE_LIMITS.profile, keyGenerator: shopperKey }),
     favourites: rateLimit({ ...SHARED, ...ACCOUNT_RATE_LIMITS.favourites, keyGenerator: shopperKey }),
+    club: rateLimit({ ...SHARED, ...ACCOUNT_RATE_LIMITS.club, keyGenerator: shopperKey }),
   }
 }
 

@@ -11,6 +11,7 @@ import { OrderHistoryPage } from './pages/OrderHistoryPage'
 import { OrderDetailPage } from './pages/OrderDetailPage'
 import { RequireAuth } from './components/auth/RequireAuth'
 import { FavouritesPage } from './pages/FavouritesPage'
+import { ClubPage } from './pages/ClubPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
@@ -88,6 +89,19 @@ function App() {
           element={
             <RequireAuth>
               <OrderHistoryPage />
+            </RequireAuth>
+          }
+        />
+        {/*
+          MILESTONE-012 Checkpoint B — the club's account surface, linked
+          from the account menu the same day it ships (the ISSUE-097/102/104
+          family: a route nothing links to is staged, not shipped).
+        */}
+        <Route
+          path="/account/club"
+          element={
+            <RequireAuth>
+              <ClubPage />
             </RequireAuth>
           }
         />

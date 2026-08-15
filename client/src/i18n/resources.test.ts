@@ -108,10 +108,12 @@ describe('i18n namespace-registration drift guard — the real repository state'
     expect([...registeredNamespaces.he].sort()).toEqual([...registeredNamespaces.en].sort())
   })
 
-  it('the current shipped namespace set is exactly admin/auth/common/layout/catalog/cart/orders/checkout/info (confirmation, not the source of truth)', () => {
+  it('the current shipped namespace set is exactly admin/auth/common/layout/catalog/cart/orders/checkout/info/club (confirmation, not the source of truth)', () => {
     // Updated at MILESTONE-006 Checkpoint H (`auth`), MILESTONE-008
-    // Checkpoint F0 (`orders`), and 2026-08-15 (`info` — the ISSUE-119
-    // About + ISSUE-125 Contact pages). This
+    // Checkpoint F0 (`orders`), 2026-08-15 (`info` — the ISSUE-119
+    // About + ISSUE-125 Contact pages), and 2026-08-15 again (`club` —
+    // MILESTONE-012 Checkpoint B, with club.i18n.test.ts shipped alongside
+    // it per the drift-guard rule). This
     // assertion is DESIGNED to fail on any namespace change — that is its
     // whole job, and updating it is the deliberate acknowledgement the drift
     // guard asks for, not a nuisance to be loosened.
@@ -122,6 +124,7 @@ describe('i18n namespace-registration drift guard — the real repository state'
       'cart',
       'catalog',
       'checkout',
+      'club',
       'common',
       'info',
       'layout',

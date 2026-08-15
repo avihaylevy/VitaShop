@@ -1,5 +1,11 @@
 import { getApiBaseUrl } from './apiBaseUrl.js'
-import type { ShopperAddress, ShopperProfile, ShopperProfileResult } from '../types/account.js'
+import type {
+  ClubStatus,
+  ClubStatusResult,
+  ShopperAddress,
+  ShopperProfile,
+  ShopperProfileResult,
+} from '../types/account.js'
 
 /**
  * MILESTONE-008 Checkpoint F2b — the profile transport.
@@ -75,4 +81,57 @@ export async function requestShopperProfile(): Promise<ShopperProfileResult> {
 
   const profile = readProfile(body)
   return profile ? { ok: true, profile } : { ok: false, failure: 'unavailable' }
+}
+
+/*
+ * MILESTONE-012 Checkpoint B — the club transports. Same posture as the
+ * profile: session-only identity, validated-not-cast, and 401 is the only
+ * failure the screen treats differently.
+ */
+
+function readClubStatus(value: unknown): ClubStatus | null {
+  if (!isPlainObject(value)) return null
+  if (typeof value.isClubMember !== 'boolean') return null
+  if (value.clubJoinedAt !== null && typeof value.clubJoinedAt !== 'string') return null
+  return { isClubMember: value.isClubMember, clubJoinedAt: value.clubJoinedAt }
+}
+
+async function clubRequest(init?: RequestInit): Promise<ClubStatusResult> {
+  const base = getApiBaseUrl()
+  if (!base.ok) return { ok: false, failure: 'unavailable' }
+
+  let status: number
+  let body: unknown
+  try {
+    const response = await fetch(`${base.value}/api/account/club`, {
+      credentials: 'include',
+      ...init,
+    })
+    status = response.status
+    try {
+      body = await response.json()
+    } catch {
+      body = null
+    }
+  } catch {
+    return { ok: false, failure: 'unavailable' }
+  }
+
+  if (status === 401) return { ok: false, failure: 'unauthenticated' }
+  if (status !== 200) return { ok: false, failure: 'unavailable' }
+
+  const clubStatus = readClubStatus(body)
+  return clubStatus ? { ok: true, status: clubStatus } : { ok: false, failure: 'unavailable' }
+}
+
+export function requestClubStatus(): Promise<ClubStatusResult> {
+  return clubRequest()
+}
+
+export function requestClubAction(action: 'join' | 'leave'): Promise<ClubStatusResult> {
+  return clubRequest({
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action }),
+  })
 }

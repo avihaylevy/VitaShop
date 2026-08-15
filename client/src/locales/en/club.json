@@ -1,0 +1,16 @@
+{
+  "page": {
+    "title": "Membership club",
+    "intro": "Club membership gives 10% off every product in the store. The discount is computed on the server and appears in your cart and checkout prices.",
+    "statusMember": "Your club membership is active — cart prices include the discount.",
+    "statusNotMember": "You have not joined the club yet.",
+    "join": "Join the club",
+    "leave": "Leave the club",
+    "joined": "You joined the club! The discount now applies to your cart.",
+    "left": "You left the club. Prices are back to full price.",
+    "error": "The action did not complete. You can try again.",
+    "loadError": "We could not load your club status. You can try again.",
+    "loading": "Loading your club status…",
+    "retry": "Try again"
+  }
+}

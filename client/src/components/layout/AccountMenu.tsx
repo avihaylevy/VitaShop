@@ -219,6 +219,15 @@ export function AccountMenu() {
               >
                 {t('account.myOrders')}
               </Link>
+              {/* MILESTONE-012 Checkpoint B — linked the day it shipped. */}
+              <Link
+                role="menuitem"
+                to="/account/club"
+                onClick={() => setOpen(false)}
+                className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+              >
+                {t('account.club')}
+              </Link>
               {/*
                 🔴 ISSUE-097 CLOSED — the admin screen has existed since F3b
                 with NOTHING linking to it, so an admin signing in found a site

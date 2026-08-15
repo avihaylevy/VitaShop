@@ -35,3 +35,18 @@ export type ShopperProfile = {
 export type ShopperProfileResult =
   | { ok: true; profile: ShopperProfile }
   | { ok: false; failure: 'unauthenticated' | 'unavailable' }
+
+/**
+ * MILESTONE-012 Checkpoint B — the caller's own club state, as
+ * `GET/POST /api/account/club` report it. `clubJoinedAt` is an ISO string
+ * or null; the page renders state, never derives a discount (§3.4 — the
+ * discounted figures arrive in the cart/checkout DTOs).
+ */
+export type ClubStatus = {
+  isClubMember: boolean
+  clubJoinedAt: string | null
+}
+
+export type ClubStatusResult =
+  | { ok: true; status: ClubStatus }
+  | { ok: false; failure: 'unauthenticated' | 'unavailable' }

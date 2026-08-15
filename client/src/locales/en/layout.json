@@ -29,6 +29,7 @@
     "guestGreeting": "Not signed in",
     "signedInGreeting": "Signed in",
     "myOrders": "My orders",
+    "club": "Membership club",
     "adminOrders": "Manage orders"
   },
   "welcome": {
