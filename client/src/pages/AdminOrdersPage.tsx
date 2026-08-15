@@ -284,7 +284,7 @@ export function AdminOrdersPage() {
 
   return (
     <main className="mx-auto flex max-w-[1100px] flex-col gap-4 px-4 py-6">
-      <h1 className="text-2xl font-semibold text-text-ink">{t('page.title')}</h1>
+      <h1 className="heading-page">{t('page.title')}</h1>
 
       {/* Present from first render, so a later message is an UPDATE to it. */}
       <p role="status" aria-live="polite" className="sr-only">

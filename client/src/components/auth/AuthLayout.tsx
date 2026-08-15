@@ -25,7 +25,9 @@ export function AuthCard({
       className="mx-auto w-full max-w-md px-4 py-10 sm:py-14"
       aria-labelledby={titleId}
     >
-      <h1 id={titleId} className="text-xl font-semibold text-text-ink">
+      {/* Same section-scale display treatment as RequireAuth's gate title —
+          the two render the same auth moment and must match. */}
+      <h1 id={titleId} className="heading-section">
         {title}
       </h1>
       {children}

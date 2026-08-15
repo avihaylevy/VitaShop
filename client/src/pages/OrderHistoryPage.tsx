@@ -151,7 +151,7 @@ export function OrderHistoryPage() {
 
   return (
     <div className="px-7 py-8">
-      <h1 className="text-2xl font-semibold text-text-ink">{t('history.title')}</h1>
+      <h1 className="heading-page">{t('history.title')}</h1>
 
       {/*
         One live region, always mounted — the shape ISSUE-098 settled on the

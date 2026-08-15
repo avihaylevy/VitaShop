@@ -28,7 +28,7 @@ export function CatalogShowcase() {
 
   return (
     <div className="flex flex-col gap-6 px-7 py-8">
-      <h1 className="text-2xl font-semibold text-text-ink">Catalog showcase (dev only)</h1>
+      <h1 className="heading-page">Catalog showcase (dev only)</h1>
 
       <p className="text-sm text-text-muted">
         Last add-to-cart callback: {lastAddedSlug ?? '(none yet)'}

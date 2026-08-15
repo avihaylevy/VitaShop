@@ -28,6 +28,11 @@ export interface PublicCatalogProduct {
   categoryNameEn: string
   categorySlug: string
   brandName: string
+  /**
+   * ISSUE-127a — the brand's manufacturer-verified Latin form (Brand.nameEn),
+   * null when none is sourced. The client picks per display language.
+   */
+  brandNameEn: string | null
   dosageForm: string
   packageQuantity: number
   price: string
@@ -145,6 +150,7 @@ export function mapProductToPublicCatalog(product: ProductWithCatalogRelations):
     categoryNameEn: product.category.nameEn,
     categorySlug: canonicalCategory.slug,
     brandName: product.brand.name,
+    brandNameEn: product.brand.nameEn ?? null,
     dosageForm: product.dosageForm,
     packageQuantity: product.packageQuantity,
     price: product.price.toFixed(2),

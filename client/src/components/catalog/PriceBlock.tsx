@@ -3,6 +3,11 @@ import { formatPrice } from '../../lib/formatPrice'
 
 type PriceBlockProps = {
   price: string
+  /**
+   * DESIGN_SYSTEM.md §2: --text-price is 23/700 (18-19 mobile) — the card
+   * and detail page pass 'price'; inline/metadata contexts keep 'base'.
+   */
+  size?: 'base' | 'price'
 }
 
 /**
@@ -17,13 +22,21 @@ type PriceBlockProps = {
  * direction and aligns by IT (`text-start`), while the inner span keeps the
  * digits LTR. Isolation protects the digits; it must never pin the block.
  */
-export function PriceBlock({ price }: PriceBlockProps) {
+export function PriceBlock({ price, size = 'base' }: PriceBlockProps) {
   const { i18n } = useTranslation()
   const language = i18n.language === 'he' ? 'he' : 'en'
 
   return (
     <span className="text-start">
-      <span dir="ltr" className="text-base font-semibold text-text-ink" style={{ unicodeBidi: 'isolate' }}>
+      <span
+        dir="ltr"
+        className={
+          size === 'price'
+            ? 'text-lg font-bold tracking-[-0.015em] text-text-ink md:text-[23px]'
+            : 'text-base font-semibold text-text-ink'
+        }
+        style={{ unicodeBidi: 'isolate' }}
+      >
         {formatPrice(price, language)}
       </span>
     </span>

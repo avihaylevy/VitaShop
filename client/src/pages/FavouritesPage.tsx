@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { fetchFavourites } from '../lib/favouritesApi'
 import { mapCatalogProduct } from '../lib/mapCatalogProduct'
-import { useFavourites } from '../state/FavouritesContext'
+import { useFavourites, type FavouriteToggleResult } from '../state/FavouritesContext'
 import { useAddToCart } from '../hooks/useAddToCart'
 import { ProductGrid } from '../components/catalog/ProductGrid'
+import { CatalogLoadingState } from '../components/catalog/CatalogLoadingState'
+import { CatalogEmptyState } from '../components/catalog/CatalogEmptyState'
 import { CartDrawer } from '../components/cart/CartDrawer'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
@@ -30,33 +32,95 @@ import type { SupportedLanguage } from '../i18n'
 export function FavouritesPage() {
   const { t, i18n } = useTranslation('catalog')
   const language = i18n.language as SupportedLanguage
-  const { isFavourite } = useFavourites()
+  const navigate = useNavigate()
+  const { isFavourite, replaceAll } = useFavourites()
   const [state, setState] = useState<
     { status: 'loading' } | { status: 'ready'; items: CatalogProductDto[] } | { status: 'failed' }
   >({ status: 'loading' })
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setState({ status: 'loading' })
-    const result = await fetchFavourites(signal)
-    if (signal?.aborted) return
-    // 'unauthenticated' cannot ordinarily happen behind RequireAuth — a
-    // session that died in between renders the failure state and the retry
-    // round-trips to the same 401, whose screen-level answer is RequireAuth's.
-    setState(result.ok ? { status: 'ready', items: result.items } : { status: 'failed' })
-  }, [])
+  /*
+   * 🔴 EVERY load carries an abort signal tied to this mount — including the
+   * retry (review of this diff: a signal-less retry left in flight while the
+   * shopper navigated away would later call replaceAll with a STALE list,
+   * un-filling a heart they had just pressed elsewhere; the provider
+   * outlives this page, so the global write must not).
+   */
+  const controllerRef = useRef<AbortController | null>(null)
+
+  const load = useCallback(
+    async (signal: AbortSignal) => {
+      setState({ status: 'loading' })
+      const result = await fetchFavourites(signal)
+      if (signal.aborted) return
+      // 'unauthenticated' cannot ordinarily happen behind RequireAuth — a
+      // session that died in between renders the failure state and the retry
+      // round-trips to the same 401, whose screen-level answer is RequireAuth's.
+      setState(result.ok ? { status: 'ready', items: result.items } : { status: 'failed' })
+      // One server answer feeds BOTH consumers: syncing the context here
+      // repairs a failed provider hydration (and the header badge) instead
+      // of letting the page's own filter contradict the list it just got.
+      if (result.ok) replaceAll(result.items.map((item) => item.slug))
+    },
+    [replaceAll],
+  )
+
+  const startLoad = useCallback(() => {
+    controllerRef.current?.abort()
+    const controller = new AbortController()
+    controllerRef.current = controller
+    void load(controller.signal)
+  }, [load])
 
   useEffect(() => {
-    const controller = new AbortController()
-    void load(controller.signal)
-    return () => controller.abort()
-  }, [load])
+    startLoad()
+    return () => controllerRef.current?.abort()
+  }, [startLoad])
 
   const { handleAddToCart, drawerOpen, closeDrawer, returnFocusRef, gridRef, announced } =
     useAddToCart()
 
-  const visible =
-    state.status === 'ready' ? state.items.filter((item) => isFavourite(item.slug)) : []
-  const products = visible.map((dto) => mapCatalogProduct(dto, language))
+  // Memoized: this page re-renders on drawer/announcement/context changes
+  // far more often than the list itself changes — the grid's props must not
+  // gain a fresh identity on every one of those.
+  const products = useMemo(() => {
+    const visible =
+      state.status === 'ready' ? state.items.filter((item) => isFavourite(item.slug)) : []
+    return visible.map((dto) => mapCatalogProduct(dto, language))
+  }, [state, isFavourite, language])
+
+  /*
+   * 🔴 THE UNMOUNT-TAKES-FOCUS FAMILY (browser-verification.md): un-hearting
+   * derives the card — and the very button the user pressed — out of view.
+   * The heart's own settled-toggle EVENT drives the response (never an
+   * inferred count change, which also fires when the provider clears the
+   * set on sign-out): announce from a region that was ALREADY mounted, and
+   * repair keyboard focus to the heading when the unmount dropped it to
+   * <body>. The message names the PRODUCT, so consecutive removals produce
+   * distinct sentences (identical text is not re-announced) and there is no
+   * "0 products left" zero case.
+   */
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const [removalMessage, setRemovalMessage] = useState('')
+  const handleFavouriteToggled = useCallback(
+    (result: FavouriteToggleResult, slug: string) => {
+      if (result !== 'removed') return
+      if (state.status !== 'ready') return
+      const removed = state.items.find((item) => item.slug === slug)
+      if (!removed) return
+      const name = language === 'he' ? removed.nameHe : removed.nameEn
+      setRemovalMessage(t('favouritesPage.removed', { product: name }))
+    },
+    [state, language, t],
+  )
+  useEffect(() => {
+    if (!removalMessage) return
+    // Runs after the commit that unmounted the card. preventScroll: a mouse
+    // user un-hearting below the fold must not have the viewport yanked to
+    // the top; the focus target still anchors the next Tab press.
+    if (document.activeElement === document.body) {
+      headingRef.current?.focus({ preventScroll: true })
+    }
+  }, [removalMessage])
 
   const announcedProduct = announced
     ? products.find((product) => product.slug === announced.slug)
@@ -68,35 +132,52 @@ export function FavouritesPage() {
 
   return (
     <div className="px-7 py-8">
-      <h1 className="text-2xl font-semibold text-text-ink">{t('favouritesPage.title')}</h1>
+      <h1 ref={headingRef} tabIndex={-1} className={`${FOCUS_RING} rounded-card heading-page`}>
+        {t('favouritesPage.title')}
+      </h1>
 
-      {/* One always-mounted polite region for load/failure — the ISSUE-098 shape. */}
-      <p role="status" className="mt-4 text-sm text-text-muted">
-        {state.status === 'loading' ? t('favouritesPage.loading') : ''}
-        {state.status === 'failed' ? t('favouritesPage.error') : ''}
+      {/* Always-mounted removal announcement — see the unmount-takes-focus note above. */}
+      <p role="status" className="sr-only">
+        {removalMessage}
       </p>
 
-      {state.status === 'failed' && (
-        <Button variant="secondary" className="mt-3" onClick={() => void load()}>
-          {t('favouritesPage.retry')}
-        </Button>
-      )}
-
-      {state.status === 'ready' && visible.length === 0 && (
-        <div className="mt-6 flex flex-col items-start gap-3">
-          <p className="text-sm text-text-muted">{t('favouritesPage.empty')}</p>
-          <Link to="/catalog" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
-            {t('favouritesPage.emptyCta')}
-          </Link>
+      {state.status === 'loading' && (
+        <div className="mt-6">
+          <CatalogLoadingState />
         </div>
       )}
 
-      {state.status === 'ready' && visible.length > 0 && (
+      {state.status === 'failed' && (
+        <div className="mt-6 flex flex-col items-start gap-3">
+          <p role="alert" className="text-sm text-state-error">
+            {t('favouritesPage.error')}
+          </p>
+          <Button variant="secondary" onClick={startLoad}>
+            {t('favouritesPage.retry')}
+          </Button>
+        </div>
+      )}
+
+      {state.status === 'ready' && products.length === 0 && (
+        <div className="mt-2">
+          <CatalogEmptyState
+            heading={t('favouritesPage.emptyHeading')}
+            message={t('favouritesPage.empty')}
+            action={{ label: t('favouritesPage.emptyCta'), onClick: () => navigate('/catalog') }}
+          />
+        </div>
+      )}
+
+      {state.status === 'ready' && products.length > 0 && (
         <div ref={gridRef} className="mt-6">
           <p role="status" className="sr-only">
             {addedToCartMessage}
           </p>
-          <ProductGrid products={products} onAddToCart={handleAddToCart} />
+          <ProductGrid
+            products={products}
+            onAddToCart={handleAddToCart}
+            onFavouriteToggled={handleFavouriteToggled}
+          />
         </div>
       )}
 

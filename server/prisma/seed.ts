@@ -79,9 +79,10 @@ const DOSAGE_FORM_EN: Record<DosageForm, string> = {
 // unlike category/name/description/health_goal, are not a paired _he/_en
 // field). That's correct for the stored row, but embedding the Hebrew value
 // mid-sentence in a generated ENGLISH description would be a real display
-// bug, not a translation choice. This map is used ONLY inside
-// buildEnglishDescription below — it does not change what's written to
-// Brand.name in the database.
+// bug, not a translation choice. This map feeds buildEnglishDescription
+// below AND (since DEC-080, 2026-08-15) converges Brand.nameEn — the
+// manufacturer-verified Latin form the English UI displays. It still never
+// changes what's written to Brand.name itself.
 const BRAND_EN: Record<string, string> = {
   'סולגאר': 'Solgar',
   'סופהרב': 'Supherb',
@@ -311,9 +312,22 @@ async function findOrCreateCategory(db: Db, nameHe: string, slug: string) {
 }
 
 async function findOrCreateBrand(db: Db, name: string) {
+  // ISSUE-127a (user-approved 2026-08-15): the seed CONVERGES nameEn from
+  // BRAND_EN — the same manufacturer-sourced map the English descriptions
+  // already use — so existing rows gain the Latin form on the next run,
+  // not only newly created ones.
+  const nameEn = BRAND_EN[name] ?? null
   const existing = await db.brand.findFirst({ where: { name } })
-  if (existing) return existing
-  return db.brand.create({ data: { name } })
+  if (existing) {
+    // Bidirectional convergence: a retracted/renamed BRAND_EN entry must be
+    // repairable by re-running the seed, so a null CLEARS a stale Latin
+    // form rather than fossilizing it (review of this diff).
+    if (existing.nameEn !== nameEn) {
+      return db.brand.update({ where: { id: existing.id }, data: { nameEn } })
+    }
+    return existing
+  }
+  return db.brand.create({ data: { name, nameEn } })
 }
 
 async function findOrCreateHealthGoal(db: Db, nameHe: string, slug: string) {

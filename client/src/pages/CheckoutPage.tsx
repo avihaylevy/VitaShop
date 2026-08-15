@@ -302,7 +302,7 @@ export function CheckoutPage() {
           ref={confirmationHeading}
           tabIndex={-1}
           role="status"
-          className={`${FOCUS_RING} rounded-card text-2xl font-semibold text-text-ink`}
+          className={`${FOCUS_RING} rounded-card heading-page`}
         >
           {t('done.heading')}
         </h1>
@@ -314,7 +314,7 @@ export function CheckoutPage() {
           stepper — which is what "LTR numeric isolation" means in
           .claude/rules/browser-verification.md.
         */}
-        <p className="text-lg font-semibold text-text-ink">
+        <p className="heading-section">
           <Trans
             i18nKey="done.orderNumber"
             t={t}
@@ -361,7 +361,7 @@ export function CheckoutPage() {
 
   return (
     <main className="mx-auto flex max-w-[900px] flex-col gap-6 px-4 py-6">
-      <h1 className="text-2xl font-semibold text-text-ink">{t('page.title')}</h1>
+      <h1 className="heading-page">{t('page.title')}</h1>
 
       <fieldset className="min-w-0 border-0 p-0">
         <legend id={legendId} className="mb-2 text-sm font-semibold text-text-ink">
@@ -537,7 +537,7 @@ export function CheckoutPage() {
 
       {state.status === 'ready' && (
         <section className="flex flex-col gap-3" aria-labelledby={`${legendId}-summary`}>
-          <h2 id={`${legendId}-summary`} className="text-lg font-semibold text-text-ink">
+          <h2 id={`${legendId}-summary`} className="heading-section">
             {t('page.summaryHeading')}
           </h2>
 

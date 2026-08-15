@@ -167,7 +167,7 @@ describe('the roundtrip', () => {
     const item = body.items[0]!
     // The SAME mapper as the catalogue: a favourite can never render
     // differently from its catalogue card.
-    for (const key of ['slug', 'nameHe', 'nameEn', 'price', 'stockQuantity', 'brandName']) {
+    for (const key of ['slug', 'nameHe', 'nameEn', 'price', 'stockQuantity', 'brandName', 'brandNameEn']) {
       expect(item[key], key).toBeDefined()
     }
 

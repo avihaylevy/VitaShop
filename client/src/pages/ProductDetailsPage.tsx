@@ -8,13 +8,11 @@ import { ProductImage } from '../components/catalog/ProductImage'
 import { StockState } from '../components/catalog/StockState'
 import { ADD_TO_CART_ATTRIBUTE } from '../components/catalog/ProductCard'
 import { CartDrawer } from '../components/cart/CartDrawer'
-import { useAddToCart } from '../hooks/useAddToCart'
-import { useFavourites } from '../state/FavouritesContext'
+import { resetOnConfirmedAdd, useAddToCart } from '../hooks/useAddToCart'
 import { getStockState } from '../lib/stockState'
 import { Button } from '../components/ui/Button'
-import { IconButton } from '../components/ui/IconButton'
-import { HeartIcon } from '../components/icons'
-import { QuantityStepper } from '../components/catalog/QuantityStepper'
+import { FavouriteButton } from '../components/catalog/FavouriteButton'
+import { AddQuantityStepper } from '../components/catalog/AddQuantityStepper'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import type { ProductDetailModel } from '../types/product'
 import type { SupportedLanguage } from '../i18n/index'
@@ -102,7 +100,7 @@ export function ProductDetailsPage() {
             server sends an identical 404 for the two (§7), and the UI must
             not add a distinction the API deliberately withholds.
           */}
-          <h1 className="text-2xl font-semibold text-text-ink">{t('productDetails.notFoundHeading')}</h1>
+          <h1 className="heading-page">{t('productDetails.notFoundHeading')}</h1>
           <p className="text-sm text-text-muted">{t('productDetails.notFoundMessage')}</p>
           <button
             type="button"
@@ -141,7 +139,7 @@ export function ProductDetailsPage() {
 type ProductDetailViewProps = {
   product: ProductDetailModel
   onBack: () => void
-  onAddToCart: (slug: string, quantity: number) => void
+  onAddToCart: (slug: string, quantity: number) => void | Promise<boolean>
 }
 
 /**
@@ -152,18 +150,15 @@ type ProductDetailViewProps = {
  */
 function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewProps) {
   const { t } = useTranslation('catalog')
-  const navigate = useNavigate()
   // The same single disable condition as ProductCard: real stock only.
   const isOut = getStockState(product.stockQuantity, product.lowStockThreshold) === 'out'
-  // ISSUE-115 — the ISSUE-035 "decide together" rule's second half arrives:
-  // the detail page favourites through the same context as the cards.
-  const { isFavourite, toggle } = useFavourites()
-  const favourited = isFavourite(product.slug)
   const [quantity, setQuantity] = useState(1)
 
   return (
     <article>
-      <h1 className="text-2xl font-semibold text-text-ink">{product.name}</h1>
+      <h1 className="heading-page">
+        {product.name}
+      </h1>
 
       <div className="mt-6 flex flex-col gap-8 lg:flex-row">
         <section aria-label={t('productDetails.gallery')} className="w-full lg:max-w-md">
@@ -193,7 +188,7 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
           {/* ISSUE-123 — the user's ordering: the product DATA first, the
               price + buy action BELOW it (moved from above). */}
           <section aria-labelledby="product-specifications">
-            <h2 id="product-specifications" className="text-lg font-semibold text-text-ink">
+            <h2 id="product-specifications" className="heading-section">
               {t('productDetails.specifications')}
             </h2>
             {/*
@@ -256,33 +251,26 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
 
           {/* ISSUE-035's action + ISSUE-123's placement: below the data. */}
           <div className="flex flex-wrap items-center gap-4">
-            <PriceBlock price={product.price} />
+            <PriceBlock price={product.price} size="price" />
             <StockState stockQuantity={product.stockQuantity} lowStockThreshold={product.lowStockThreshold} />
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {/* ISSUE-118 — the same shared stepper as the cards. */}
-            <QuantityStepper value={quantity} onChange={setQuantity} />
+            <AddQuantityStepper value={quantity} onChange={setQuantity} productName={product.name} />
             <Button
               variant="primary"
               disabled={isOut}
-              onClick={() => {
-                onAddToCart(product.slug, quantity)
-                setQuantity(1)
-              }}
+              onClick={() =>
+                resetOnConfirmedAdd(onAddToCart(product.slug, quantity), () => setQuantity(1))
+              }
               {...{ [ADD_TO_CART_ATTRIBUTE]: product.slug }}
             >
               {t('addToCart')}
             </Button>
-            <IconButton
-              icon={<HeartIcon filled={favourited} />}
-              aria-pressed={favourited}
-              aria-label={favourited ? t('favourite.remove') : t('favourite.add')}
-              variant="ghost"
-              onClick={() => {
-                void toggle(product.slug).then((result) => {
-                  if (result === 'auth-required') navigate('/login')
-                })
-              }}
+            {/* ISSUE-115 — the shared heart (FavouriteButton owns the A10
+                guest gate and the failure announcement). */}
+            <FavouriteButton
+              slug={product.slug}
               className="rounded-round border border-border-hairline"
             />
           </div>
@@ -290,21 +278,21 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
       </div>
 
       <section aria-labelledby="product-description" className="mt-8">
-        <h2 id="product-description" className="text-lg font-semibold text-text-ink">
+        <h2 id="product-description" className="heading-section">
           {t('productDetails.description')}
         </h2>
         <p className="mt-2 text-sm text-text-ink">{product.description}</p>
       </section>
 
       <section aria-labelledby="product-usage" className="mt-8">
-        <h2 id="product-usage" className="text-lg font-semibold text-text-ink">
+        <h2 id="product-usage" className="heading-section">
           {t('productDetails.usageInstructions')}
         </h2>
         <p className="mt-2 text-sm text-text-ink">{product.usageInstructions}</p>
       </section>
 
       <section aria-labelledby="product-warnings" className="mt-8">
-        <h2 id="product-warnings" className="text-lg font-semibold text-text-ink">
+        <h2 id="product-warnings" className="heading-section">
           {t('productDetails.warningsAllergens')}
         </h2>
         {product.warningsAllergens.length > 0 && (
@@ -334,7 +322,7 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
 
       {product.ingredients.length > 0 && (
         <section aria-labelledby="product-ingredients" className="mt-8">
-          <h2 id="product-ingredients" className="text-lg font-semibold text-text-ink">
+          <h2 id="product-ingredients" className="heading-section">
             {t('productDetails.ingredients')}
           </h2>
           {/*
@@ -378,7 +366,7 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
       {/* Field 14 is "0 or more" — an empty set renders no section at all. */}
       {product.healthGoals.length > 0 && (
         <section aria-labelledby="product-health-goals" className="mt-8">
-          <h2 id="product-health-goals" className="text-lg font-semibold text-text-ink">
+          <h2 id="product-health-goals" className="heading-section">
             {t('productDetails.healthGoals')}
           </h2>
           <ul className="mt-2 flex flex-wrap gap-2">

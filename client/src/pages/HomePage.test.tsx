@@ -33,6 +33,7 @@ function product(index: number) {
     // rendering bug and was a fixture that did not match the real contract.
     categorySlug: 'vitamins',
     brandName: 'Brand',
+    brandNameEn: null,
     price: '95.00',
     stockQuantity: 10,
     lowStockThreshold: 3,

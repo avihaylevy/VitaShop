@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './apiBaseUrl.js'
+import { isCatalogProductDto, isPlainObject } from './catalogApi.js'
 import type { CatalogProductDto } from '../types/catalog.js'
 
 /**
@@ -6,8 +7,9 @@ import type { CatalogProductDto } from '../types/catalog.js'
  *
  * 🔴 VALIDATED, NOT CAST, like every transport here. The items ride the
  * catalogue's own card DTO (the server maps them with the same function the
- * catalogue uses), so the checks below assert that shared shape's
- * load-bearing fields rather than restating the whole contract.
+ * catalogue uses), validated by the SAME predicate the catalogue uses —
+ * reuse, not a parallel definition (review of this diff: the local 5-field
+ * copy accepted payloads the catalogue rejected).
  *
  * 🔴 401 IS A RESULT, NOT AN ERROR: a guest pressing a heart is an expected
  * path (A10 gates the ACTION), and the caller sends them to /login.
@@ -15,24 +17,9 @@ import type { CatalogProductDto } from '../types/catalog.js'
 
 export type FavouritesListResult =
   | { ok: true; items: CatalogProductDto[] }
-  | { ok: false; reason: 'unauthenticated' | 'failed' }
+  | { ok: false; reason: 'unauthenticated' | 'failed' | 'aborted' }
 
 export type FavouriteWriteResult = 'ok' | 'unauthenticated' | 'not-found' | 'failed'
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isCardDto(value: unknown): value is CatalogProductDto {
-  if (!isPlainObject(value)) return false
-  return (
-    typeof value.slug === 'string' &&
-    typeof value.nameHe === 'string' &&
-    typeof value.nameEn === 'string' &&
-    typeof value.price === 'string' &&
-    typeof value.stockQuantity === 'number'
-  )
-}
 
 export async function fetchFavourites(signal?: AbortSignal): Promise<FavouritesListResult> {
   const base = getApiBaseUrl()
@@ -45,12 +32,16 @@ export async function fetchFavourites(signal?: AbortSignal): Promise<FavouritesL
     if (response.status === 401) return { ok: false, reason: 'unauthenticated' }
     if (!response.ok) return { ok: false, reason: 'failed' }
     const body = (await response.json()) as unknown
-    if (!isPlainObject(body) || !Array.isArray(body.items) || !body.items.every(isCardDto)) {
+    if (!isPlainObject(body) || !Array.isArray(body.items) || !body.items.every(isCatalogProductDto)) {
       return { ok: false, reason: 'failed' }
     }
     return { ok: true, items: body.items }
-  } catch (error) {
-    if (signal?.aborted) throw error
+  } catch {
+    // An abort is a RESULT, not an exception to rethrow: both callers run
+    // under `void`/fire-and-forget, so a rethrown AbortError became an
+    // unhandled rejection on every StrictMode mount and on navigation away
+    // mid-load (review of ab8e374). Callers treat 'aborted' as a no-op.
+    if (signal?.aborted) return { ok: false, reason: 'aborted' }
     return { ok: false, reason: 'failed' }
   }
 }

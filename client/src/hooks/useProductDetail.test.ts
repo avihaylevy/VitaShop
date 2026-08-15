@@ -25,6 +25,7 @@ const DETAIL = {
   categoryNameEn: 'Omega & Fats',
   categorySlug: 'omega-fats',
   brandName: 'סולגאר',
+  brandNameEn: 'Solgar',
   dosageForm: 'CAPSULE',
   packageQuantity: 100,
   price: '94.90',

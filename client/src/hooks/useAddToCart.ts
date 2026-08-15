@@ -58,6 +58,26 @@ function markDrawerShown(): void {
   }
 }
 
+/**
+ * The stepper-reset half of the confirmation contract, beside the hook that
+ * owns the Promise<boolean> it consumes (review of this diff: the branch had
+ * been copied verbatim into ProductCard and ProductDetailsPage). Resets only
+ * when the add was confirmed IN FULL; a void-returning handler (tests, the
+ * dev showcase) keeps the immediate-reset meaning.
+ */
+export function resetOnConfirmedAdd(
+  confirmation: void | Promise<boolean>,
+  reset: () => void,
+): void {
+  if (confirmation instanceof Promise) {
+    void confirmation.then((taken) => {
+      if (taken) reset()
+    })
+  } else {
+    reset()
+  }
+}
+
 export function useAddToCart() {
   const { addItem } = useCart()
   const mountedRef = useRef(true)
@@ -92,14 +112,18 @@ export function useAddToCart() {
     // ISSUE-118 — the caller may say HOW MANY (the stepper); one is still
     // the default so every existing call site keeps its meaning. The server
     // clamps regardless (§3.4).
-    (slug: string, quantity = 1) => {
+    // Returns whether the server took the add IN FULL (false on transport
+    // failure, unmount, a clamped add, or a refused-at-maximum add) — the
+    // card's stepper resets only on true, never optimistically, so the
+    // shopper's chosen number survives for the retry the drawer invites.
+    (slug: string, quantity = 1): Promise<boolean> => {
       const trigger =
         gridRef.current?.querySelector<HTMLElement>(
           `[${ADD_TO_CART_ATTRIBUTE}="${CSS.escape(slug)}"]`,
         ) ?? null
 
-      void addItem(slug, quantity).then((result) => {
-        if (!result || !mountedRef.current) return
+      return addItem(slug, quantity).then((result) => {
+        if (!result || !mountedRef.current) return false
 
         // 🔴 EVERY add is announced — quiet is not silent. The header badge
         // updates from the same committed total.
@@ -127,14 +151,19 @@ export function useAddToCart() {
         const outcome = result.outcome
         const addDidNotFullyTake =
           outcome.clampedByStock || outcome.clampedByCap || outcome.alreadyAtMaximum || outcome.unchanged
-        if (!addDidNotFullyTake && (drawerAlreadyShown() || drawerOpenRef.current)) return
-        if (drawerOpenRef.current) return
+        // 🔴 The confirmation the caller resets on is "the add FULLY took" —
+        // review of this diff: returning true for alreadyAtMaximum/unchanged
+        // reset the stepper in exactly the case the gate was built for.
+        const taken = !addDidNotFullyTake
+        if (taken && (drawerAlreadyShown() || drawerOpenRef.current)) return taken
+        if (drawerOpenRef.current) return taken
         markDrawerShown()
         // DEC-047-A R1 — the return-focus owner is established only on the
         // closed -> open transition.
         returnFocusRef.current = trigger
         drawerOpenRef.current = true
         setDrawerOpen(true)
+        return taken
       })
     },
     [addItem],

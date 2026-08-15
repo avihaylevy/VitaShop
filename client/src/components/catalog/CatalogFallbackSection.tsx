@@ -5,7 +5,10 @@ import type { CatalogFallback } from '../../features/catalog/catalogViewState'
 
 type CatalogFallbackSectionProps = {
   fallback: CatalogFallback
-  onAddToCart: (slug: string) => void
+  // The same shape ProductGrid/ProductCard declare — an intermediary that
+  // promised less would let a 1-arg void handler type-check here while the
+  // cards below silently dropped quantity and confirmation.
+  onAddToCart: (slug: string, quantity: number) => void | Promise<boolean>
   className?: string
 }
 
@@ -41,7 +44,7 @@ export function CatalogFallbackSection({ fallback, onAddToCart, className = '' }
 
   return (
     <section aria-labelledby={headingId} className={`mt-10 border-t border-border-hairline pt-6 ${className}`}>
-      <h2 id={headingId} className="text-lg font-semibold text-text-ink">
+      <h2 id={headingId} className="heading-section">
         {fallback.kind === 'category' ? t('fallback.categoryHeading') : t('fallback.popularHeading')}
       </h2>
       <p className="mt-1 text-sm text-text-muted">{t('fallback.note')}</p>

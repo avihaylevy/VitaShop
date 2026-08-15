@@ -23,7 +23,7 @@ export function EmptyCart() {
         <CartIcon />
       </Icon>
 
-      <h2 className="text-lg font-semibold text-text-ink">{t('empty.heading')}</h2>
+      <h2 className="heading-section">{t('empty.heading')}</h2>
       <p className="text-sm text-text-muted">{t('empty.message')}</p>
 
       <Link

@@ -185,7 +185,12 @@ model Category {
 
 model Brand {
   id       String    @id @default(uuid())
-  name     String // DEC-017 — brand names not translated
+  name     String // DEC-017 — the stored market name, never translated; DEC-080's sourced Latin FORM lives in nameEn below
+  // ISSUE-127a (user-approved 2026-08-15): the brand's manufacturer-verified
+  // Latin form, seeded from seed.ts's BRAND_EN map (each entry sourced from
+  // the manufacturer's own English branding — DEC-032's no-invention rule).
+  // Nullable: a brand without a sourced Latin form simply has none yet.
+  nameEn   String?   @map("name_en")
   products Product[]
 
   @@map("brands")

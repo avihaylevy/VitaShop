@@ -11,6 +11,7 @@ function buildDto(overrides: Partial<CatalogProductDto> = {}): CatalogProductDto
     categoryNameEn: 'Omega & Fats',
     categorySlug: 'omega-fats',
     brandName: 'סולגאר',
+    brandNameEn: 'Solgar',
     dosageForm: 'CAPSULE',
     packageQuantity: 100,
     price: '94.90',
@@ -73,5 +74,19 @@ describe('mapCatalogProduct', () => {
     const result = mapCatalogProduct(buildDto({ brandName: 'סופהרב', packageQuantity: 60 }), 'he')
     expect(result.brandName).toBe('סופהרב')
     expect(result.packageQuantity).toBe(60)
+  })
+
+  // ISSUE-127a — the English UI shows the manufacturer-verified Latin form;
+  // the Hebrew UI keeps the stored name; a brand without a sourced Latin
+  // form falls back rather than inventing one.
+  it('picks brandNameEn for the English UI and keeps the stored name in Hebrew', () => {
+    const dto = buildDto({ brandName: 'סולגאר', brandNameEn: 'Solgar' })
+    expect(mapCatalogProduct(dto, 'en').brandName).toBe('Solgar')
+    expect(mapCatalogProduct(dto, 'he').brandName).toBe('סולגאר')
+  })
+
+  it('falls back to the stored brand name in English when no Latin form is sourced', () => {
+    const dto = buildDto({ brandName: 'סולגאר', brandNameEn: null })
+    expect(mapCatalogProduct(dto, 'en').brandName).toBe('סולגאר')
   })
 })

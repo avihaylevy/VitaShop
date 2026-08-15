@@ -264,7 +264,7 @@ export function CatalogPage() {
 
   return (
     <div className="px-7 py-8">
-      <h1 className="text-2xl font-semibold text-text-ink">{t('nav.catalog', { ns: 'layout' })}</h1>
+      <h1 className="heading-page">{t('nav.catalog', { ns: 'layout' })}</h1>
 
       {/*
         🔴 The query controls render PERSISTENTLY, outside the resolved-state
@@ -370,7 +370,7 @@ export function CatalogPage() {
             focus on the toggle button, so no focus is orphaned. */}
         {railOpen && (
           <aside aria-label={t('filters.heading', { ns: 'catalog' })} className="hidden w-60 shrink-0 md:block">
-            <h2 className="mb-4 text-lg font-semibold text-text-ink">{t('filters.heading', { ns: 'catalog' })}</h2>
+            <h2 className="mb-4 heading-section">{t('filters.heading', { ns: 'catalog' })}</h2>
             {filterPanel}
           </aside>
         )}
@@ -464,7 +464,7 @@ export function CatalogPage() {
                     id="catalog-grid-heading"
                     ref={resultsHeadingRef}
                     tabIndex={-1}
-                    className="text-lg font-semibold text-text-ink"
+                    className="heading-section"
                   >
                     {gridHeading}
                   </h2>

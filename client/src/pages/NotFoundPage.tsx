@@ -31,7 +31,7 @@ export function NotFoundPage() {
         event interrupting the shopper — it is announced by the page's heading
         and title like any other navigation.
       */}
-      <h1 className="text-2xl font-semibold text-text-ink">{t('notFound.title')}</h1>
+      <h1 className="heading-page">{t('notFound.title')}</h1>
       <p className="mt-3 max-w-prose text-sm text-text-muted">{t('notFound.message')}</p>
 
       <div className="mt-6 flex flex-wrap items-center gap-4">

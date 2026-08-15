@@ -2,20 +2,23 @@
   "addToCart": "Add to cart",
   "quantity": {
     "label": "Quantity",
+    "labelFor": "Quantity for {{product}}",
     "increase": "Increase quantity",
     "decrease": "Decrease quantity"
   },
   "favourite": {
     "add": "Add to favourites",
-    "remove": "Remove from favourites"
+    "remove": "Remove from favourites",
+    "failed": "Updating favourites failed. Try again."
   },
   "favouritesPage": {
     "title": "My favourites",
-    "loading": "Loading favourites…",
     "error": "Favourites could not be loaded right now.",
     "retry": "Try again",
+    "emptyHeading": "No favourites yet",
     "empty": "No favourites yet. Press the heart on a product card to add it here.",
-    "emptyCta": "Browse all products"
+    "emptyCta": "Browse all products",
+    "removed": "{{product}} removed from favourites."
   },
   "stock": {
     "low": "Low stock",

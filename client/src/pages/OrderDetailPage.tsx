@@ -140,7 +140,7 @@ function OrderBody({ order, language }: { order: OrderDetail; language: Supporte
 
   return (
     <article className="mt-4">
-      <h1 className="text-2xl font-semibold text-text-ink">
+      <h1 className="heading-page">
         {t('detail.title', { orderNumber: order.orderNumber })}
       </h1>
 

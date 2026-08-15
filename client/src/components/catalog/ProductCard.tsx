@@ -1,18 +1,20 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import type { ProductCardModel } from '../../types/product'
 import { getStockState } from '../../lib/stockState'
 import { getCategoryTone } from '../../lib/categoryTone'
-import { useFavourites } from '../../state/FavouritesContext'
 import { ProductImage } from './ProductImage'
 import { PriceBlock } from './PriceBlock'
 import { StockState } from './StockState'
-import { QuantityStepper } from './QuantityStepper'
+import { AddQuantityStepper } from './AddQuantityStepper'
+import { FavouriteButton } from './FavouriteButton'
+// Safe cycle: useAddToCart imports this file's ADD_TO_CART_ATTRIBUTE; both
+// references resolve at call time, never at module evaluation.
+import { resetOnConfirmedAdd } from '../../hooks/useAddToCart'
+import type { FavouriteToggleResult } from '../../state/FavouritesContext'
 import { Button } from '../ui/Button'
-import { IconButton } from '../ui/IconButton'
 import { Surface } from '../ui/Surface'
-import { HeartIcon } from '../icons'
 import { FOCUS_RING } from '../ui/focusRing'
 
 /**
@@ -41,7 +43,10 @@ import { FOCUS_RING } from '../ui/focusRing'
  * exactly these.
  */
 type CardAction =
-  | { onAddToCart: (slug: string, quantity: number) => void; navigational?: never }
+  // The handler may return a confirmation promise (true = the server took
+  // the add) — the card resets its stepper only on that answer, never
+  // optimistically. A void-returning handler keeps its old meaning.
+  | { onAddToCart: (slug: string, quantity: number) => void | Promise<boolean>; navigational?: never }
   | { navigational: true; onAddToCart?: never }
 
 type ProductCardProps = ProductCardModel &
@@ -50,6 +55,12 @@ type ProductCardProps = ProductCardModel &
     headingLevel?: 'h2' | 'h3' | 'h4'
     /** Defaults to true — unchanged from the Checkpoint B contract. ProductGrid passes this through. */
     showCategoryEyebrow?: boolean
+    /**
+     * The heart's settled-toggle event, forwarded from FavouriteButton. The
+     * favourites page uses it to announce a removal and repair focus when
+     * the confirmed removal derives this very card out of view.
+     */
+    onFavouriteToggled?: (result: FavouriteToggleResult, slug: string) => void
   }
 
 /**
@@ -85,20 +96,11 @@ export function ProductCard({
   onAddToCart,
   headingLevel = 'h3',
   showCategoryEyebrow = true,
+  onFavouriteToggled,
 }: ProductCardProps) {
   const { t, i18n } = useTranslation('catalog')
   const Heading = headingLevel
   const categoryLabel = i18n.language === 'he' ? categoryNameHe : categoryName
-  /*
-   * ISSUE-115 / REQ-F-003 — "add to favourites from the product card". The
-   * heart reads/writes through FavouritesContext (server-confirmed, never
-   * optimistic); A10: a GUEST pressing it is sent to /login — the action is
-   * gated, the catalogue stays open. `aria-pressed` carries the state, the
-   * label says the ACTION, and HeartIcon's fill mirrors it visually.
-   */
-  const { isFavourite, toggle } = useFavourites()
-  const navigate = useNavigate()
-  const favourited = isFavourite(slug)
   const [quantity, setQuantity] = useState(1)
   // Slice 7: the only reason add-to-cart is ever disabled is real stock.
   // The Slice 6 `addToCartUnavailableId` boundary — which force-disabled
@@ -129,7 +131,9 @@ export function ProductCard({
       // width Surface's `bordered` prop already reserves) — never the only
       // indicator, since the link/button keep their own FOCUS_RING outline.
       // A colour-only change, so it survives prefers-reduced-motion.
-      className="group relative flex flex-col gap-3 p-4 transition-[box-shadow,border-color] duration-200 ease-standard hover:z-10 hover:shadow-[var(--shadow-card-hover)] motion-safe:transition-transform motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.012] focus-within:border-brand-teal"
+      // h-full: the card fills its grid cell so the mt-auto commerce block
+      // pins to one shared bottom edge across a row (ISSUE-127b).
+      className="group relative flex h-full flex-col gap-3 p-4 transition-[box-shadow,border-color] duration-200 ease-standard hover:z-10 hover:shadow-[var(--shadow-card-hover)] motion-safe:transition-transform motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.012] focus-within:border-brand-teal"
       style={{ backgroundColor: categoryTone }}
     >
       {/*
@@ -146,72 +150,85 @@ export function ProductCard({
       </Link>
 
       {/* A SIBLING positioned over the image corner — never nested inside
-          the aria-hidden image link (a focusable child would break it). */}
-      <IconButton
-        icon={<HeartIcon filled={favourited} />}
-        aria-pressed={favourited}
-        aria-label={favourited ? t('favourite.remove') : t('favourite.add')}
-        variant="ghost"
-        onClick={() => {
-          void toggle(slug).then((result) => {
-            if (result === 'auth-required') navigate('/login')
-          })
-        }}
+          the aria-hidden image link (a focusable child would break it).
+          ISSUE-115 / REQ-F-003 — the shared heart (FavouriteButton owns the
+          A10 guest gate and the failure announcement). */}
+      <FavouriteButton
+        slug={slug}
+        onToggled={onFavouriteToggled && ((result) => onFavouriteToggled(result, slug))}
         className="absolute top-6 end-6 z-10 rounded-round border border-border-hairline bg-well/90"
       />
 
-      {showCategoryEyebrow && <p className="text-xs text-text-muted">{categoryLabel}</p>}
+      {/* §2 --text-label: 12 / Assistant 700 / tracking .07em — the eyebrow
+          is the token's first consumer, so it must land exactly. */}
+      {showCategoryEyebrow && (
+        <p className="text-xs font-bold tracking-[0.07em] text-text-muted">{categoryLabel}</p>
+      )}
 
       {/*
-       * 🔴 ISSUE-047, cause 2 of 2. `line-clamp-2` + `min-h-10` reserves
-       * EXACTLY two lines (line-height 20px x 2 = 40px) whether the name wraps
-       * or not. Without the reservation a two-line name made its card 20px
-       * taller than its neighbours — measured as 406px against 386px.
+       * ISSUE-127b/c — name + brand are ONE identity block, tight (gap-0.5),
+       * at the DESIGN_SYSTEM §2 scale the card was under-implementing: name
+       * 16/600 (--text-body-lg), brand 13/600 muted, metadata 13/400.
        *
-       * ⚠️ The clamp and the min-height are one fix, not two: clamping alone
-       * caps the tall cards, and reserving alone leaves short names short.
-       * Both are needed for every card to land on one height.
+       * 🔴 ISSUE-047, cause 2 of 2, recomputed for 16px: `line-clamp-2` +
+       * `min-h-12` reserves EXACTLY two lines (leading-6 = 24px x 2 = 48px)
+       * whether the name wraps or not. The clamp and the min-height are one
+       * fix, not two — both are needed for every card to land on one height.
        */}
-      <Heading className="line-clamp-2 min-h-10 text-sm font-semibold text-text-ink">
-        <Link to={`/product/${slug}`} className={`${FOCUS_RING} rounded-compact`}>
-          {name}
-        </Link>
-      </Heading>
+      <div className="flex flex-col gap-0.5">
+        <Heading className="line-clamp-2 min-h-12 text-base font-semibold leading-6 text-text-ink">
+          <Link to={`/product/${slug}`} className={`${FOCUS_RING} rounded-compact`}>
+            {name}
+          </Link>
+        </Heading>
+        {brandName && <p className="text-[13px] font-semibold text-text-muted">{brandName}</p>}
+      </div>
 
-      {brandName && <p className="text-xs text-text-muted">{brandName}</p>}
       {(dosageForm || packageQuantity) && (
-        <p className="text-xs text-text-muted">
+        <p className="text-[13px] text-text-muted">
           {packageQuantity && dosageForm
             ? `${packageQuantity} ${dosageForm}`
             : (packageQuantity ?? dosageForm)}
         </p>
       )}
 
-      <PriceBlock price={price} />
       <StockState stockQuantity={stockQuantity} lowStockThreshold={lowStockThreshold} />
 
-      {onAddToCart && (
-        /* ISSUE-118 — how many, chosen at the card. The stepper resets to 1
-           after a confirmed hand-off to the cart flow. */
-        // flex-wrap: in the 420px two-column grid the pair is wider than
-        // the card, and the button (fullWidth) drops to its own line
-        // instead of pushing the page sideways.
-        <div className="flex flex-wrap items-center gap-2">
-          <QuantityStepper value={quantity} onChange={setQuantity} className="shrink-0" />
-          <Button
-            variant="primary"
-            fullWidth
-            disabled={isOut}
-            onClick={() => {
-              onAddToCart(slug, quantity)
-              setQuantity(1)
-            }}
-            {...{ [ADD_TO_CART_ATTRIBUTE]: slug }}
-          >
-            {t('addToCart')}
-          </Button>
-        </div>
-      )}
+      {/*
+       * ISSUE-127b — the COMMERCE block: hairline-separated, pinned to the
+       * card's bottom edge (mt-auto) so price rows align across the grid
+       * regardless of how much metadata sits above. §6's structure: the
+       * hairline, then price, then the action row.
+       */}
+      <div className="mt-auto flex flex-col gap-2.5 border-t border-border-hairline pt-3">
+        <PriceBlock price={price} size="price" />
+
+        {onAddToCart && (
+          /* ISSUE-118 — how many, chosen at the card. The stepper resets to 1
+             only after the server CONFIRMS the add — a failed add keeps the
+             shopper's chosen number for the retry (review of ab8e374). */
+          // flex-wrap: in the 420px two-column grid the pair is wider than
+          // the card, and the button (fullWidth) drops to its own line
+          // instead of pushing the page sideways.
+          <div className="flex flex-wrap items-center gap-2">
+            <AddQuantityStepper
+              value={quantity}
+              onChange={setQuantity}
+              productName={name}
+              className="shrink-0"
+            />
+            <Button
+              variant="primary"
+              fullWidth
+              disabled={isOut}
+              onClick={() => resetOnConfirmedAdd(onAddToCart(slug, quantity), () => setQuantity(1))}
+              {...{ [ADD_TO_CART_ATTRIBUTE]: slug }}
+            >
+              {t('addToCart')}
+            </Button>
+          </div>
+        )}
+      </div>
     </Surface>
   )
 }

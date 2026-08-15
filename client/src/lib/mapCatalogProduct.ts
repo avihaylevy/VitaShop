@@ -29,7 +29,11 @@ export function mapCatalogProduct(dto: CatalogProductDto, language: SupportedLan
     price: dto.price,
     stockQuantity: dto.stockQuantity,
     lowStockThreshold: dto.lowStockThreshold,
-    brandName: dto.brandName,
+    // ISSUE-127a — the English UI shows the brand's manufacturer-verified
+    // Latin form when one is sourced; the Hebrew UI keeps the stored name.
+    // (Latin-in-Hebrew-UI for Latin-native brands needs per-brand sourcing
+    // and rides the ISSUE-124 enrichment wave.)
+    brandName: (language === 'en' ? dto.brandNameEn : null) ?? dto.brandName,
     dosageForm: DOSAGE_FORM_LABELS[language][dto.dosageForm],
     packageQuantity: dto.packageQuantity,
     imageFile: dto.imageFile,

@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import type { PrismaClient } from '@prisma/client'
 import { createAccountRateLimiters, type AccountRateLimiters } from '../lib/rateLimit.js'
-import { mapProductToPublicCatalog } from '../lib/catalogMapper.js'
+import { CatalogIntegrityError, mapProductToPublicCatalog } from '../lib/catalogMapper.js'
+import { CATALOG_RELATIONS_INCLUDE } from '../lib/catalogProductLookup.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireActiveShopper } from './requireActiveShopper.js'
 
@@ -213,10 +214,28 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
       const rows = await prisma.favorite.findMany({
         where: { userId, product: { isActive: true } },
         orderBy: { createdAt: 'desc' },
-        include: { product: { include: { category: true, brand: true, images: true } } },
+        // The catalogue's own include constant — "so the list and the
+        // detail cannot drift into including different things", and now
+        // neither can favourites.
+        include: { product: { include: CATALOG_RELATIONS_INCLUDE } },
       })
       res.json({ items: rows.map((row) => mapProductToPublicCatalog(row.product)) })
     } catch (error) {
+      // A non-canonical category is a DATA defect, not a transient outage —
+      // answer it the way the catalogue does (500, operator-actionable),
+      // never as a 503 whose "try again" can never come true. (Review of
+      // ab8e374: the blanket 503 turned one bad row into a permanent,
+      // misleading retry loop for that shopper.)
+      if (error instanceof CatalogIntegrityError) {
+        console.error(`[account] favourites list integrity failure for ${userId}`, error)
+        res.status(500).json({
+          error: {
+            code: 'CATALOG_DATA_INTEGRITY',
+            message: 'The catalogue could not be served due to a data-integrity problem.',
+          },
+        })
+        return
+      }
       console.error(`[account] favourites list failed for ${userId}`, error)
       res.status(503).json({ error: { code: 'FAVOURITES_UNAVAILABLE', message: 'Try again shortly.' } })
     }

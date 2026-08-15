@@ -16,6 +16,11 @@ export interface CatalogProductDto {
   categoryNameEn: string
   categorySlug: string
   brandName: string
+  /**
+   * ISSUE-127a — the brand's manufacturer-verified Latin form, null when
+   * none is sourced. Display picks it for the English UI.
+   */
+  brandNameEn: string | null
   dosageForm: DosageFormKey
   packageQuantity: number
   /** Server-serialized via Prisma Decimal.toFixed(2) — never parse as a number here. */

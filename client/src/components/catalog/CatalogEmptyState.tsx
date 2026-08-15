@@ -24,7 +24,7 @@ interface CatalogEmptyStateProps {
 export function CatalogEmptyState({ heading, message, action }: CatalogEmptyStateProps) {
   return (
     <div className="mt-4 flex flex-col items-start gap-3">
-      <h2 className="text-lg font-semibold text-text-ink">{heading}</h2>
+      <h2 className="heading-section">{heading}</h2>
       <p className="text-sm text-text-muted">{message}</p>
       {action && (
         <button

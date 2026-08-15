@@ -18,6 +18,7 @@ function detailDto(overrides: Partial<ProductDetailDto> = {}): ProductDetailDto 
     categoryNameEn: 'Omega & Fats',
     categorySlug: 'omega-fats',
     brandName: 'סולגאר',
+    brandNameEn: 'Solgar',
     dosageForm: 'CAPSULE',
     packageQuantity: 100,
     price: '94.90',

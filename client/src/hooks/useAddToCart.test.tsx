@@ -330,6 +330,33 @@ describe('the shared add-to-cart choreography', () => {
     await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
   })
 
+  it('🔴 review finding — a REFUSED add keeps the chosen quantity; the stepper resets only on a FULL take', async () => {
+    // The Promise<boolean> gate exists for exactly this: the server took
+    // NOTHING (alreadyAtMaximum), so the shopper's chosen 3 must survive
+    // for the retry the re-opened drawer invites — never snap back to 1.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        init?.method === 'POST'
+          ? ({
+              ok: true, status: 200,
+              json: async () => mutation(2, { alreadyAtMaximum: true }),
+            } as unknown as Response)
+          : ({ ok: true, status: 200, json: async () => ({ cart: cartBody(0) }) } as unknown as Response),
+      ),
+    )
+    renderSurface()
+
+    const increase = await screen.findByRole('button', { name: /increase quantity/i })
+    fireEvent.click(increase)
+    fireEvent.click(increase)
+    expect(screen.getByText('3')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
+    expect(screen.getByText('3')).toBeTruthy()
+  })
+
   it('DEC-073 — an add while the drawer is ALREADY open keeps it open (D8: content only)', async () => {
     vi.stubGlobal(
       'fetch',

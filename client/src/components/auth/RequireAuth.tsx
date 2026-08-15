@@ -40,7 +40,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   if (status === 'guest') {
     return (
       <section className="mx-auto max-w-md px-4 py-12 text-center" aria-labelledby="auth-gate-title">
-        <h1 id="auth-gate-title" className="text-lg font-semibold text-text-ink">
+        <h1 id="auth-gate-title" className="heading-section">
           {t('gate.title')}
         </h1>
         <p className="mt-2 text-sm text-text-muted">{t('gate.body')}</p>

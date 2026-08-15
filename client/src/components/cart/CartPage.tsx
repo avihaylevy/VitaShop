@@ -129,7 +129,7 @@ export function CartPage() {
 
   return (
     <div className="px-7 py-8">
-      <h1 className="text-2xl font-semibold text-text-ink">{t('page.title')}</h1>
+      <h1 className="heading-page">{t('page.title')}</h1>
 
       {/*
         🔴 LOADING AND FAILED ARE REAL, RENDERED STATES. The state layer this

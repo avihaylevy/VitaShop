@@ -38,7 +38,9 @@ export class CatalogApiError extends Error {
   }
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+// Exported: favouritesApi validates the SAME card DTO and must use the SAME
+// predicate — "reuse, not a parallel definition" (the detail DTO's rule).
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -50,7 +52,7 @@ function isCatalogApiErrorBody(value: unknown): value is CatalogApiErrorBody {
   return true
 }
 
-function isCatalogProductDto(value: unknown): value is CatalogProductDto {
+export function isCatalogProductDto(value: unknown): value is CatalogProductDto {
   if (!isPlainObject(value)) return false
   return (
     typeof value.slug === 'string' &&
@@ -60,6 +62,11 @@ function isCatalogProductDto(value: unknown): value is CatalogProductDto {
     typeof value.categoryNameEn === 'string' &&
     typeof value.categorySlug === 'string' &&
     typeof value.brandName === 'string' &&
+    // == null accepts undefined too: a client bundle must keep rendering
+    // against a server that predates the name_en migration (stale deploy /
+    // cached HTML) — a missing OPTIONAL display string must never take the
+    // catalogue down. mapCatalogProduct already falls back via ??.
+    (value.brandNameEn == null || typeof value.brandNameEn === 'string') &&
     typeof value.dosageForm === 'string' &&
     DOSAGE_FORM_KEYS.includes(value.dosageForm as DosageFormKey) &&
     typeof value.packageQuantity === 'number' &&

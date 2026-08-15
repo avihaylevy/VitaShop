@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { ProductCardModel } from '../../types/product'
+import type { FavouriteToggleResult } from '../../state/FavouritesContext'
 import { ProductCard } from './ProductCard'
 
 /**
@@ -9,13 +10,17 @@ import { ProductCard } from './ProductCard'
  * green type-check and a green suite.
  */
 type GridAction =
-  | { onAddToCart: (slug: string) => void; navigational?: never }
+  // Two-arg + optional confirmation promise — the card resets its stepper on
+  // the confirmed answer. Narrower handlers ((slug) => void) stay assignable.
+  | { onAddToCart: (slug: string, quantity: number) => void | Promise<boolean>; navigational?: never }
   | { navigational: true; onAddToCart?: never }
 
 type ProductGridProps = GridAction & {
   products: readonly ProductCardModel[]
   showCategoryEyebrow?: boolean
   emptyState?: ReactNode
+  /** Forwarded to every card's heart — see ProductCard.onFavouriteToggled. */
+  onFavouriteToggled?: (result: FavouriteToggleResult, slug: string) => void
 }
 
 /**
@@ -32,6 +37,7 @@ export function ProductGrid({
   products,
   showCategoryEyebrow,
   emptyState,
+  onFavouriteToggled,
   ...action
 }: ProductGridProps) {
   if (products.length === 0) {
@@ -46,6 +52,7 @@ export function ProductGrid({
             {...product}
             {...(action.navigational ? { navigational: true as const } : { onAddToCart: action.onAddToCart! })}
             showCategoryEyebrow={showCategoryEyebrow}
+            onFavouriteToggled={onFavouriteToggled}
           />
         </li>
       ))}

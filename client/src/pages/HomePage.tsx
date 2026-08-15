@@ -34,7 +34,7 @@ export function HomePage() {
 
   return (
     <div className="px-7 py-8">
-      <h1 className="text-2xl font-semibold text-text-ink">{t('app.name', { ns: 'common' })}</h1>
+      <h1 className="heading-page">{t('app.name', { ns: 'common' })}</h1>
 
       {/*
         ISSUE-105's "home page content" half (Wave 4). An intro strip: one
@@ -105,7 +105,7 @@ function ShopByGoal() {
 
   return (
     <section aria-labelledby="shop-by-goal-heading" className="mt-10">
-      <h2 id="shop-by-goal-heading" className="text-lg font-semibold text-text-ink">
+      <h2 id="shop-by-goal-heading" className="heading-section">
         {t('home.shopByGoalTitle')}
       </h2>
       <ul className="mt-4 flex flex-wrap gap-2">
@@ -245,7 +245,7 @@ function NewArrivals() {
         // an indicator matching nothing else on the page — DESIGN_SYSTEM §4
         // makes the teal ring the one treatment, and `CheckoutPage` lands on
         // its own heading exactly this way.
-        className={`${FOCUS_RING} rounded-card text-lg font-semibold text-text-ink`}
+        className={`${FOCUS_RING} rounded-card heading-section`}
       >
         {t('home.newArrivalsTitle')}
       </h2>

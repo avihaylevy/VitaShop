@@ -1654,6 +1654,10 @@ describe('GET /api/products/:slug — Product Details (Checkpoint J)', () => {
     expect(dto.slug).toBe(row.slug)
     expect(dto.nameHe).toBe(row.nameHe)
     expect(dto.brandName).toBe(row.brand.name)
+    // DEC-080 — pinned END TO END, not only in the mapper unit test: a
+    // narrowed brand select would silently null this for every product
+    // while both suites stayed green.
+    expect(dto.brandNameEn).toBe(row.brand.nameEn)
     expect(dto.price).toBe(row.price.toFixed(2))
     expect(dto.usageInstructions).toBe(row.usageInstructions)
     expect(dto.warningsAllergens).toBe(row.warningsAllergens)
