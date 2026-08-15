@@ -9,7 +9,9 @@
     "mainLabel": "Main navigation",
     "mobileLabel": "Mobile navigation",
     "home": "Home",
-    "catalog": "Shop"
+    "catalog": "Shop",
+    "about": "About",
+    "contact": "Contact"
   },
   "language": {
     "toggleLabel": "Change language",

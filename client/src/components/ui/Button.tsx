@@ -8,7 +8,11 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 // disabled/loading only ever changes the border COLOUR, never adds a
 // border where none existed — a width-auto button must not shift size
 // when it becomes disabled.
-const VARIANT_CLASS: Record<ButtonVariant, string> = {
+// Exported for LinkButton — a Link styled as a button must draw from the
+// SAME variant source, or every token change forks (review of the
+// ISSUE-119/125 diff: two pages carried hand-copied primary-fill strings
+// that had already drifted from these values).
+export const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary: 'border border-transparent bg-brand-teal text-white hover:bg-brand-teal-strong active:bg-brand-teal-strong',
   secondary: 'border border-border-control bg-well text-text-ink hover:bg-surface-sunken',
   ghost: 'border border-transparent bg-transparent text-text-ink hover:bg-surface-sunken',

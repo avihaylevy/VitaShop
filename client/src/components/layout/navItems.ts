@@ -30,9 +30,17 @@
  * A `path="*"` route now exists regardless (see `App.tsx`), so an unknown URL
  * says "not found" instead of rendering blank chrome.
  */
+/**
+ * 🔄 ISSUE-119 + ISSUE-125 (2026-08-15): `about` and `contact` RETURN — this
+ * time WITH their routes and pages (the ISSUE-066 deletion above was about
+ * nav items pointing at nothing; the user has since asked for both pages
+ * explicitly, superseding DEC-075's אודות deferral). `sales` stays gone.
+ */
 export const NAV_ITEMS = [
   { key: 'home', to: '/', end: true },
   { key: 'catalog', to: '/catalog', end: false },
+  { key: 'about', to: '/about', end: true },
+  { key: 'contact', to: '/contact', end: true },
 ] as const
 
 export type NavItem = (typeof NAV_ITEMS)[number]

@@ -9,7 +9,9 @@
     "mainLabel": "ניווט ראשי",
     "mobileLabel": "ניווט נייד",
     "home": "בית",
-    "catalog": "חנות"
+    "catalog": "חנות",
+    "about": "אודות",
+    "contact": "יצירת קשר"
   },
   "language": {
     "toggleLabel": "שינוי שפה",

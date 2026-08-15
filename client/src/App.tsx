@@ -16,6 +16,8 @@ import { RegisterPage } from './pages/RegisterPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
+import { AboutPage } from './pages/AboutPage'
+import { ContactPage } from './pages/ContactPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
 function App() {
@@ -111,6 +113,16 @@ function App() {
             </RequireAuth>
           }
         />
+        {/*
+          ISSUE-119 + ISSUE-125 — the two nav pages the user asked for.
+          About: invented store story, user-authorized. Contact: MOCK by
+          instruction — the form validates and submits nowhere (DEC-014's
+          no-email-service line untouched). Placed ABOVE the auth block so
+          its "NONE of these gate anything" comment keeps meaning exactly
+          the auth routes it documents.
+        */}
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/contact" element={<ContactPage />} />
         {/*
           MILESTONE-006 Checkpoint H — the auth forms.
 

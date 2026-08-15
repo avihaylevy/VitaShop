@@ -11,6 +11,7 @@ import { CartDrawer } from '../components/cart/CartDrawer'
 import { AddedToCartToast } from '../components/cart/AddedToCartToast'
 import { useAddToCart } from '../hooks/useAddToCart'
 import { Button } from '../components/ui/Button'
+import { LinkButton } from '../components/ui/LinkButton'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { getCategoryTone } from '../lib/categoryTone'
 import type { SupportedLanguage } from '../i18n'
@@ -71,12 +72,9 @@ export function HomePage() {
               {t('home.tagline', { ns: 'catalog' })}
             </p>
             <div className="mt-6">
-              <Link
-                to="/catalog"
-                className={`${FOCUS_RING} inline-flex h-12 items-center rounded-card bg-brand-teal px-6 text-base font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
-              >
+              <LinkButton to="/catalog" size="hero">
                 {t('home.browseCatalog', { ns: 'catalog' })}
-              </Link>
+              </LinkButton>
             </div>
           </div>
           {showcase.heroImages.length > 0 && (

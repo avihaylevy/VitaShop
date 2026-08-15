@@ -108,10 +108,10 @@ describe('i18n namespace-registration drift guard — the real repository state'
     expect([...registeredNamespaces.he].sort()).toEqual([...registeredNamespaces.en].sort())
   })
 
-  it('the current shipped namespace set is exactly admin/auth/common/layout/catalog/cart/orders/checkout (confirmation, not the source of truth)', () => {
-    // Updated at MILESTONE-006 Checkpoint H, when `auth` was added, and again
-    // at MILESTONE-008 Checkpoint F0, when `orders` was added for REQ-F-046's
-    // six status labels. This
+  it('the current shipped namespace set is exactly admin/auth/common/layout/catalog/cart/orders/checkout/info (confirmation, not the source of truth)', () => {
+    // Updated at MILESTONE-006 Checkpoint H (`auth`), MILESTONE-008
+    // Checkpoint F0 (`orders`), and 2026-08-15 (`info` — the ISSUE-119
+    // About + ISSUE-125 Contact pages). This
     // assertion is DESIGNED to fail on any namespace change — that is its
     // whole job, and updating it is the deliberate acknowledgement the drift
     // guard asks for, not a nuisance to be loosened.
@@ -123,6 +123,7 @@ describe('i18n namespace-registration drift guard — the real repository state'
       'catalog',
       'checkout',
       'common',
+      'info',
       'layout',
       'orders',
     ])
