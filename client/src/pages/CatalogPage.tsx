@@ -20,9 +20,11 @@ import { VisuallyHidden } from '../components/ui/VisuallyHidden'
 import { catalogViewState } from '../features/catalog/catalogViewState'
 import {
   activeFilterCount,
+  buildDietaryOptions,
   buildFilterGroups,
   hasActiveFilters,
   toggleFilterValue,
+  type DietaryFilterKey,
   type RepeatableFilterKey,
 } from '../features/catalog/catalogQueryControls'
 import {
@@ -144,6 +146,13 @@ export function CatalogPage() {
     [applyQueryChange],
   )
 
+  const handleDietaryChange = useCallback(
+    // DEC-078/DEC-083 — same literal contract as inStock: "true" or absent.
+    (key: DietaryFilterKey, checked: boolean) =>
+      applyQueryChange({ [key]: checked ? 'true' : undefined }),
+    [applyQueryChange],
+  )
+
   /** §5: "Clear filters" → bare `/catalog`. */
   const handleClearFilters = useCallback(() => setSearchParams(new URLSearchParams()), [setSearchParams])
 
@@ -190,6 +199,7 @@ export function CatalogPage() {
   const [railOpen, setRailOpen] = useState(() => activeFilterCount(urlState) > 0)
 
   const filterGroups = buildFilterGroups(facets, urlState, language)
+  const dietaryOptions = buildDietaryOptions(facets, urlState, language)
   const filtersActive = hasActiveFilters(urlState)
   const activeCount = activeFilterCount(urlState)
 
@@ -197,6 +207,8 @@ export function CatalogPage() {
     <CatalogFilterPanel
       groups={filterGroups}
       onToggleValue={handleToggleFilterValue}
+      dietaryOptions={dietaryOptions}
+      onDietaryChange={handleDietaryChange}
       minPrice={urlState.minPrice ?? ''}
       maxPrice={urlState.maxPrice ?? ''}
       onPriceCommit={handlePriceCommit}

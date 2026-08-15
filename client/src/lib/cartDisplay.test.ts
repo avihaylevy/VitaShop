@@ -18,6 +18,7 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
     nameHe: 'מוצר',
     nameEn: 'Product',
     brandName: 'Brand',
+    brandNameEn: null,
     packageQuantity: 60,
     imageFile: null,
     quantity: 1,
@@ -29,6 +30,24 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
     ...overrides,
   } as CartLine
 }
+
+describe('ISSUE-129 — the brand language pick matches the catalogue (DEC-080)', () => {
+  const bilingual = () => line({ brandName: 'סולגאר', brandNameEn: 'Solgar' })
+
+  it('the English UI prefers the manufacturer-verified Latin form', () => {
+    expect(toCartLineDisplay(bilingual(), 'en').brandName).toBe('Solgar')
+  })
+
+  it('the Hebrew UI keeps the stored name even when a Latin form exists', () => {
+    expect(toCartLineDisplay(bilingual(), 'he').brandName).toBe('סולגאר')
+  })
+
+  it('the English UI falls back to the stored name when no Latin form is sourced', () => {
+    expect(toCartLineDisplay(line({ brandName: 'סולגאר', brandNameEn: null }), 'en').brandName).toBe(
+      'סולגאר',
+    )
+  })
+})
 
 describe('purchasability — the three unbuyable shapes and the buyable one', () => {
   it('a normal line is ok and counts toward the total', () => {

@@ -21,6 +21,11 @@ export type CartLine = {
   nameHe: string
   nameEn: string
   brandName: string
+  /**
+   * ISSUE-129 / DEC-080 — the manufacturer-verified Latin form, nullable like
+   * the catalogue DTO's. The English UI prefers it; Hebrew keeps `brandName`.
+   */
+  brandNameEn: string | null
   packageQuantity: number
   imageFile: string | null
   quantity: number

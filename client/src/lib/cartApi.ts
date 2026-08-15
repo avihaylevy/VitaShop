@@ -41,6 +41,7 @@ function isCartLine(value: unknown): value is CartLine {
     typeof value.nameHe === 'string' &&
     typeof value.nameEn === 'string' &&
     typeof value.brandName === 'string' &&
+    (value.brandNameEn === null || typeof value.brandNameEn === 'string') &&
     typeof value.packageQuantity === 'number' &&
     (value.imageFile === null || typeof value.imageFile === 'string') &&
     typeof value.quantity === 'number' &&

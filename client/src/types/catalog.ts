@@ -124,11 +124,28 @@ export interface CatalogDosageFormFacetDto {
   labelEn: string
 }
 
+/** DEC-078/DEC-083 — the three dietary filter values, server offer order. */
+export const DIETARY_FACET_VALUES = ['kosher', 'glutenFree', 'vegan'] as const
+export type DietaryFacetValue = (typeof DIETARY_FACET_VALUES)[number]
+
+export interface CatalogDietaryFacetDto {
+  value: DietaryFacetValue
+  labelHe: string
+  labelEn: string
+}
+
 export interface CatalogFacetsDto {
   brands: CatalogFacetOptionDto[]
   ingredients: CatalogFacetOptionDto[]
   healthGoals: CatalogBilingualFacetOptionDto[]
   dosageForms: CatalogDosageFormFacetDto[]
+  /**
+   * Only the flags at least one active product carries `true` — the server
+   * never offers an option that can match nothing (§9d / ISSUE-051), so an
+   * absent value here means "no sourced data yet", and the UI renders no
+   * checkbox for it.
+   */
+  dietary: CatalogDietaryFacetDto[]
 }
 
 export interface CatalogCategoryDto {

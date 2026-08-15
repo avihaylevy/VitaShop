@@ -27,6 +27,7 @@ const QUOTE = {
       nameHe: 'מ',
       nameEn: 'P',
       brandName: 'B',
+      brandNameEn: null,
       quantity: 1,
       unitPrice: '100.00',
       lineTotal: '100.00',

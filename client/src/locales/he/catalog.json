@@ -115,6 +115,7 @@
     "maxPrice": "מחיר מקסימלי",
     "availability": "זמינות",
     "inStock": "רק מוצרים במלאי",
+    "dietary": "תזונה וכשרות",
     "ceilingHint": "אפשר לבחור עד {{max}} ערכים בקבוצה זו.",
     "searchGroup": "חיפוש ברשימה",
     "searchNoMatch": "לא נמצאו ערכים תואמים",

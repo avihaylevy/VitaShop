@@ -45,6 +45,12 @@ export type CartLineDto = {
   nameEn: string
   /** For the row's brand line. Read live, exactly like the name. */
   brandName: string
+  /**
+   * ISSUE-129 / DEC-080 — the brand's manufacturer-verified Latin form, so the
+   * English UI does not say "Solgar" on the card and "סולגאר" in the cart.
+   * Nullable exactly as the catalogue DTO's: no sourced Latin form means none.
+   */
+  brandNameEn: string | null
   /** For the row's "package quantity" line. */
   packageQuantity: number
   imageFile: string | null
@@ -116,7 +122,7 @@ function toDto(
     id: string; slug: string; nameHe: string; nameEn: string; isActive: boolean
     stockQuantity: number; lowStockThreshold: number; packageQuantity: number
     price: { toFixed: (d: number) => string }
-    brand: { name: string }
+    brand: { name: string; nameEn: string | null }
     images: { url: string }[]
   } }[],
 ): CartDto {
@@ -129,6 +135,7 @@ function toDto(
       nameHe: item.product.nameHe,
       nameEn: item.product.nameEn,
       brandName: item.product.brand.name,
+      brandNameEn: item.product.brand.nameEn ?? null,
       packageQuantity: item.product.packageQuantity,
       imageFile: item.product.images[0]?.url.split('/').pop() ?? null,
       quantity: item.quantity,
@@ -210,7 +217,7 @@ const LINE_SELECT = {
     select: {
       id: true, slug: true, nameHe: true, nameEn: true, isActive: true,
       stockQuantity: true, lowStockThreshold: true, packageQuantity: true, price: true,
-      brand: { select: { name: true } },
+      brand: { select: { name: true, nameEn: true } },
       images: { select: { url: true }, orderBy: { sortOrder: 'asc' as const }, take: 1 },
     },
   },

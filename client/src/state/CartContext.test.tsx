@@ -20,6 +20,7 @@ function cartWith(quantity: number): Cart {
         nameHe: 'שם',
         nameEn: 'Name',
         brandName: 'Brand',
+        brandNameEn: null,
         packageQuantity: 30,
         imageFile: null,
         quantity,

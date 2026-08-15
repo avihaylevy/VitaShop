@@ -94,7 +94,9 @@ export function toCartLineDisplay(line: CartLine, language: SupportedLanguage): 
     id: line.id,
     slug: line.slug,
     name: language === 'he' ? line.nameHe : line.nameEn,
-    brandName: line.brandName,
+    // ISSUE-129 — the same pick as mapCatalogProduct: the English UI prefers
+    // the manufacturer-verified Latin form, falling back to the stored name.
+    brandName: (language === 'en' ? line.brandNameEn : null) ?? line.brandName,
     packageQuantity: line.packageQuantity,
     imageFile: line.imageFile,
     unitPrice: line.unitPrice,

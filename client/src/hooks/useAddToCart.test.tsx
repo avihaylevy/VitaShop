@@ -78,6 +78,7 @@ function cartBody(totalQuantity: number) {
         nameHe: 'פרוביוטיק',
         nameEn: 'Probiotic Intense',
         brandName: 'Altman',
+        brandNameEn: null,
         packageQuantity: 30,
         imageFile: null,
         quantity: totalQuantity,

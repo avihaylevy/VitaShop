@@ -7,6 +7,8 @@ import { VisuallyHidden } from '../ui/VisuallyHidden'
 import { FOCUS_RING } from '../ui/focusRing'
 import {
   MAX_VALUES_PER_REPEATABLE_PARAMETER,
+  type DietaryFilterKey,
+  type DietaryOptionModel,
   type FilterGroupModel,
   type RepeatableFilterKey,
 } from '../../features/catalog/catalogQueryControls'
@@ -185,6 +187,13 @@ const PRICE_INPUT_STEP = '0.1'
 type CatalogFilterPanelProps = {
   groups: readonly FilterGroupModel[]
   onToggleValue: (key: RepeatableFilterKey, value: string) => void
+  /**
+   * DEC-078/DEC-083 — the ingredient group's replacement. Offer-gated by the
+   * facets payload (an empty list renders no fieldset at all), labels are the
+   * server's own; only the boolean param key is ever submitted.
+   */
+  dietaryOptions: readonly DietaryOptionModel[]
+  onDietaryChange: (key: DietaryFilterKey, checked: boolean) => void
   /** Raw URL values — passed through untouched, never coerced (§5). */
   minPrice: string
   maxPrice: string
@@ -222,6 +231,8 @@ type CatalogFilterPanelProps = {
 export function CatalogFilterPanel({
   groups,
   onToggleValue,
+  dietaryOptions,
+  onDietaryChange,
   minPrice,
   maxPrice,
   onPriceCommit,
@@ -265,6 +276,34 @@ export function CatalogFilterPanel({
         group.key === 'ingredient' || group.options.length === 0 ? null : (
           <FilterGroup key={group.key} group={group} onToggleValue={onToggleValue} />
         ),
+      )}
+
+      {/*
+        DEC-078/DEC-083 — the ingredient group's replacement: kosher ·
+        gluten-free · vegan, boolean params matching sourced-true rows only.
+        Offer-gated: a flag with no sourced data is not in `dietaryOptions`
+        and renders nothing (§9d / the ISSUE-051 empty-filter lesson).
+      */}
+      {dietaryOptions.length > 0 && (
+        <fieldset className="min-w-0 border-0 p-0">
+          <legend className="mb-2 text-sm font-semibold text-text-ink">{t('filters.dietary')}</legend>
+          <div className="flex flex-col gap-1">
+            {dietaryOptions.map((option) => (
+              <label
+                key={option.key}
+                className="flex min-h-11 items-center gap-2 text-sm text-text-ink"
+              >
+                <input
+                  type="checkbox"
+                  checked={option.checked}
+                  onChange={(event) => onDietaryChange(option.key, event.target.checked)}
+                  className={`${FOCUS_RING} size-4 shrink-0 rounded-compact border border-border-control accent-brand-teal`}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
       )}
 
       <fieldset className="min-w-0 border-0 p-0">

@@ -18,6 +18,12 @@ export const SUPPORTED_QUERY_PARAMS = [
   'minPrice',
   'maxPrice',
   'inStock',
+  // DEC-078/DEC-083 — the three dietary filters. Same value contract as
+  // inStock: the literal "true" or absent; they match ONLY products whose
+  // sourced flag is true (null means unknown, never false — DEC-083).
+  'kosher',
+  'glutenFree',
+  'vegan',
   'sort',
   'page',
 ] as const
@@ -63,6 +69,9 @@ const FIELD_ORDER = [
   'minPrice',
   'maxPrice',
   'inStock',
+  'kosher',
+  'glutenFree',
+  'vegan',
   'sort',
   'page',
 ] as const
@@ -78,6 +87,9 @@ export interface ParsedCatalogQuery {
   minPrice: string | undefined
   maxPrice: string | undefined
   inStock: true | undefined
+  kosher: true | undefined
+  glutenFree: true | undefined
+  vegan: true | undefined
   sort: SortValue
   page: number
 }
@@ -238,6 +250,15 @@ export function parseCatalogProductsQuery(rawQuery: RawCatalogQuery): CatalogQue
   const inStockLiteral = parseSingleValue('inStock', rawQuery.inStock, inStockSchema, invalidFields)
   const inStock: true | undefined = inStockLiteral === 'true' ? true : undefined
 
+  // DEC-078/DEC-083 — same literal contract as inStock, one schema for all
+  // three so the flags cannot drift apart.
+  const kosherLiteral = parseSingleValue('kosher', rawQuery.kosher, inStockSchema, invalidFields)
+  const kosher: true | undefined = kosherLiteral === 'true' ? true : undefined
+  const glutenFreeLiteral = parseSingleValue('glutenFree', rawQuery.glutenFree, inStockSchema, invalidFields)
+  const glutenFree: true | undefined = glutenFreeLiteral === 'true' ? true : undefined
+  const veganLiteral = parseSingleValue('vegan', rawQuery.vegan, inStockSchema, invalidFields)
+  const vegan: true | undefined = veganLiteral === 'true' ? true : undefined
+
   const sort = parseSingleValue('sort', rawQuery.sort, sortSchema, invalidFields) ?? DEFAULT_SORT
   const page = parseSingleValue('page', rawQuery.page, pageSchema, invalidFields) ?? DEFAULT_PAGE
 
@@ -255,6 +276,6 @@ export function parseCatalogProductsQuery(rawQuery: RawCatalogQuery): CatalogQue
 
   return {
     ok: true,
-    query: { q, category, brand, ingredient, healthGoal, dosageForm, minPrice, maxPrice, inStock, sort, page },
+    query: { q, category, brand, ingredient, healthGoal, dosageForm, minPrice, maxPrice, inStock, kosher, glutenFree, vegan, sort, page },
   }
 }

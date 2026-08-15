@@ -16,6 +16,7 @@ function validLine(overrides: Partial<CartLine> = {}): CartLine {
     nameHe: 'פרוביוטיק אינטנס',
     nameEn: 'Probiotic Intense',
     brandName: 'אלטמן',
+    brandNameEn: 'Altman',
     packageQuantity: 30,
     imageFile: 'probiotic.webp',
     quantity: 2,

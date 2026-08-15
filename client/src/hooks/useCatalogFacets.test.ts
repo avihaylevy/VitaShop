@@ -25,6 +25,7 @@ const FACETS: CatalogFacetsDto = {
   ingredients: [],
   healthGoals: [],
   dosageForms: [{ value: 'CAPSULE', labelHe: 'כמוסות', labelEn: 'Capsules' }],
+  dietary: [],
 }
 
 let fetchMock: ReturnType<typeof vi.fn>

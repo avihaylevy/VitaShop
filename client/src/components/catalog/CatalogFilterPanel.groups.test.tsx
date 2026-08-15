@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { CatalogFilterPanel } from './CatalogFilterPanel'
-import type { FilterGroupModel } from '../../features/catalog/catalogQueryControls'
+import type { DietaryOptionModel, FilterGroupModel } from '../../features/catalog/catalogQueryControls'
 
 /**
  * ISSUE-050 / ISSUE-051 — the disclosure redesign. REQ-F-011 forbids
@@ -33,11 +33,17 @@ function group(key: FilterGroupModel['key'], count: number, selected = 0): Filte
   }
 }
 
-function renderPanel(groups: FilterGroupModel[]) {
+function renderPanel(
+  groups: FilterGroupModel[],
+  dietaryOptions: DietaryOptionModel[] = [],
+  onDietaryChange = vi.fn(),
+) {
   return render(
     <CatalogFilterPanel
       groups={groups}
       onToggleValue={vi.fn()}
+      dietaryOptions={dietaryOptions}
+      onDietaryChange={onDietaryChange}
       minPrice=""
       maxPrice=""
       onPriceCommit={vi.fn()}
@@ -54,6 +60,31 @@ beforeEach(async () => {
 })
 
 afterEach(cleanup)
+
+describe('DEC-078/DEC-083 — the dietary fieldset', () => {
+  it('renders one labelled checkbox per OFFERED option, and fires the change with the key', () => {
+    const onDietaryChange = vi.fn()
+    renderPanel(
+      [],
+      [
+        { key: 'kosher', label: 'Kosher', checked: false },
+        { key: 'vegan', label: 'Vegan', checked: true },
+      ],
+      onDietaryChange,
+    )
+    const kosher = screen.getByRole('checkbox', { name: 'Kosher' })
+    expect((screen.getByRole('checkbox', { name: 'Vegan' }) as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(kosher)
+    expect(onDietaryChange).toHaveBeenCalledWith('kosher', true)
+  })
+
+  it('🔴 renders NO dietary fieldset at all when nothing is offered — a filter over empty data does not exist', () => {
+    renderPanel([], [])
+    // Only the availability checkbox remains.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1)
+    expect(screen.queryByText('Dietary & kosher')).toBeNull()
+  })
+})
 
 describe('ISSUE-050/051 — big filter groups are disclosures', () => {
   it('🔴 DEC-078 — the ingredient group is NOT OFFERED, whatever its size', () => {

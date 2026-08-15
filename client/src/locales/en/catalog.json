@@ -113,6 +113,7 @@
     "maxPrice": "Maximum price",
     "availability": "Availability",
     "inStock": "In stock only",
+    "dietary": "Dietary & kosher",
     "ceilingHint": "Up to {{max}} values can be selected in this group.",
     "searchGroup": "Search this list",
     "searchNoMatch": "No matching options",

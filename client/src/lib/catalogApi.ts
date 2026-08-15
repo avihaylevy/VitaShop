@@ -1,9 +1,11 @@
 import { getApiBaseUrl } from './apiBaseUrl.js'
+import { DIETARY_FACET_VALUES } from '../types/catalog.js'
 import type {
   CatalogApiErrorBody,
   CatalogBilingualFacetOptionDto,
   CatalogCategoriesEnvelope,
   CatalogCategoryDto,
+  CatalogDietaryFacetDto,
   CatalogDosageFormFacetDto,
   CatalogFacetOptionDto,
   CatalogFacetsDto,
@@ -131,6 +133,16 @@ function isCatalogDosageFormFacetDto(value: unknown): value is CatalogDosageForm
   )
 }
 
+function isCatalogDietaryFacetDto(value: unknown): value is CatalogDietaryFacetDto {
+  if (!isPlainObject(value)) return false
+  return (
+    typeof value.value === 'string' &&
+    (DIETARY_FACET_VALUES as readonly string[]).includes(value.value) &&
+    typeof value.labelHe === 'string' &&
+    typeof value.labelEn === 'string'
+  )
+}
+
 // §9d's payload is returned UNWRAPPED by the server — no `items` envelope.
 function isCatalogFacetsDto(value: unknown): value is CatalogFacetsDto {
   if (!isPlainObject(value)) return false
@@ -142,7 +154,9 @@ function isCatalogFacetsDto(value: unknown): value is CatalogFacetsDto {
     Array.isArray(value.healthGoals) &&
     value.healthGoals.every(isCatalogBilingualFacetOptionDto) &&
     Array.isArray(value.dosageForms) &&
-    value.dosageForms.every(isCatalogDosageFormFacetDto)
+    value.dosageForms.every(isCatalogDosageFormFacetDto) &&
+    Array.isArray(value.dietary) &&
+    value.dietary.every(isCatalogDietaryFacetDto)
   )
 }
 

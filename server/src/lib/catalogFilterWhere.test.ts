@@ -15,6 +15,9 @@ const EMPTY: CatalogFilterInput = {
   minPrice: undefined,
   maxPrice: undefined,
   inStock: undefined,
+  kosher: undefined,
+  glutenFree: undefined,
+  vegan: undefined,
 }
 
 describe('buildProductWhere', () => {
@@ -32,6 +35,9 @@ describe('buildProductWhere', () => {
       [{ ...EMPTY, minPrice: '10' }, undefined],
       [{ ...EMPTY, maxPrice: '10' }, undefined],
       [{ ...EMPTY, inStock: true }, undefined],
+      [{ ...EMPTY, kosher: true }, undefined],
+      [{ ...EMPTY, glutenFree: true }, undefined],
+      [{ ...EMPTY, vegan: true }, undefined],
       [{ ...EMPTY, q: 'omega' }, undefined],
       [EMPTY, 'ויטמינים'],
       [
@@ -108,6 +114,30 @@ describe('buildProductWhere', () => {
   it('inStock absent — no stock clause added', () => {
     const where = buildProductWhere(EMPTY, undefined)
     expect(andClauses(where).some((clause) => 'stockQuantity' in clause)).toBe(false)
+  })
+
+  it('kosher true — isKosher: true clause; null (unsourced) rows are excluded by equality', () => {
+    const where = buildProductWhere({ ...EMPTY, kosher: true }, undefined)
+    expect(andClauses(where)).toContainEqual({ isKosher: true })
+  })
+
+  it('glutenFree true — isGlutenFree: true clause', () => {
+    const where = buildProductWhere({ ...EMPTY, glutenFree: true }, undefined)
+    expect(andClauses(where)).toContainEqual({ isGlutenFree: true })
+  })
+
+  it('vegan true — isVegan: true clause', () => {
+    const where = buildProductWhere({ ...EMPTY, vegan: true }, undefined)
+    expect(andClauses(where)).toContainEqual({ isVegan: true })
+  })
+
+  it('dietary flags absent — no dietary clause added at all', () => {
+    const clauses = andClauses(buildProductWhere(EMPTY, undefined))
+    for (const clause of clauses) {
+      expect(clause).not.toHaveProperty('isKosher')
+      expect(clause).not.toHaveProperty('isGlutenFree')
+      expect(clause).not.toHaveProperty('isVegan')
+    }
   })
 
   it('AND-across-groups: every present group contributes its own top-level AND clause', () => {

@@ -18,6 +18,7 @@ function quoteBody(overrides: Record<string, unknown> = {}) {
         nameHe: 'מוצר',
         nameEn: 'Product',
         brandName: 'Brand',
+        brandNameEn: null,
         quantity: 2,
         unitPrice: '100.00',
         lineTotal: '200.00',

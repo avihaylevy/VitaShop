@@ -17,6 +17,8 @@ function renderPanel() {
     <CatalogFilterPanel
       groups={[]}
       onToggleValue={vi.fn()}
+      dietaryOptions={[]}
+      onDietaryChange={vi.fn()}
       minPrice=""
       maxPrice=""
       onPriceCommit={vi.fn()}

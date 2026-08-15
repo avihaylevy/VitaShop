@@ -21,6 +21,7 @@ export const EMPTY_CATALOG_FACETS: CatalogFacetsDto = {
   ingredients: [],
   healthGoals: [],
   dosageForms: [],
+  dietary: [],
 }
 
 /**

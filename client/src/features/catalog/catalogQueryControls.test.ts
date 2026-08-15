@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   activeFilterCount,
+  buildDietaryOptions,
   buildFilterGroups,
   buildPaginationSlots,
   CATALOG_SORT_VALUES,
@@ -25,6 +26,10 @@ const FACETS: CatalogFacetsDto = {
   ],
   ingredients: [{ id: 'ing-1', label: 'Omega 3' }],
   healthGoals: [{ id: 'goal-1', labelHe: 'חיזוק חיסוני', labelEn: 'Immune support' }],
+  dietary: [
+    { value: 'kosher', labelHe: 'כשר', labelEn: 'Kosher' },
+    { value: 'vegan', labelHe: 'טבעוני', labelEn: 'Vegan' },
+  ],
   dosageForms: [
     { value: 'CAPSULE', labelHe: 'כמוסות', labelEn: 'Capsules' },
     { value: 'DROPS', labelHe: 'טיפות', labelEn: 'Drops' },
@@ -107,7 +112,11 @@ describe('buildFilterGroups', () => {
   })
 
   it('returns an empty (not missing) group when the catalogue offers no such facet', () => {
-    const groups = buildFilterGroups({ brands: [], ingredients: [], healthGoals: [], dosageForms: [] }, urlState(), 'he')
+    const groups = buildFilterGroups(
+      { brands: [], ingredients: [], healthGoals: [], dosageForms: [], dietary: [] },
+      urlState(),
+      'he',
+    )
     expect(groups).toHaveLength(4)
     expect(groups.every((group) => group.options.length === 0)).toBe(true)
   })
@@ -193,6 +202,42 @@ describe('hasActiveFilters / activeFilterCount', () => {
     expect(activeFilterCount(urlState({ minPrice: '10' }))).toBe(1)
     expect(activeFilterCount(urlState({ maxPrice: '90' }))).toBe(1)
     expect(activeFilterCount(urlState({ inStock: 'true' }))).toBe(1)
+  })
+
+  it('DEC-078/DEC-083 — the dietary flags narrow AND count on the badge', () => {
+    for (const key of ['kosher', 'glutenFree', 'vegan'] as const) {
+      expect(hasActiveFilters(urlState({ [key]: 'true' }))).toBe(true)
+      expect(activeFilterCount(urlState({ [key]: 'true' }))).toBe(1)
+    }
+    expect(
+      activeFilterCount(urlState({ kosher: 'true', glutenFree: 'true', vegan: 'true' })),
+    ).toBe(3)
+  })
+})
+
+describe('buildDietaryOptions — DEC-078/DEC-083, offer-gated by the facets payload', () => {
+  it('renders exactly the offered flags, in the server order, language-resolved', () => {
+    // FACETS offers kosher + vegan only — glutenFree has no sourced data, so
+    // no checkbox exists for it (the ISSUE-051 empty-filter lesson).
+    const he = buildDietaryOptions(FACETS, urlState(), 'he')
+    expect(he.map((o) => o.key)).toEqual(['kosher', 'vegan'])
+    expect(he.map((o) => o.label)).toEqual(['כשר', 'טבעוני'])
+    const en = buildDietaryOptions(FACETS, urlState(), 'en')
+    expect(en.map((o) => o.label)).toEqual(['Kosher', 'Vegan'])
+  })
+
+  it('checks an option exactly when the URL carries its literal "true"', () => {
+    const options = buildDietaryOptions(FACETS, urlState({ kosher: 'true' }), 'he')
+    expect(options.find((o) => o.key === 'kosher')?.checked).toBe(true)
+    expect(options.find((o) => o.key === 'vegan')?.checked).toBe(false)
+    // A non-"true" literal is passed through to the server (400), never
+    // rendered as checked.
+    const malformed = buildDietaryOptions(FACETS, urlState({ kosher: 'yes' }), 'he')
+    expect(malformed.find((o) => o.key === 'kosher')?.checked).toBe(false)
+  })
+
+  it('an empty dietary payload renders no options at all', () => {
+    expect(buildDietaryOptions({ ...FACETS, dietary: [] }, urlState(), 'he')).toEqual([])
   })
 })
 

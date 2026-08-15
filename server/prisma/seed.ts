@@ -155,6 +155,14 @@ interface ValidatedProductRow {
    * cannot vanish by omission); anything else fails the seed loudly.
    */
   isActive: boolean
+  /**
+   * DEC-083 — tri-state dietary claims. 🔴 `null` means UNKNOWN, never false:
+   * a value exists only when a manufacturer page states it (DEC-032's
+   * no-invention rule). Blank CSV cell = null; `yes`/`no` = sourced claim.
+   */
+  isKosher: boolean | null
+  isGlutenFree: boolean | null
+  isVegan: boolean | null
 }
 
 
@@ -246,6 +254,17 @@ function readIsActive(row: Record<string, string>, slug: string): boolean {
   throw new Error(`Malformed verified row "${slug}": "is_active" must be yes/no/blank, got "${raw}".`)
 }
 
+// DEC-083. Distinct from readIsActive on purpose: there, blank means yes
+// (an omitted row must not vanish); here, blank means UNKNOWN (null) —
+// defaulting a dietary claim either way would invent it (DEC-032).
+function readDietaryFlag(row: Record<string, string>, column: string, slug: string): boolean | null {
+  const raw = (row[column] ?? '').trim()
+  if (raw === '') return null
+  if (raw === 'yes') return true
+  if (raw === 'no') return false
+  throw new Error(`Malformed verified row "${slug}": "${column}" must be yes/no/blank, got "${raw}".`)
+}
+
 function validateProductRow(row: Record<string, string>): ValidatedProductRow {
   const slug = requireNonEmpty(row.slug ?? '', 'slug', row.slug || '(missing slug)')
   return {
@@ -271,6 +290,9 @@ function validateProductRow(row: Record<string, string>): ValidatedProductRow {
     // is what creates pressure to paraphrase a page — and a paraphrase is how
     // superherb-biokid-drops came to state an infant dose from the wrong age.
     usageInstructions: (row.usage_instructions ?? '').trim(),
+    isKosher: readDietaryFlag(row, 'is_kosher', slug),
+    isGlutenFree: readDietaryFlag(row, 'is_gluten_free', slug),
+    isVegan: readDietaryFlag(row, 'is_vegan', slug),
     ...validateAllergenFields(row, slug),
   }
 }
@@ -373,6 +395,12 @@ async function seedProduct(db: Db, row: ValidatedProductRow, ingredients: Valida
     // its authority; an admin deactivation still only survives a re-seed if
     // the CSV row says `no`. That is the deal DEC-076 records.
     isActive: row.isActive,
+    // DEC-083 — converged like is_active: the CSV's stated value, null when
+    // the file is silent. A retracted claim (value removed from the CSV)
+    // returns to null on the next seed rather than fossilizing.
+    isKosher: row.isKosher,
+    isGlutenFree: row.isGlutenFree,
+    isVegan: row.isVegan,
   }
 
   const product = await db.product.upsert({

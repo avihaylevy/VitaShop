@@ -34,6 +34,7 @@ interface FacetsEnvelope {
   ingredients: { id: string; label: string }[]
   healthGoals: { id: string; labelHe: string; labelEn: string }[]
   dosageForms: { value: string; labelHe: string; labelEn: string }[]
+  dietary: { value: string; labelHe: string; labelEn: string }[]
 }
 
 function assertLocalVitashopDevTarget(): void {
@@ -422,6 +423,41 @@ describe('GET /api/products — filtering (Checkpoint D)', () => {
     expect(body.totalItems).toBe(expected)
   })
 
+  it('kosher=true — every returned product carries a sourced isKosher=true; null (unsourced) rows excluded', async () => {
+    const expected = await testPrisma.product.findMany({
+      where: { isActive: true, isKosher: true },
+      select: { slug: true },
+    })
+    // 🔴 Non-vacuity: ISSUE-124 batch 1 sourced kosher certifications, so an
+    // empty expectation means the fixture is broken, not that the filter works.
+    expect(expected.length).toBeGreaterThan(0)
+    const { slugs } = await fetchAllPages('kosher=true')
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
+  })
+
+  it('glutenFree=true and vegan=true — same equality against direct reads', async () => {
+    for (const [param, where] of [
+      ['glutenFree=true', { isGlutenFree: true }],
+      ['vegan=true', { isVegan: true }],
+    ] as const) {
+      const expected = await testPrisma.product.findMany({
+        where: { isActive: true, ...where },
+        select: { slug: true },
+      })
+      expect(expected.length).toBeGreaterThan(0)
+      const { slugs } = await fetchAllPages(param)
+      expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
+    }
+  })
+
+  it('kosher=false is INVALID_QUERY_PARAMETER — the literal contract, same as inStock', async () => {
+    const res = await fetch(`${baseUrl}/api/products?kosher=false`)
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: { code: string; fields: string[] } }
+    expect(body.error.code).toBe('INVALID_QUERY_PARAMETER')
+    expect(body.error.fields).toEqual(['kosher'])
+  })
+
   it('a filter combination with no matches returns a truthful zero-result envelope', async () => {
     const res = await fetch(`${baseUrl}/api/products?minPrice=99999&maxPrice=99999.99`)
     expect(res.status).toBe(200)
@@ -518,10 +554,29 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     expect(new Set(body.items.map((i) => i.slug))).toEqual(expected)
   })
 
-  it('direct field — Hebrew description match, a term absent from every name ("החרדית" -> superherb-magnesium-max-550 only)', async () => {
+  /**
+   * 🔴 REWRITTEN 2026-08-15 (ISSUE-124 batch 1) the same way the English
+   * sibling below was on 2026-08-11 and for the same reason: the enrichment
+   * wave added "בד"צ העדה החרדית" kosher-certification wording to three
+   * Altman descriptions, so the single-slug expectation went stale. What is
+   * under test is that a term appearing ONLY in the Hebrew description is
+   * reachable — so the expectation derives from the field the endpoint
+   * searches, and the "absent from every name" premise is asserted rather
+   * than assumed.
+   */
+  it('direct field — Hebrew description match, a term absent from every name ("החרדית")', async () => {
+    const expected = await testPrisma.product.findMany({
+      where: { isActive: true, descriptionHe: { contains: 'החרדית' } },
+      select: { slug: true, nameHe: true, nameEn: true },
+    })
+    expect(expected.length).toBeGreaterThan(0) // fixture assumption
+    for (const product of expected) {
+      expect(product.nameHe).not.toContain('החרדית')
+      expect(product.nameEn).not.toContain('החרדית')
+    }
     const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('החרדית')}`)
     const body = (await res.json()) as ProductsEnvelope
-    expect(body.items.map((i) => i.slug)).toEqual(['superherb-magnesium-max-550'])
+    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   /**
@@ -1507,6 +1562,29 @@ describe('GET /api/catalog/facets', () => {
     for (const form of body.dosageForms) {
       expect(form.labelHe.length).toBeGreaterThan(0)
       expect(form.labelEn.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('dietary — exactly the flags carried true by at least one active product (DEC-078/DEC-083)', async () => {
+    const [kosher, glutenFree, vegan] = await Promise.all([
+      testPrisma.product.count({ where: { isActive: true, isKosher: true } }),
+      testPrisma.product.count({ where: { isActive: true, isGlutenFree: true } }),
+      testPrisma.product.count({ where: { isActive: true, isVegan: true } }),
+    ])
+    const expected = new Set(
+      [kosher > 0 ? 'kosher' : null, glutenFree > 0 ? 'glutenFree' : null, vegan > 0 ? 'vegan' : null].filter(
+        (v): v is string => v !== null,
+      ),
+    )
+    // 🔴 Non-vacuity: batch 1's sourcing means at least the kosher option
+    // must exist — an empty expected set would make this test prove nothing.
+    expect(expected.size).toBeGreaterThan(0)
+    const res = await fetch(`${baseUrl}/api/catalog/facets`)
+    const body = (await res.json()) as FacetsEnvelope
+    expect(new Set(body.dietary.map((d) => d.value))).toEqual(expected)
+    for (const option of body.dietary) {
+      expect(option.labelHe.length).toBeGreaterThan(0)
+      expect(option.labelEn.length).toBeGreaterThan(0)
     }
   })
 

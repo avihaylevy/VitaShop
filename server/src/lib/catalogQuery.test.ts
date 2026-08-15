@@ -53,6 +53,9 @@ describe('parseCatalogProductsQuery — regression / baseline', () => {
       minPrice: undefined,
       maxPrice: undefined,
       inStock: undefined,
+      kosher: undefined,
+      glutenFree: undefined,
+      vegan: undefined,
       sort: 'newest',
       page: 1,
     })
@@ -271,6 +274,31 @@ describe('parseCatalogProductsQuery — minPrice / maxPrice', () => {
   })
 })
 
+describe('parseCatalogProductsQuery — dietary flags (DEC-078/DEC-083)', () => {
+  it.each(['kosher', 'glutenFree', 'vegan'] as const)('%s=true parses to true', (key) => {
+    expect(expectOk({ [key]: 'true' })[key]).toBe(true)
+  })
+
+  it.each(['kosher', 'glutenFree', 'vegan'] as const)('%s absent parses to undefined', (key) => {
+    expect(expectOk({})[key]).toBeUndefined()
+  })
+
+  it.each(['kosher', 'glutenFree', 'vegan'] as const)(
+    '%s=false is INVALID, same literal contract as inStock',
+    (key) => {
+      const error = expectInvalid({ [key]: 'false' })
+      expect(error.fields).toEqual([key])
+    },
+  )
+
+  it('all three together parse independently', () => {
+    const query = expectOk({ kosher: 'true', glutenFree: 'true', vegan: 'true' })
+    expect(query.kosher).toBe(true)
+    expect(query.glutenFree).toBe(true)
+    expect(query.vegan).toBe(true)
+  })
+})
+
 describe('parseCatalogProductsQuery — inStock', () => {
   it('accepts the literal "true"', () => {
     expect(expectOk({ inStock: 'true' }).inStock).toBe(true)
@@ -429,6 +457,9 @@ describe('parseCatalogProductsQuery — accumulation and determinism', () => {
       minPrice: '10',
       maxPrice: '200',
       inStock: 'true',
+      kosher: 'true',
+      glutenFree: 'true',
+      vegan: 'true',
       sort: 'price_asc',
       page: '2',
     })
@@ -442,6 +473,9 @@ describe('parseCatalogProductsQuery — accumulation and determinism', () => {
       minPrice: '10',
       maxPrice: '200',
       inStock: true,
+      kosher: true,
+      glutenFree: true,
+      vegan: true,
       sort: 'price_asc',
       page: 2,
     })

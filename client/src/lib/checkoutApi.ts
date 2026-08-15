@@ -64,6 +64,7 @@ function isQuoteLine(value: unknown): value is CheckoutQuoteLine {
     typeof value.nameHe === 'string' &&
     typeof value.nameEn === 'string' &&
     typeof value.brandName === 'string' &&
+    (value.brandNameEn === null || typeof value.brandNameEn === 'string') &&
     typeof value.quantity === 'number' &&
     Number.isInteger(value.quantity) &&
     value.quantity > 0 &&

@@ -112,7 +112,7 @@ function setCatalogData(result: Partial<UseCatalogDataResult>) {
   })
 }
 
-const EMPTY_FACETS: CatalogFacetsDto = { brands: [], ingredients: [], healthGoals: [], dosageForms: [] }
+const EMPTY_FACETS: CatalogFacetsDto = { brands: [], ingredients: [], healthGoals: [], dosageForms: [], dietary: [] }
 
 function setFacets(facets: Partial<CatalogFacetsDto> = {}) {
   mockUseCatalogFacets.mockReturnValue({

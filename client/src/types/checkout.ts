@@ -40,6 +40,8 @@ export type CheckoutQuoteLine = {
   nameHe: string
   nameEn: string
   brandName: string
+  /** ISSUE-129 / DEC-080 — nullable Latin form; the English UI prefers it. */
+  brandNameEn: string | null
   quantity: number
   unitPrice: string
   lineTotal: string

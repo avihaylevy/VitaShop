@@ -21,6 +21,7 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
     nameHe: 'פרוביוטיק אינטנס',
     nameEn: 'Probiotic Intense',
     brandName: 'Altman',
+    brandNameEn: null,
     packageQuantity: 30,
     imageFile: null,
     quantity: 2,

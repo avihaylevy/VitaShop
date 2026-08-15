@@ -232,6 +232,13 @@ model Product {
   // A row with this true must NEVER render an empty allergen section.
   allergenInfoIncomplete Boolean    @default(false) @map("allergen_info_incomplete")
   targetAudience         String?    @map("target_audience") // field 15 — TBD closed list, DEC-024 open item 2
+  // DEC-083 (Accepted 2026-08-15). 🔴 NULL MEANS UNKNOWN, never false: these
+  // are sourced-only claims (DEC-032 — an unsourced "kosher" is an invented
+  // claim about a real product). A value is written only when a manufacturer
+  // page states it; the catalogue filters match `true` only (DEC-078).
+  isKosher               Boolean?   @map("is_kosher")
+  isGlutenFree           Boolean?   @map("is_gluten_free")
+  isVegan                Boolean?   @map("is_vegan")
   createdAt              DateTime   @default(now()) @map("created_at") @db.Timestamptz // field 16
   isActive               Boolean    @default(true) @map("is_active") // soft delete, INV-03, §4.7.1
   lowStockThreshold      Int        @default(5) @map("low_stock_threshold") // §4.7.2

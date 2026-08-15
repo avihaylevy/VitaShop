@@ -19,6 +19,7 @@ function quote(overrides: Record<string, unknown> = {}) {
         nameHe: 'מוצר',
         nameEn: 'Product',
         brandName: 'Brand',
+        brandNameEn: null,
         quantity: 1,
         unitPrice: '100.00',
         lineTotal: '100.00',

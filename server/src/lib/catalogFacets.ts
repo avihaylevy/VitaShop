@@ -25,11 +25,25 @@ export interface DosageFormFacetOption {
   labelEn: string
 }
 
+// DEC-078/DEC-083 — the three dietary filters. Offered only when at least
+// one ACTIVE product carries the flag `true` (§9d: never an option that can
+// match nothing — the ISSUE-051 lesson applied mechanically: until the
+// enrichment wave sources a claim, the filter simply is not offered).
+export const DIETARY_VALUES = ['kosher', 'glutenFree', 'vegan'] as const
+export type DietaryValue = (typeof DIETARY_VALUES)[number]
+
+export interface DietaryFacetOption {
+  value: DietaryValue
+  labelHe: string
+  labelEn: string
+}
+
 export interface CatalogFacetsPayload {
   brands: FacetOption[]
   ingredients: FacetOption[]
   healthGoals: BilingualFacetOption[]
   dosageForms: DosageFormFacetOption[]
+  dietary: DietaryFacetOption[]
 }
 
 // Server-owned dosage-form labels — the DosageForm enum's `@map` values
@@ -45,6 +59,20 @@ const DOSAGE_FORM_LABELS: Record<DosageFormValue, { labelHe: string; labelEn: st
   DROPS: { labelHe: 'טיפות', labelEn: 'Drops' },
   POWDER: { labelHe: 'אבקה', labelEn: 'Powder' },
   SYRUP: { labelHe: 'סירופ', labelEn: 'Syrup' },
+}
+
+// Same "server owns its labels" pattern as DOSAGE_FORM_LABELS; matches the
+// client catalog namespace's `filters.{kosher,glutenFree,vegan}` keys.
+const DIETARY_LABELS: Record<DietaryValue, { labelHe: string; labelEn: string }> = {
+  kosher: { labelHe: 'כשר', labelEn: 'Kosher' },
+  glutenFree: { labelHe: 'ללא גלוטן', labelEn: 'Gluten-free' },
+  vegan: { labelHe: 'טבעוני', labelEn: 'Vegan' },
+}
+
+const DIETARY_WHERE: Record<DietaryValue, { isKosher: true } | { isGlutenFree: true } | { isVegan: true }> = {
+  kosher: { isKosher: true },
+  glutenFree: { isGlutenFree: true },
+  vegan: { isVegan: true },
 }
 
 export async function resolveCatalogFacets(prisma: PrismaClient): Promise<CatalogFacetsPayload> {
@@ -73,6 +101,17 @@ export async function resolveCatalogFacets(prisma: PrismaClient): Promise<Catalo
 
   const usedDosageForms = new Set(activeDosageForms.map((row) => row.dosageForm as DosageFormValue))
 
+  // Internal presence probes only — the counts are never surfaced (§12's
+  // no-inventory-leakage rule is about counts in the payload; a boolean
+  // "at least one" is what §9d needs).
+  const dietaryPresence = await Promise.all(
+    DIETARY_VALUES.map(async (value) => ({
+      value,
+      present:
+        (await prisma.product.count({ where: { isActive: true, ...DIETARY_WHERE[value] }, take: 1 })) > 0,
+    })),
+  )
+
   return {
     brands: brands.map((brand) => ({ id: brand.id, label: brand.name })),
     ingredients: ingredients.map((ingredient) => ({ id: ingredient.id, label: ingredient.name })),
@@ -84,5 +123,10 @@ export async function resolveCatalogFacets(prisma: PrismaClient): Promise<Catalo
       value,
       ...DOSAGE_FORM_LABELS[value],
     })),
+    // Declaration order (DIETARY_VALUES), filtered to what the sourced data
+    // actually supports — same shape discipline as dosageForms.
+    dietary: dietaryPresence
+      .filter((entry) => entry.present)
+      .map((entry) => ({ value: entry.value, ...DIETARY_LABELS[entry.value] })),
   }
 }

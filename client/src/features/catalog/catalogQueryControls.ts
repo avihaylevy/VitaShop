@@ -18,7 +18,7 @@
  * both, and only `value` is ever written into the URL.
  */
 
-import type { CatalogFacetsDto } from '../../types/catalog.js'
+import type { CatalogFacetsDto, DietaryFacetValue } from '../../types/catalog.js'
 import type { SupportedLanguage } from '../../i18n/index.js'
 import { isPresent, type CatalogUrlState } from './catalogUrlState.js'
 
@@ -155,6 +155,45 @@ export function buildFilterGroups(
 }
 
 /**
+ * The three DEC-078/DEC-083 dietary filter keys — re-exported from the DTO
+ * type module, NOT restated: the facet payload's `value` and the URL-state
+ * key are the same identifier by contract, and one list cannot drift from
+ * the other if only one list exists.
+ */
+export type DietaryFilterKey = DietaryFacetValue
+
+export interface DietaryOptionModel {
+  key: DietaryFilterKey
+  /** Server-owned facet label, language-resolved — never submitted. */
+  label: string
+  checked: boolean
+}
+
+/**
+ * Maps the facets payload's `dietary` list plus the URL state into the
+ * boolean dietary checkboxes. 🔴 Offer-gated by the server (§9d / the
+ * ISSUE-051 lesson): a flag no active product carries simply is not in the
+ * payload, so the checkbox does not exist — never a filter over empty data.
+ * A URL carrying a param whose option is not offered still filters (the
+ * server accepts it); only the control is absent, matching DEC-078's
+ * ingredient precedent.
+ */
+export function buildDietaryOptions(
+  facets: CatalogFacetsDto,
+  urlState: CatalogUrlState,
+  language: SupportedLanguage,
+): DietaryOptionModel[] {
+  // No re-filter here: `catalogApi`'s isCatalogFacetsDto already rejects any
+  // payload whose dietary value is outside the frozen three, so `value` is
+  // the union by the time it arrives.
+  return facets.dietary.map((option) => ({
+    key: option.value,
+    label: language === 'he' ? option.labelHe : option.labelEn,
+    checked: urlState[option.value] === 'true',
+  }))
+}
+
+/**
  * 🔴 THE narrowing predicate — one definition, two consumers. True when the
  * URL carries at least one narrowing parameter; sort and page reorder or
  * paginate, so neither counts.
@@ -180,7 +219,10 @@ export function hasActiveFilters(urlState: CatalogUrlState): boolean {
     urlState.healthGoal.length > 0 ||
     isPresent(urlState.minPrice) ||
     isPresent(urlState.maxPrice) ||
-    isPresent(urlState.inStock)
+    isPresent(urlState.inStock) ||
+    isPresent(urlState.kosher) ||
+    isPresent(urlState.glutenFree) ||
+    isPresent(urlState.vegan)
   )
 }
 
@@ -208,7 +250,10 @@ export function activeFilterCount(urlState: CatalogUrlState): number {
     urlState.healthGoal.length +
     (isPresent(urlState.minPrice) ? 1 : 0) +
     (isPresent(urlState.maxPrice) ? 1 : 0) +
-    (isPresent(urlState.inStock) ? 1 : 0)
+    (isPresent(urlState.inStock) ? 1 : 0) +
+    (isPresent(urlState.kosher) ? 1 : 0) +
+    (isPresent(urlState.glutenFree) ? 1 : 0) +
+    (isPresent(urlState.vegan) ? 1 : 0)
   )
 }
 

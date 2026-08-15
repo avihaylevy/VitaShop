@@ -293,6 +293,7 @@ describe('fetchCatalogFacets', () => {
     ingredients: [{ id: 'i1', label: 'Omega 3' }],
     healthGoals: [{ id: 'g1', labelHe: 'חיזוק חיסוני', labelEn: 'Immune support' }],
     dosageForms: [{ value: 'CAPSULE', labelHe: 'כמוסות', labelEn: 'Capsules' }],
+    dietary: [{ value: 'kosher', labelHe: 'כשר', labelEn: 'Kosher' }],
   }
 
   it('resolves with the UNWRAPPED payload — the server sends no items envelope here', async () => {
@@ -301,7 +302,7 @@ describe('fetchCatalogFacets', () => {
   })
 
   it('accepts an entirely empty facet payload', async () => {
-    const empty = { brands: [], ingredients: [], healthGoals: [], dosageForms: [] }
+    const empty = { brands: [], ingredients: [], healthGoals: [], dosageForms: [], dietary: [] }
     fetchMock.mockResolvedValue(mockResponse(200, empty))
     await expect(fetchCatalogFacets()).resolves.toEqual(empty)
   })
@@ -332,6 +333,13 @@ describe('fetchCatalogFacets', () => {
   it('rejects a dosage form outside the frozen enum — an unknown value would be an unusable filter', async () => {
     fetchMock.mockResolvedValue(
       mockResponse(200, { ...facets, dosageForms: [{ value: 'GUMMY', labelHe: 'סוכריות', labelEn: 'Gummies' }] }),
+    )
+    await expect(fetchCatalogFacets()).rejects.toMatchObject({ code: 'INVALID_RESPONSE_SHAPE' })
+  })
+
+  it('rejects a dietary value outside the frozen three — an unknown value would be an unusable filter', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse(200, { ...facets, dietary: [{ value: 'organic', labelHe: 'אורגני', labelEn: 'Organic' }] }),
     )
     await expect(fetchCatalogFacets()).rejects.toMatchObject({ code: 'INVALID_RESPONSE_SHAPE' })
   })

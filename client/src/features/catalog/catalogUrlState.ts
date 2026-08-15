@@ -45,6 +45,11 @@ const CANONICAL_PARAM_ORDER = [
   'minPrice',
   'maxPrice',
   'inStock',
+  // DEC-078/DEC-083 — the three dietary filters, same literal-"true" contract
+  // and faithful pass-through semantics as inStock.
+  'kosher',
+  'glutenFree',
+  'vegan',
   'sort',
   'page',
 ] as const
@@ -68,6 +73,12 @@ export interface CatalogUrlState {
   // 400 INVALID_QUERY_PARAMETER surfaces the generic error state (§5).
   // `undefined` means the param was absent, not that it was "false".
   inStock: string | undefined
+  // DEC-078/DEC-083 — same pass-through contract as inStock: `undefined`
+  // means absent; any supplied literal is carried faithfully so a malformed
+  // value surfaces as the server's 400 rather than being silently dropped.
+  kosher: string | undefined
+  glutenFree: string | undefined
+  vegan: string | undefined
   // Not narrowed to the four frozen values — an unrecognized sort is
   // parsed through faithfully (see the module doc comment above) rather
   // than silently coerced to a default, which would hide a malformed URL
@@ -92,6 +103,9 @@ export const EMPTY_CATALOG_URL_STATE: CatalogUrlState = {
   minPrice: undefined,
   maxPrice: undefined,
   inStock: undefined,
+  kosher: undefined,
+  glutenFree: undefined,
+  vegan: undefined,
   sort: DEFAULT_SORT,
   page: DEFAULT_PAGE,
   pageRaw: undefined,
@@ -140,6 +154,9 @@ export function parseCatalogUrlState(params: URLSearchParams): CatalogUrlState {
     minPrice: firstValue(params, 'minPrice'),
     maxPrice: firstValue(params, 'maxPrice'),
     inStock: firstValue(params, 'inStock'),
+    kosher: firstValue(params, 'kosher'),
+    glutenFree: firstValue(params, 'glutenFree'),
+    vegan: firstValue(params, 'vegan'),
     sort: firstValue(params, 'sort') ?? DEFAULT_SORT,
     page,
     pageRaw,
@@ -183,6 +200,15 @@ export function buildCatalogSearchParams(state: CatalogUrlState): URLSearchParam
         break
       case 'inStock':
         if (isPresent(state.inStock)) params.append('inStock', state.inStock)
+        break
+      case 'kosher':
+        if (isPresent(state.kosher)) params.append('kosher', state.kosher)
+        break
+      case 'glutenFree':
+        if (isPresent(state.glutenFree)) params.append('glutenFree', state.glutenFree)
+        break
+      case 'vegan':
+        if (isPresent(state.vegan)) params.append('vegan', state.vegan)
         break
       case 'sort':
         if (state.sort !== DEFAULT_SORT) params.append('sort', state.sort)

@@ -25,6 +25,9 @@ export interface CatalogFilterInput {
   minPrice: string | undefined
   maxPrice: string | undefined
   inStock: true | undefined
+  kosher: true | undefined
+  glutenFree: true | undefined
+  vegan: true | undefined
 }
 
 // The resolved server-owned category representation (§4b/§6c) — Product has
@@ -75,6 +78,19 @@ export function buildProductWhere(
 
   if (filter.inStock === true) {
     AND.push({ stockQuantity: { gt: 0 } })
+  }
+
+  // DEC-078/DEC-083 — each flag matches `true` ONLY. Null means "not yet
+  // sourced" (never false), so a null row is correctly excluded: an unsourced
+  // product must not appear under a dietary claim nobody verified.
+  if (filter.kosher === true) {
+    AND.push({ isKosher: true })
+  }
+  if (filter.glutenFree === true) {
+    AND.push({ isGlutenFree: true })
+  }
+  if (filter.vegan === true) {
+    AND.push({ isVegan: true })
   }
 
   return { AND }

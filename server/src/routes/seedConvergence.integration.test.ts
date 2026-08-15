@@ -213,6 +213,44 @@ describe('seed convergence — the database equals the CSV, in both directions',
     expect(orphans).toEqual([])
   })
 
+  it('DIETARY FLAGS converge from the CSV tri-state — DEC-083, null means unknown', async () => {
+    // Blank cell = null (unknown), yes = true, no = false. Compared per slug
+    // and per column so a failure names the exact drifted claim. Retraction
+    // is covered by the same equality: a value removed from the CSV must
+    // read back as null after the next seed, not fossilize.
+    const toTriState = (raw: string | undefined): boolean | null => {
+      const v = (raw ?? '').trim()
+      return v === '' ? null : v === 'yes'
+    }
+    const expected = new Map(
+      readVerifiedProductRows().map((r) => [
+        r.slug ?? '',
+        {
+          isKosher: toTriState(r.is_kosher),
+          isGlutenFree: toTriState(r.is_gluten_free),
+          isVegan: toTriState(r.is_vegan),
+        },
+      ]),
+    )
+    const rows = await prisma.product.findMany({
+      select: { slug: true, isKosher: true, isGlutenFree: true, isVegan: true },
+    })
+    const drifted = rows
+      .filter((p) => !isFixture(p.slug) && expected.has(p.slug))
+      .filter((p) => {
+        const want = expected.get(p.slug)!
+        return (
+          p.isKosher !== want.isKosher ||
+          p.isGlutenFree !== want.isGlutenFree ||
+          p.isVegan !== want.isVegan
+        )
+      })
+      .map((p) => `${p.slug}: db(${p.isKosher},${p.isGlutenFree},${p.isVegan})`)
+    expect(drifted).toEqual([])
+    // 🔴 The non-vacuity control: the comparison must have visited real rows.
+    expect(rows.filter((p) => !isFixture(p.slug) && expected.has(p.slug)).length).toBeGreaterThan(24)
+  })
+
   it('🔴 the fixture itself is non-trivial — a catalogue of zero would satisfy every set above', async () => {
     // Without this, an empty database and an empty CSV agree perfectly and
     // every assertion in this file passes while proving nothing. Same trap as
