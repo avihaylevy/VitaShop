@@ -85,6 +85,9 @@ export function isCart(value: unknown): value is Cart {
     Array.isArray(value.items) &&
     value.items.every(isCartLine) &&
     typeof value.totalQuantity === 'number' &&
+    // M-012 C — strict boolean, like the shipping flags: absence must be a
+    // broken response, not a silent "not a member".
+    typeof value.clubMember === 'boolean' &&
     isMoney(value.subtotal) &&
     // 🔴 Strict: a MISSING flag rejects the response rather than defaulting to
     // false, because false is exactly the value that lets checkout proceed over

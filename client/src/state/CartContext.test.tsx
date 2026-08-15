@@ -32,6 +32,7 @@ function cartWith(quantity: number): Cart {
       },
     ],
     totalQuantity: quantity,
+    clubMember: false,
     subtotal: `${(10 * quantity).toFixed(2)}`,
     hasBlockingLine: false,
     shipping: {
@@ -165,6 +166,7 @@ describe('🔴 the server decides the quantity — §3.4', () => {
         cart: {
           items: [],
           totalQuantity: 0,
+          clubMember: false,
           subtotal: '0.00',
           hasBlockingLine: false,
           shipping: {

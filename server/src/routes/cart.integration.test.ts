@@ -76,6 +76,7 @@ describe('getCart', () => {
     expect(cart).toEqual({
       items: [],
       totalQuantity: 0,
+      clubMember: false,
       subtotal: '0.00',
       hasBlockingLine: false,
       // No identity means no cart means nothing to ship: no charge, and no

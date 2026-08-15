@@ -33,6 +33,7 @@ function validCart(lines: CartLine[] = [validLine()]) {
   return {
     items: lines,
     totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+    clubMember: false,
     subtotal: '189.80',
     hasBlockingLine: lines.some((line) => !line.isActive),
     // DEC-058. Present because `isCart` REQUIRES it — a response without

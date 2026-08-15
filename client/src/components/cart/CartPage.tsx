@@ -237,6 +237,24 @@ export function CartPage() {
                 `TBD` (DEC-058), and a placeholder would read as a real number.
               */}
               <div className="mt-6 flex flex-col gap-2 border-t border-border-hairline pt-4">
+                {/*
+                  M-012 C / DEC-086 — copy only, chosen by the SERVER's
+                  clubMember flag; the figures above are already member or
+                  full prices either way. Rendered only beside items (an
+                  empty cart reports clubMember=false even for a member).
+                */}
+                <p className="text-xs text-text-muted">
+                  {cart.clubMember ? (
+                    t('hint.cartMember', { ns: 'club' })
+                  ) : (
+                    <>
+                      {t('hint.cartJoin', { ns: 'club' })}{' '}
+                      <Link to="/account/club" className="text-brand-teal underline">
+                        {t('hint.cartJoinLink', { ns: 'club' })}
+                      </Link>
+                    </>
+                  )}
+                </p>
                 <p className="flex flex-wrap items-baseline gap-2">
                   <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
                   <PriceBlock price={cart.subtotal} />

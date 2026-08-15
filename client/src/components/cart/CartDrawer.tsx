@@ -178,7 +178,20 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
               re-derived. Shipping/threshold rows stay on the page (DEC-047
               D3 for everything except editing).
             */}
-            <p className="flex flex-wrap items-baseline gap-2 border-t border-border-hairline pt-4">
+            {/* M-012 C — the same copy-only hint the cart page carries. */}
+            <p className="border-t border-border-hairline pt-4 text-xs text-text-muted">
+              {cart.clubMember ? (
+                t('hint.cartMember', { ns: 'club' })
+              ) : (
+                <>
+                  {t('hint.cartJoin', { ns: 'club' })}{' '}
+                  <Link to="/account/club" className="text-brand-teal underline">
+                    {t('hint.cartJoinLink', { ns: 'club' })}
+                  </Link>
+                </>
+              )}
+            </p>
+            <p className="flex flex-wrap items-baseline gap-2">
               <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
               <PriceBlock price={cart.subtotal} />
             </p>

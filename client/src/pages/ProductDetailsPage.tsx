@@ -248,6 +248,13 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
             <PriceBlock price={product.price} size="price" />
             <StockState stockQuantity={product.stockQuantity} lowStockThreshold={product.lowStockThreshold} />
           </div>
+          {/*
+            M-012 C / DEC-086 O4 — the card/detail surfaces keep ONE price
+            plus this factual hint. Static for every visitor: the price
+            shown is the full price, and the discounted figures appear in
+            the cart the moment a member adds (§3.4 — the server prices).
+          */}
+          <p className="text-xs text-text-muted">{t('hint.detail', { ns: 'club' })}</p>
           <div className="flex flex-wrap items-center gap-3">
             {/* ISSUE-118 — the same shared stepper as the cards. */}
             <AddQuantityStepper value={quantity} onChange={setQuantity} productName={product.name} />

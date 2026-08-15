@@ -73,6 +73,13 @@ export type Cart = {
   items: readonly CartLine[]
   totalQuantity: number
   /**
+   * M-012 Checkpoint C — whether the prices in this DTO are MEMBER prices.
+   * Chooses COPY only (join hint vs member note); the client never derives
+   * a discount from it (§3.4). ⚠️ An EMPTY cart reports false even for a
+   * member (the server's empty constant) — hints render only beside items.
+   */
+  clubMember: boolean
+  /**
    * 🔴 PURCHASABLE LINES ONLY, and therefore EQUAL to `shipping.basis` —
    * DEC-059 answer 3, applied to the DTO at Checkpoint F1: an unpurchasable
    * line "contributes to nothing", which the decision says collapses the
@@ -154,6 +161,7 @@ export type CartMergeReport = {
 export const EMPTY_CART: Cart = {
   items: [],
   totalQuantity: 0,
+  clubMember: false,
   subtotal: '0.00',
   hasBlockingLine: false,
   shipping: {

@@ -90,6 +90,7 @@ function cartBody(totalQuantity: number) {
       },
     ],
     totalQuantity,
+    clubMember: false,
     subtotal: '94.90',
     hasBlockingLine: false,
     shipping: {

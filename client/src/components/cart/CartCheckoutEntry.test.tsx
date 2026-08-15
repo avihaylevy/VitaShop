@@ -53,6 +53,7 @@ function cart(lines: CartLine[]): Cart {
   return {
     items: lines,
     totalQuantity: lines.reduce((sum, l) => sum + l.quantity, 0),
+    clubMember: false,
     subtotal: '189.80',
     // 🔴 THE SERVER'S FLAG, exactly as the page consumes it — the client never
     // re-derives it, so the fixture must not either.

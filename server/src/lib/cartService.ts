@@ -75,6 +75,12 @@ export type CartDto = {
   items: CartLineDto[]
   totalQuantity: number
   /**
+   * MILESTONE-012 Checkpoint C — whether the prices above are MEMBER prices.
+   * The client uses it only to choose COPY (a join hint vs a member note);
+   * the figures themselves are already computed either way (§3.4).
+   */
+  clubMember: boolean
+  /**
    * Sum of live line totals, ALL lines. Recomputed per request, never stored.
    *
    * ⚠️ This INCLUDES withdrawn lines, by C3: the cart must not lie about what
@@ -101,6 +107,7 @@ export type AddItemResult =
 const EMPTY_CART: CartDto = {
   items: [],
   totalQuantity: 0,
+  clubMember: false,
   subtotal: '0.00',
   hasBlockingLine: false,
   // Nothing to ship, so no charge and no free-shipping promise.
@@ -189,6 +196,7 @@ function toDto(
 
   return {
     items: lines,
+    clubMember: isClubMember,
     totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
     /*
      * 🔴 MILESTONE-008 CHECKPOINT F1 — DEC-059 ANSWER 3, FINALLY APPLIED HERE.

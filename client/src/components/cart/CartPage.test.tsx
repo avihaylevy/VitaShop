@@ -44,6 +44,7 @@ function cart(lines: CartLine[], shipping: Partial<Cart['shipping']> = {}): Cart
   return {
     items: lines,
     totalQuantity: lines.reduce((sum, l) => sum + l.quantity, 0),
+    clubMember: false,
     subtotal: '189.80',
     hasBlockingLine: lines.some((l) => !l.isActive),
     shipping: {
@@ -384,5 +385,28 @@ describe('🔴 the basis is named whenever the two figures disagree — free or 
     // 🔴 Without this branch the page would say only "qualifies for free
     // shipping" beside a subtotal that does not match the basis.
     expect(screen.getByText(/counted on the .*260\.00.* of items you can buy right now/)).toBeDefined()
+  })
+})
+
+describe('M-012 C — the club hint chooses copy by the SERVER flag', () => {
+  it('a non-member cart shows the join hint with a link to /account/club', async () => {
+    fetchMock.mockResolvedValue(mockResponse(200, cart([line()])))
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Probiotic Intense')).toBeDefined())
+    expect(screen.getByText(/Club membership gives 10% off/)).toBeDefined()
+    expect(screen.getByRole('link', { name: 'Join the club' }).getAttribute('href')).toBe(
+      '/account/club',
+    )
+    expect(screen.queryByText(/discount is included in the prices above/)).toBeNull()
+  })
+
+  it('a MEMBER cart shows the member note and offers no join link', async () => {
+    fetchMock.mockResolvedValue(mockResponse(200, { ...cart([line()]), clubMember: true }))
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Probiotic Intense')).toBeDefined())
+    expect(screen.getByText(/discount is included in the prices above/)).toBeDefined()
+    expect(screen.queryByRole('link', { name: 'Join the club' })).toBeNull()
   })
 })

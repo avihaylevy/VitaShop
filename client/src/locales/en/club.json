@@ -12,5 +12,11 @@
     "loadError": "We could not load your club status. You can try again.",
     "loading": "Loading your club status…",
     "retry": "Try again"
+  },
+  "hint": {
+    "detail": "Club membership gives 10% off every product.",
+    "cartMember": "Club prices — the 10% discount is included in the prices above.",
+    "cartJoin": "Club membership gives 10% off every product.",
+    "cartJoinLink": "Join the club"
   }
 }
