@@ -85,19 +85,22 @@ describe('buildFilterGroups', () => {
 
   it('pairs each option with its STABLE ID as the value and the facet label as display text', () => {
     const [brands] = buildFilterGroups(FACETS, urlState(), 'he')
+    // User amendment (2026-08-15): the brand FILTER shows the Latin form in
+    // BOTH languages; only an option with no sourced Latin form keeps its
+    // stored name.
     expect(brands.options).toEqual([
-      { value: 'brand-1', label: 'סולגאר', checked: false, disabled: false },
+      { value: 'brand-1', label: 'Solgar', checked: false, disabled: false },
       { value: 'brand-2', label: 'אלטמן', checked: false, disabled: false },
     ])
   })
 
-  it('sixth list item 1 — the ENGLISH UI prefers the brand facet Latin form, falling back per option', () => {
-    const [brands] = buildFilterGroups(FACETS, urlState(), 'en')
-    // brand-1 carries a sourced Latin form; brand-2 does not and keeps its
-    // stored name — per option, never all-or-nothing.
-    expect(brands.options.map((option) => option.label)).toEqual(['Solgar', 'אלטמן'])
-    // The submitted value never changes with language.
-    expect(brands.options.map((option) => option.value)).toEqual(['brand-1', 'brand-2'])
+  it('sixth list item 1 (amended) — the brand filter is Latin-first in BOTH languages, per option', () => {
+    for (const lang of ['he', 'en'] as const) {
+      const [brands] = buildFilterGroups(FACETS, urlState(), lang)
+      expect(brands.options.map((option) => option.label)).toEqual(['Solgar', 'אלטמן'])
+      // The submitted value never changes with language.
+      expect(brands.options.map((option) => option.value)).toEqual(['brand-1', 'brand-2'])
+    }
   })
 
   it('resolves bilingual labels by language, and dosage forms by enum identifier', () => {

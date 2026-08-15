@@ -125,12 +125,16 @@ export function buildFilterGroups(
     toGroup(
       'brand',
       urlState.brand,
-      // Sixth list item 1 — the same pick as everywhere nameEn travels
-      // (mapCatalogProduct, cartDisplay): the English UI prefers the Latin
-      // form, falling back to the stored name.
+      // Sixth list item 1, amended by the user 2026-08-15 (seventy-second
+      // pass): the FILTER shows the manufacturer's Latin form in BOTH
+      // languages — "the filter section still shows the manufacturer name
+      // in Hebrew" was reported against the Hebrew UI too. Deliberately
+      // NOT the language-branched pick the cards/cart use: this is the one
+      // surface the user asked to be Latin always. Fallback stays per
+      // option — a brand with no sourced Latin form keeps its stored name.
       facets.brands.map((brand) => ({
         value: brand.id,
-        label: (language === 'en' ? brand.labelEn : null) ?? brand.label,
+        label: brand.labelEn ?? brand.label,
       })),
     ),
     toGroup(
