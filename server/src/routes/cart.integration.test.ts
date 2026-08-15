@@ -77,6 +77,7 @@ describe('getCart', () => {
       items: [],
       totalQuantity: 0,
       clubMember: false,
+      clubSavings: '0.00',
       subtotal: '0.00',
       hasBlockingLine: false,
       // No identity means no cart means nothing to ship: no charge, and no

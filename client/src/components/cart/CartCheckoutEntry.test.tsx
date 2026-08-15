@@ -40,6 +40,7 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
     imageFile: null,
     quantity: 2,
     unitPrice: '94.90',
+    baseUnitPrice: '94.90',
     lineTotal: '189.80',
     isActive: true,
     stockQuantity: 3,
@@ -54,6 +55,7 @@ function cart(lines: CartLine[]): Cart {
     items: lines,
     totalQuantity: lines.reduce((sum, l) => sum + l.quantity, 0),
     clubMember: false,
+    clubSavings: '0.00',
     subtotal: '189.80',
     // 🔴 THE SERVER'S FLAG, exactly as the page consumes it — the client never
     // re-derives it, so the fixture must not either.

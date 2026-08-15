@@ -104,6 +104,31 @@ describe('TEST-030 — confirmation, email, phone, terms', () => {
   })
 })
 
+describe('the seventh list, item 1 — the joinClub opt-in field', () => {
+  it('ABSENT means "did not opt in" — parses ok with joinClub false', () => {
+    const result = parseRegistration(valid)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.joinClub).toBe(false)
+  })
+
+  it('true and false both pass through', () => {
+    const yes = parseWith({ joinClub: true })
+    expect(yes.ok).toBe(true)
+    if (yes.ok) expect(yes.value.joinClub).toBe(true)
+    const no = parseWith({ joinClub: false })
+    expect(no.ok).toBe(true)
+    if (no.ok) expect(no.value.joinClub).toBe(false)
+  })
+
+  it('🔴 a PRESENT non-boolean rejects with the NAMED code, not a zod default', () => {
+    // The client maps codes it knows; an unnamed message renders as a
+    // submit that silently does nothing (review finding).
+    const result = parseWith({ joinClub: 'true' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.codes).toContain('JOIN_CLUB_INVALID')
+  })
+})
+
 describe('normalisePhone', () => {
   it('strips dashes only', () => {
     expect(normalisePhone('050-987-1234')).toBe('0509871234')

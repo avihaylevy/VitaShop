@@ -9,6 +9,7 @@ import { Drawer } from '../ui/Drawer'
 import { FOCUS_RING } from '../ui/focusRing'
 import { CartItemRow } from './CartItemRow'
 import { useCartOutcomeMessage } from './CartOutcomeNotice'
+import { ClubSavingsRow } from './ClubSavingsRow'
 
 type CartDrawerProps = {
   /** Owned by the caller (useAddToCart). */
@@ -191,6 +192,9 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
                 </>
               )}
             </p>
+            {/* The seventh list, item 2 — the shared row; ClubSavingsRow
+                owns the gate and the member/join reading. */}
+            <ClubSavingsRow cart={cart} />
             <p className="flex flex-wrap items-baseline gap-2">
               <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
               <PriceBlock price={cart.subtotal} />

@@ -67,6 +67,7 @@ const ROUTES: ReadonlyArray<[name: string, call: () => Promise<unknown>, path: s
         confirmPassword: 'pw',
         phone: '0501234567',
         acceptedTerms: true,
+        joinClub: false,
       }),
     '/api/auth/register',
   ],

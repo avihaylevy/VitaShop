@@ -3,7 +3,7 @@ import { clampAddition, clampCartQuantity, parseRequestedQuantity } from './cart
 import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 import { computeShipping, toAgorot, type ShippingDto } from './shipping.js'
 import { isPurchasable } from './purchasability.js'
-import { effectiveUnitPrice, readClubMembership } from './clubPricing.js'
+import { clubSavingsPerUnitAgorot, effectiveUnitPrice, readClubMembership } from './clubPricing.js'
 
 /**
  * MILESTONE-007 Checkpoint C — the cart service.
@@ -58,6 +58,14 @@ export type CartLineDto = {
   quantity: number
   /** Live, from the product row. Never stored on the line. */
   unitPrice: string
+  /**
+   * The user's seventh list, item 2 — the UNDISCOUNTED unit price, always
+   * present. For a non-member it equals `unitPrice` byte-for-byte; for a
+   * member the client renders it struck through beside the member price.
+   * 🔴 The client compares the two STRINGS to decide whether to show it —
+   * it never subtracts (§3.4).
+   */
+  baseUnitPrice: string
   lineTotal: string
   /**
    * 🔴 INV-03: a soft-deleted product does NOT vanish from the response. C4
@@ -80,6 +88,18 @@ export type CartDto = {
    * the figures themselves are already computed either way (§3.4).
    */
   clubMember: boolean
+  /**
+   * The user's seventh list, item 2 — what the club is worth on THIS cart,
+   * in shekels, over the PURCHASABLE lines only (the same population as
+   * `subtotal`, so the two never disagree about which lines count).
+   *
+   * 🔴 ONE FIGURE, TWO READINGS, both server-computed (§3.4): for a member
+   * it is what the discount is currently saving them; for a non-member it
+   * is what joining would save on the same cart. The formula is identical
+   * either way — the per-unit delta comes from `clubSavingsPerUnitAgorot`,
+   * which derives from the ONE pricing seam rather than restating the 10%.
+   */
+  clubSavings: string
   /**
    * Sum of live line totals, ALL lines. Recomputed per request, never stored.
    *
@@ -108,6 +128,7 @@ const EMPTY_CART: CartDto = {
   items: [],
   totalQuantity: 0,
   clubMember: false,
+  clubSavings: '0.00',
   subtotal: '0.00',
   hasBlockingLine: false,
   // Nothing to ship, so no charge and no free-shipping promise.
@@ -153,6 +174,7 @@ function toDto(
       imageFile: item.product.images[0]?.url.split('/').pop() ?? null,
       quantity: item.quantity,
       unitPrice,
+      baseUnitPrice: item.product.price.toFixed(2),
       // Integer-agorot arithmetic — the float multiply this replaces could
       // land a cent off, and the club discount makes odd unit prices common.
       lineTotal: ((unitAgorot * item.quantity) / 100).toFixed(2),
@@ -194,9 +216,20 @@ function toDto(
   const purchasable = lines.filter(isPurchasable)
   const basisAgorot = purchasable.reduce((sum, line) => sum + toAgorot(line.lineTotal), 0)
 
+  // The seventh list, item 2 — summed over the SAME `purchasable` array as
+  // the basis/subtotal, so the savings row can never claim money about a
+  // line the subtotal refuses to count: one filtered population, not two
+  // filters kept in lockstep by convention (review finding). The per-unit
+  // delta derives from the line's own baseUnitPrice through the one seam.
+  const clubSavingsAgorot = purchasable.reduce(
+    (sum, line) => sum + clubSavingsPerUnitAgorot(line.baseUnitPrice) * line.quantity,
+    0,
+  )
+
   return {
     items: lines,
     clubMember: isClubMember,
+    clubSavings: (clubSavingsAgorot / 100).toFixed(2),
     totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
     /*
      * 🔴 MILESTONE-008 CHECKPOINT F1 — DEC-059 ANSWER 3, FINALLY APPLIED HERE.

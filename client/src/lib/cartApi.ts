@@ -47,6 +47,9 @@ function isCartLine(value: unknown): value is CartLine {
     typeof value.quantity === 'number' &&
     Number.isInteger(value.quantity) &&
     isMoney(value.unitPrice) &&
+    // Strict like every money field: a line missing the base price would
+    // silently hide the member strikethrough rather than fail loudly.
+    isMoney(value.baseUnitPrice) &&
     isMoney(value.lineTotal) &&
     typeof value.isActive === 'boolean' &&
     typeof value.stockQuantity === 'number' &&
@@ -88,6 +91,8 @@ export function isCart(value: unknown): value is Cart {
     // M-012 C — strict boolean, like the shipping flags: absence must be a
     // broken response, not a silent "not a member".
     typeof value.clubMember === 'boolean' &&
+    // The savings figure is money on screen — same strictness as subtotal.
+    isMoney(value.clubSavings) &&
     isMoney(value.subtotal) &&
     // 🔴 Strict: a MISSING flag rejects the response rather than defaulting to
     // false, because false is exactly the value that lets checkout proceed over

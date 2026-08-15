@@ -21,6 +21,7 @@ function validLine(overrides: Partial<CartLine> = {}): CartLine {
     imageFile: 'probiotic.webp',
     quantity: 2,
     unitPrice: '94.90',
+    baseUnitPrice: '94.90',
     lineTotal: '189.80',
     isActive: true,
     stockQuantity: 3,
@@ -34,6 +35,7 @@ function validCart(lines: CartLine[] = [validLine()]) {
     items: lines,
     totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
     clubMember: false,
+    clubSavings: '0.00',
     subtotal: '189.80',
     hasBlockingLine: lines.some((line) => !line.isActive),
     // DEC-058. Present because `isCart` REQUIRES it — a response without
@@ -107,6 +109,8 @@ describe('🔴 an invalid response is a FAILURE, never a partly-rendered cart', 
     ['a fractional quantity', { quantity: 1.5 }],
     ['a missing isActive flag — C3 could not block checkout', { isActive: undefined }],
     ['a missing stock quantity', { stockQuantity: undefined }],
+    // The seventh list, item 2 — money on screen, same strictness as the rest.
+    ['a missing base unit price — the strikethrough would silently vanish', { baseUnitPrice: undefined }],
   ])('rejects %s', async (_label, override) => {
     const line = { ...validLine(), ...override } as CartLine
     fetchMock.mockResolvedValue(mockResponse(200, validCart([line])))
@@ -133,6 +137,12 @@ describe('🔴 an invalid response is a FAILURE, never a partly-rendered cart', 
     // asserted that could not happen. `false` is exactly the wrong default:
     // it is the value that renders "add ₪0.00 more for free shipping" on an
     // order with no delivery at all.
+    expect(isCart(cart)).toBe(false)
+  })
+
+  it('🔴 a MISSING clubSavings is rejected, not defaulted', () => {
+    const cart = validCart()
+    delete (cart as Record<string, unknown>).clubSavings
     expect(isCart(cart)).toBe(false)
   })
 

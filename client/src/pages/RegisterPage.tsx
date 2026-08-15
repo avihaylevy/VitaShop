@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { AuthCard, Field, FormError } from '../components/auth/AuthLayout'
 import { Button } from '../components/ui/Button'
+import { FOCUS_RING } from '../components/ui/focusRing'
 import { register, type AuthFailure } from '../lib/authApi'
 
 /**
@@ -27,6 +28,9 @@ export function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [phone, setPhone] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
+  // The seventh list, item 1 / DEC-086 — the club opt-in. UNCHECKED by
+  // default (the user's decision): a true opt-in, not a pre-ticked one.
+  const [joinClub, setJoinClub] = useState(false)
 
   const [failure, setFailure] = useState<AuthFailure | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -46,6 +50,7 @@ export function RegisterPage() {
       confirmPassword,
       phone,
       acceptedTerms,
+      joinClub,
     })
     setSubmitting(false)
 
@@ -142,12 +147,41 @@ export function RegisterPage() {
           error={errorFor('PHONE_INVALID')}
         />
 
-        <TermsCheckbox
+        {/* The seventh list, item 1 — join the club while registering. A
+            benefit, not a consent: no error state, default off. */}
+        <CheckboxRow
+          id="register-join-club"
+          checked={joinClub}
+          onChange={setJoinClub}
+          label={t('register.clubLabel')}
+        />
+
+        <CheckboxRow
+          id="register-terms"
           checked={acceptedTerms}
           onChange={setAcceptedTerms}
-          label={t('register.termsLabel')}
           error={errorFor('TERMS_REQUIRED')}
+          label={t('register.termsLabel')}
         />
+        {/*
+          The seventh list, item 3 — the terms the label claims the user read
+          now EXIST and are one click away. 🔴 The link sits BESIDE the
+          label, never inside it (review finding): a link nested in a <label>
+          swallows most of the click-to-toggle area and embeds itself in the
+          checkbox's accessible name — the nested-interactive shape
+          browser-verification.md forbids. target="_blank" so the half-filled
+          form survives the read.
+        */}
+        <p className="ms-6 mt-1 text-xs">
+          <Link
+            to="/terms"
+            target="_blank"
+            rel="noreferrer"
+            className={`${FOCUS_RING} rounded-compact text-brand-teal underline`}
+          >
+            {t('register.termsReadLink')}
+          </Link>
+        </p>
 
         <FormError message={formMessage} />
 
@@ -166,19 +200,27 @@ export function RegisterPage() {
   )
 }
 
-/** Table 3 field 26 — consent. Its own control so the label wraps correctly. */
-function TermsCheckbox({
+/**
+ * Table 3 field 26's consent control, generalised for the club opt-in too.
+ * Its own component so the label wraps correctly beside the box.
+ *
+ * 🔴 `label` is a STRING on purpose (review finding): it guarantees every
+ * row a non-empty text accessible name, and it keeps interactive content
+ * out of the <label> — the terms link lives beside the row, not in it.
+ */
+function CheckboxRow({
+  id,
   checked,
   onChange,
   label,
   error,
 }: {
+  id: string
   checked: boolean
   onChange: (value: boolean) => void
   label: string
   error?: string
 }) {
-  const id = 'register-terms'
   const errorId = error ? `${id}-error` : undefined
 
   return (
@@ -193,7 +235,10 @@ function TermsCheckbox({
           aria-describedby={errorId}
           aria-invalid={error ? true : undefined}
           onChange={(event) => onChange(event.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-control"
+          // The codebase's one checkbox recipe (CatalogFilterPanel,
+          // CheckoutPage) — review finding: these two were the only
+          // checkboxes in the app without a visible focus ring.
+          className={`${FOCUS_RING} mt-0.5 size-4 shrink-0 rounded-compact border-border-control accent-brand-teal`}
         />
         <label htmlFor={id} className="ms-2 text-sm text-text-ink">
           {label}

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { CartLineDisplay } from '../../lib/cartDisplay'
+import { VisuallyHidden } from '../ui/VisuallyHidden'
 import { ProductImage } from '../catalog/ProductImage'
 import { PriceBlock } from '../catalog/PriceBlock'
 import { StockState } from '../catalog/StockState'
@@ -84,6 +85,21 @@ export function CartItemRow({ line, busy, onIncrement, onDecrement, onRemove }: 
         */}
         <p className="flex flex-wrap items-baseline gap-1.5 text-xs text-text-muted">
           <span>{t('item.unitPrice')}</span>
+          {/*
+            The seventh list, item 2 — the struck-through base price beside
+            the member price, via PriceBlock's `struck` variant so the
+            ISSUE-084 bidi structure stays in ONE file (review finding —
+            an inline copy here lacked the outer no-dir wrapper that fix
+            added). Never strike-through alone: the hidden label says what
+            the struck figure IS. Both figures are the server's; the row
+            noticed two different strings, it computed nothing.
+          */}
+          {line.hasClubDiscount && (
+            <>
+              <VisuallyHidden>{t('item.fullPrice')}</VisuallyHidden>
+              <PriceBlock price={line.baseUnitPrice} struck />
+            </>
+          )}
           <PriceBlock price={line.unitPrice} />
         </p>
 

@@ -65,6 +65,15 @@ export type CartLineDisplay = {
   imageFile: string | null
   /** Canonical two-decimal strings, both server-computed. */
   unitPrice: string
+  /** The undiscounted figure. Rendered struck through when a discount applies. */
+  baseUnitPrice: string
+  /**
+   * The seventh list, item 2 — whether a club discount is visible on this
+   * line. 🔴 A STRING COMPARISON of two server figures, not arithmetic: the
+   * client still derives no money, it only notices the server sent two
+   * different numbers for the same unit.
+   */
+  hasClubDiscount: boolean
   lineTotal: string
   quantity: number
   /** LIVE stock, not a snapshot — the server read it on this request. */
@@ -101,6 +110,8 @@ export function toCartLineDisplay(line: CartLine, language: SupportedLanguage): 
     packageQuantity: line.packageQuantity,
     imageFile: line.imageFile,
     unitPrice: line.unitPrice,
+    baseUnitPrice: line.baseUnitPrice,
+    hasClubDiscount: line.baseUnitPrice !== line.unitPrice,
     lineTotal: line.lineTotal,
     quantity: line.quantity,
     maxQuantity: line.stockQuantity,

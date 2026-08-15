@@ -39,6 +39,24 @@ export type BlockedLine = {
 
 export type CheckoutQuote = {
   lines: readonly CartLineDto[]
+  /**
+   * The seventh list, item 2 — copied from the cart DTO, never recomputed
+   * here (this file's header: it computes no money of its own). `clubMember`
+   * chooses copy; `clubSavings` is the included-discount figure the summary
+   * states — and on THIS surface it is MEMBER-ONLY: a non-member quote
+   * carries '0.00', so the wire cannot express the join-pitch reading the
+   * confirm-and-pay screen bans (review finding — the ban used to live in
+   * one JSX conditional).
+   *
+   * 🔴 NOT part of the fingerprint, and honestly: it derives from the BASE
+   * price, which is NOT fingerprinted (the digest carries the member
+   * unitPrice). Two base prices can round to one member price, so a base
+   * change between /validate and /pay can drift this figure by an agora
+   * while the fingerprint holds. Accepted: it is display, and the charged
+   * total — which IS fingerprinted — cannot move.
+   */
+  clubMember: boolean
+  clubSavings: string
   /** The purchasable total the threshold is measured on. */
   basis: string
   shipping: ShippingDto
@@ -139,6 +157,10 @@ export async function quoteCheckout(
     ok: true,
     quote: {
       lines: cart.items,
+      clubMember: cart.clubMember,
+      // Member-only here — see the type's comment. The cart keeps the
+      // non-member "joining would save" reading; checkout must not.
+      clubSavings: cart.clubMember ? cart.clubSavings : '0.00',
       basis: cart.shipping.basis,
       shipping,
       totalAmount,

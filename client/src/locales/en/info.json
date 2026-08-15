@@ -24,5 +24,23 @@
     "errorRequired": "This field is required",
     "errorEmail": "The email address is not valid",
     "errorSummary": "Please fix the highlighted fields and send again."
+  },
+  "terms": {
+    "title": "Terms of use and privacy policy",
+    "updated": "Last updated: August 2026",
+    "s1Title": "What this site is",
+    "s1Text": "VitaShop is a student project built for an academic course, not an operating commercial store. No real selling takes place: no payment is collected, no products are shipped, and the site's content is not intended for commercial use. The site exists for demonstration and learning only.",
+    "s2Title": "Using the site",
+    "s2Text": "You are welcome to browse and try the site. Do not misuse it — including attempts to disrupt its operation, access other users' data, or deliberately overload it.",
+    "s3Title": "Registration and your account",
+    "s3Text": "Registration asks for a name, an email address, a phone number and a password. The email address is used only to verify the account and for messages about it. Keeping the password secret is the account holder's responsibility, and a password reset can be requested at any time.",
+    "s4Title": "Orders and payment",
+    "s4Text": "The ordering flow is a simulation: the payment step is simulated, no real payment method is collected or stored, and no charge is ever made. Do not enter real credit-card details anywhere on this site. A received order is shown in your account for demonstration purposes only.",
+    "s5Title": "The membership club",
+    "s5Text": "Joining the membership club is a free choice, at registration or from the account area, and gives 10% off every product. The discount is computed on the server and appears in the cart and checkout prices. You can leave the club at any time, and prices return to full price from the next request.",
+    "s6Title": "Privacy and personal data",
+    "s6Text": "The system stores only what it needs to run: the account details entered at registration, cart contents, favourites, placed orders, and a delivery address if you asked to save one. The data is not passed to any third party and is not used for advertising. A session cookie is used solely to keep you signed in. You can contact us to review your data or delete the account.",
+    "s7Title": "Product and health information",
+    "s7Text": "Product information — ingredients, usage instructions and warnings — is presented as published by the manufacturer and is not medical advice. Dietary supplements are not a substitute for a balanced diet or medical treatment. Consult a doctor or pharmacist before using any supplement, especially during pregnancy or nursing, with a chronic condition, or alongside medication."
   }
 }

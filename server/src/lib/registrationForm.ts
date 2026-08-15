@@ -53,6 +53,13 @@ export const registrationSchema = z
     acceptedTerms: z.literal(true, {
       message: 'TERMS_REQUIRED',
     }),
+    // The user's seventh list, item 1 / DEC-086 — the club opt-in at
+    // registration. OPTIONAL and defaulting to false: absence means "did not
+    // opt in", never an error — the club is a benefit, not a field. A
+    // PRESENT non-boolean still rejects, with a NAMED code like every other
+    // field (review finding: zod's raw default message maps to nothing on
+    // the client and the submit fails with no visible feedback).
+    joinClub: z.boolean({ message: 'JOIN_CLUB_INVALID' }).optional().default(false),
   })
   // Field 24, checked server-side.
   .refine((data) => data.password === data.confirmPassword, {

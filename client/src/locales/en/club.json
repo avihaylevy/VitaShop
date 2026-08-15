@@ -18,5 +18,10 @@
     "cartMember": "Club prices — the 10% discount is included in the prices above.",
     "cartJoin": "Club membership gives 10% off every product.",
     "cartJoinLink": "Join the club"
+  },
+  "savings": {
+    "member": "Your club saving on this cart:",
+    "join": "Joining the club would save on this cart:",
+    "checkout": "Club discount (included in the prices)"
   }
 }

@@ -165,7 +165,7 @@ beforeEach(() => {
     removeLine: vi.fn(),
     pending: false,
     outcome: null,
-    cart: { items: [], subtotal: '0.00', totalQuantity: 0, hasBlockingLine: false },
+    cart: { items: [], subtotal: '0.00', totalQuantity: 0, hasBlockingLine: false, clubMember: false, clubSavings: '0.00' },
     items: [],
     totalQuantity: 0,
   })

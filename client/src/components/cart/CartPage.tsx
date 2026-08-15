@@ -10,6 +10,7 @@ import { FOCUS_RING } from '../ui/focusRing'
 import type { SupportedLanguage } from '../../i18n'
 import { CartItemRow, CART_ROW_ATTRIBUTE } from './CartItemRow'
 import { CartOutcomeNotice } from './CartOutcomeNotice'
+import { ClubSavingsRow } from './ClubSavingsRow'
 import { EmptyCart } from './EmptyCart'
 import { UndoRow } from './UndoRow'
 
@@ -255,6 +256,9 @@ export function CartPage() {
                     </>
                   )}
                 </p>
+                {/* The seventh list, item 2 — ClubSavingsRow owns the gate
+                    and the member/join reading for BOTH cart surfaces. */}
+                <ClubSavingsRow cart={cart} />
                 <p className="flex flex-wrap items-baseline gap-2">
                   <span className="text-sm text-text-muted">{t('subtotal.label')}</span>
                   <PriceBlock price={cart.subtotal} />

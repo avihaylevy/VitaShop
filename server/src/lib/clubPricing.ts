@@ -25,16 +25,47 @@ export const CLUB_DISCOUNT_PERCENT = 10
 type DecimalLike = { toFixed: (digits: number) => string }
 
 /**
+ * Either the Prisma Decimal (the product row) or an already-canonical
+ * two-decimal string (a DTO field derived from one). Accepting the string
+ * lets `toDto` compute the savings from the line it just built instead of
+ * carrying the Decimal beside it in a parallel structure.
+ */
+type PriceInput = string | DecimalLike
+
+function canonical(price: PriceInput): string {
+  return typeof price === 'string' ? price : price.toFixed(2)
+}
+
+/**
  * The canonical two-decimal price a given shopper pays per unit.
  * Non-members (and guests — a null/absent membership is false) pay the
  * stored price unchanged, byte-for-byte.
  */
-export function effectiveUnitPrice(price: DecimalLike, isClubMember: boolean): string {
-  const base = price.toFixed(2)
+export function effectiveUnitPrice(price: PriceInput, isClubMember: boolean): string {
+  const base = canonical(price)
   if (!isClubMember) return base
   const agorot = toAgorot(base)
   const discounted = Math.round((agorot * (100 - CLUB_DISCOUNT_PERCENT)) / 100)
   return (discounted / 100).toFixed(2)
+}
+
+/**
+ * The user's seventh list, item 2 — the per-unit saving the club gives, in
+ * integer agorot.
+ *
+ * 🔴 DERIVED FROM `effectiveUnitPrice`, NEVER RESTATED. This file's header
+ * explains why the discount rule must exist exactly once; a savings figure
+ * computed as `base * 10%` anywhere else is a second copy of the rule that
+ * can drift from the price the shopper actually pays. Because the member
+ * unit price is rounded per unit, the saving is too — so a line's saving
+ * times its quantity always agrees with the displayed prices.
+ *
+ * The SAME figure serves both audiences: for a member it is what the club
+ * is saving them right now; for a non-member it is what joining would save.
+ */
+export function clubSavingsPerUnitAgorot(price: PriceInput): number {
+  const base = canonical(price)
+  return toAgorot(base) - toAgorot(effectiveUnitPrice(base, true))
 }
 
 /**

@@ -20,18 +20,21 @@ const input = {
   confirmPassword: 'Abcdef12',
   phone: '0509871234',
   acceptedTerms: true as const,
+  joinClub: false,
 }
 
 interface Recorded {
   events: string[]
   createdTokenValue?: string
+  createdUserData?: Record<string, unknown>
 }
 
 function fakePrisma(existingUser: { id: string } | null, recorded: Recorded) {
   const tx = {
     user: {
-      create: vi.fn(async () => {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         recorded.events.push('user.create')
+        recorded.createdUserData = data
         return { id: 'user-1' }
       }),
     },
@@ -221,5 +224,29 @@ describe('DEC-053 clause 4b — the already-registered path', () => {
     // the bound is deliberately loose so the test is not flaky on a busy
     // machine, while still failing if the hash is removed entirely.
     expect(existingMs).toBeGreaterThan(newMs * 0.25)
+  })
+})
+
+describe('the seventh list, item 1 — the club opt-in at registration', () => {
+  it('joinClub: true creates the user as a member, stamped when consent was', async () => {
+    const recorded: Recorded = { events: [] }
+    const outcome = await registerUser(
+      { ...input, joinClub: true },
+      null,
+      deps(fakePrisma(null, recorded)),
+    )
+    expect(outcome.created).toBe(true)
+    expect(recorded.createdUserData?.isClubMember).toBe(true)
+    // The same instant as termsAcceptedAt — one `now`, not two clocks.
+    expect(recorded.createdUserData?.clubJoinedAt).toEqual(
+      recorded.createdUserData?.termsAcceptedAt,
+    )
+  })
+
+  it('🔴 CONTROL — joinClub: false creates a NON-member with no join date', async () => {
+    const recorded: Recorded = { events: [] }
+    await registerUser({ ...input, joinClub: false }, null, deps(fakePrisma(null, recorded)))
+    expect(recorded.createdUserData?.isClubMember).toBe(false)
+    expect(recorded.createdUserData?.clubJoinedAt).toBeNull()
   })
 })

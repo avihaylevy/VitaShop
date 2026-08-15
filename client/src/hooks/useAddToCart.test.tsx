@@ -83,6 +83,7 @@ function cartBody(totalQuantity: number) {
         imageFile: null,
         quantity: totalQuantity,
         unitPrice: '94.90',
+        baseUnitPrice: '94.90',
         lineTotal: '94.90',
         isActive: true,
         stockQuantity: 8,
@@ -91,6 +92,7 @@ function cartBody(totalQuantity: number) {
     ],
     totalQuantity,
     clubMember: false,
+    clubSavings: '0.00',
     subtotal: '94.90',
     hasBlockingLine: false,
     shipping: {

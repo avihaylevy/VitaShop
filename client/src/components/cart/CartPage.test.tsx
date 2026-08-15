@@ -26,6 +26,7 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
     imageFile: null,
     quantity: 2,
     unitPrice: '94.90',
+    baseUnitPrice: '94.90',
     lineTotal: '189.80',
     isActive: true,
     stockQuantity: 3,
@@ -45,6 +46,7 @@ function cart(lines: CartLine[], shipping: Partial<Cart['shipping']> = {}): Cart
     items: lines,
     totalQuantity: lines.reduce((sum, l) => sum + l.quantity, 0),
     clubMember: false,
+    clubSavings: '0.00',
     subtotal: '189.80',
     hasBlockingLine: lines.some((l) => !l.isActive),
     shipping: {
@@ -408,5 +410,47 @@ describe('M-012 C — the club hint chooses copy by the SERVER flag', () => {
     await waitFor(() => expect(screen.getByText('Probiotic Intense')).toBeDefined())
     expect(screen.getByText(/discount is included in the prices above/)).toBeDefined()
     expect(screen.queryByRole('link', { name: 'Join the club' })).toBeNull()
+  })
+})
+
+describe('the seventh list, item 2 — the savings figures are the SERVER’s', () => {
+  it('a member cart renders the saving row AND strikes the base price through', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse(200, {
+        ...cart([line({ unitPrice: '85.41', baseUnitPrice: '94.90', lineTotal: '170.82' })]),
+        clubMember: true,
+        clubSavings: '18.98',
+      }),
+    )
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText(/Your club saving on this cart/)).toBeDefined())
+    // The server's figure, rendered — never derived here.
+    expect(screen.getAllByText(/18\.98/).length).toBeGreaterThan(0)
+    // The struck base price is explained in words, not strike-through alone.
+    expect(screen.getByText('Full price')).toBeDefined()
+    expect(screen.getAllByText(/94\.90/).length).toBeGreaterThan(0)
+  })
+
+  it('a NON-member cart states what joining would save, and strikes nothing', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse(200, { ...cart([line()]), clubSavings: '18.98' }),
+    )
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText(/Joining the club would save on this cart/)).toBeDefined(),
+    )
+    // base equals unit — nothing to strike, so no "Full price" label either.
+    expect(screen.queryByText('Full price')).toBeNull()
+  })
+
+  it('🔴 CONTROL — a 0.00 saving renders NO savings row at all', async () => {
+    fetchMock.mockResolvedValue(mockResponse(200, cart([line()])))
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Probiotic Intense')).toBeDefined())
+    expect(screen.queryByText(/would save on this cart/)).toBeNull()
+    expect(screen.queryByText(/Your club saving/)).toBeNull()
   })
 })

@@ -24,6 +24,8 @@ function quoteBody(overrides: Record<string, unknown> = {}) {
         lineTotal: '200.00',
       },
     ],
+    clubMember: false,
+    clubSavings: '0.00',
     basis: '200.00',
     shipping: {
       cost: '30.00',
@@ -186,6 +188,16 @@ describe('🔴 a malformed 200 is a FAILURE, never a half-rendered checkout', ()
     vi.stubGlobal('fetch', respond(200, withoutFingerprint))
     const result = await requestCheckoutQuote('courier')
     expect(result).toEqual({ ok: false, failure: { kind: 'server' } })
+  })
+
+  it('🔴 rejects a quote missing clubSavings — absence is a broken response, not zero', async () => {
+    const body = quoteBody() as Record<string, unknown>
+    delete body.clubSavings
+    vi.stubGlobal('fetch', respond(200, body))
+    expect(await requestCheckoutQuote('courier')).toEqual({
+      ok: false,
+      failure: { kind: 'server' },
+    })
   })
 
   it('rejects money that is not canonical two-decimal', async () => {

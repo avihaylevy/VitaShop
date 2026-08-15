@@ -23,6 +23,7 @@ function line(overrides: Partial<CartLine> = {}): CartLine {
     imageFile: null,
     quantity: 1,
     unitPrice: '95.00',
+    baseUnitPrice: '95.00',
     lineTotal: '95.00',
     isActive: true,
     stockQuantity: 10,

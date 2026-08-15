@@ -174,6 +174,49 @@ describe('DEC-086 — club pricing across the three seams', () => {
     expect(frozen.unitPriceAtPurchase.toFixed(2)).toBe('85.41')
   })
 
+  it('the seventh list, item 2 — a member cart carries the base price per line and the savings total', async () => {
+    await cartWith(memberId, 2)
+    const cart = await getCart(prisma, { userId: memberId, guestCartId: undefined })
+    // The struck-through figure beside the member price.
+    expect(cart.items[0]!.baseUnitPrice).toBe('94.90')
+    expect(cart.items[0]!.unitPrice).toBe('85.41')
+    // (9490 - 8541) * 2 = 1898 agorot. Per-unit delta times quantity, so the
+    // figure always agrees with the displayed prices — never subtotal maths.
+    expect(cart.clubSavings).toBe('18.98')
+  })
+
+  it('🔴 CONTROL — a non-member sees base = unit (nothing to strike) and the SAME savings figure as the join incentive', async () => {
+    await cartWith(plainId, 2)
+    const plain = await getCart(prisma, { userId: plainId, guestCartId: undefined })
+    expect(plain.items[0]!.baseUnitPrice).toBe('94.90')
+    expect(plain.items[0]!.unitPrice).toBe('94.90')
+    // One formula, two readings: for the member it is actual, for the
+    // non-member it is what joining would save on this same cart.
+    expect(plain.clubSavings).toBe('18.98')
+  })
+
+  it('the checkout quote carries clubMember and clubSavings, copied from the cart DTO', async () => {
+    await cartWith(memberId, 2)
+    const result = await quoteCheckout(prisma, { userId: memberId, deliveryMethod: 'courier' })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.quote.clubMember).toBe(true)
+    expect(result.quote.clubSavings).toBe('18.98')
+    expect(result.quote.lines[0]!.baseUnitPrice).toBe('94.90')
+  })
+
+  it('🔴 a NON-member quote carries clubSavings 0.00 — checkout must not receive the join-pitch reading', async () => {
+    await cartWith(plainId, 2)
+    const result = await quoteCheckout(prisma, { userId: plainId, deliveryMethod: 'courier' })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.quote.clubMember).toBe(false)
+    // The CART keeps '18.98' as the join incentive; the quote deliberately
+    // zeroes it so no checkout consumer can render a discount that is not
+    // included (review finding).
+    expect(result.quote.clubSavings).toBe('0.00')
+  })
+
   it('🔴 REVOCATION — leaving the club takes effect on the NEXT request, no session involved', async () => {
     await cartWith(memberId, 1)
     const before = await getCart(prisma, { userId: memberId, guestCartId: undefined })

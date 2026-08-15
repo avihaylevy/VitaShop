@@ -166,6 +166,14 @@ async function createUserAndToken(
         passwordHash,
         phone: input.phone,
         termsAcceptedAt: now, // Table 3 field 26 — record WHEN consent was given
+        // The seventh list, item 1 / DEC-086 — the register-form opt-in.
+        // Inside the same transaction as the user row, so a rollback cannot
+        // leave a membership without an account. The already-registered path
+        // above never reaches here: a repeat registration must not toggle an
+        // existing account's membership (and answering differently would be
+        // the 4b oracle anyway).
+        isClubMember: input.joinClub,
+        clubJoinedAt: input.joinClub ? now : null,
         // status defaults to pending_verification (DEC-024). A9 blocks an
         // unverified account from completing an order; REQ-F-034 lets it
         // browse and use the cart.

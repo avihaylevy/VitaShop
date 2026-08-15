@@ -8,6 +8,13 @@ type PriceBlockProps = {
    * and detail page pass 'price'; inline/metadata contexts keep 'base'.
    */
   size?: 'base' | 'price'
+  /**
+   * The seventh list, item 2 — a superseded figure (the full price beside a
+   * member price), rendered as a semantic <s> in muted small type. A variant
+   * HERE rather than an inline copy in the cart row, so the ISSUE-084
+   * two-element structure below keeps owning every price on the site.
+   */
+  struck?: boolean
 }
 
 /**
@@ -22,23 +29,25 @@ type PriceBlockProps = {
  * direction and aligns by IT (`text-start`), while the inner span keeps the
  * digits LTR. Isolation protects the digits; it must never pin the block.
  */
-export function PriceBlock({ price, size = 'base' }: PriceBlockProps) {
+export function PriceBlock({ price, size = 'base', struck = false }: PriceBlockProps) {
   const { i18n } = useTranslation()
   const language = i18n.language === 'he' ? 'he' : 'en'
 
+  // <s>, not a line-through class: the strikethrough is MEANING (a
+  // superseded figure), and visual-only signals are this project's named
+  // anti-pattern. The dir/isolation attributes are identical either way.
+  const Inner = struck ? 's' : 'span'
+  const innerClass = struck
+    ? 'text-xs text-text-muted'
+    : size === 'price'
+      ? 'text-lg font-bold tracking-[-0.015em] text-text-ink md:text-[23px]'
+      : 'text-base font-semibold text-text-ink'
+
   return (
     <span className="text-start">
-      <span
-        dir="ltr"
-        className={
-          size === 'price'
-            ? 'text-lg font-bold tracking-[-0.015em] text-text-ink md:text-[23px]'
-            : 'text-base font-semibold text-text-ink'
-        }
-        style={{ unicodeBidi: 'isolate' }}
-      >
+      <Inner dir="ltr" className={innerClass} style={{ unicodeBidi: 'isolate' }}>
         {formatPrice(price, language)}
-      </span>
+      </Inner>
     </span>
   )
 }

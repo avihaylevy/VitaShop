@@ -19,6 +19,7 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
 import { AboutPage } from './pages/AboutPage'
 import { ContactPage } from './pages/ContactPage'
+import { TermsPage } from './pages/TermsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
 function App() {
@@ -137,6 +138,12 @@ function App() {
         */}
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
+        {/*
+          The seventh list, item 3 — the terms the registration checkbox
+          asserts were read. Open like /about: a guest registering must be
+          able to read what they are agreeing to (A10's spirit).
+        */}
+        <Route path="/terms" element={<TermsPage />} />
         {/*
           MILESTONE-006 Checkpoint H — the auth forms.
 

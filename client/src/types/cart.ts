@@ -31,6 +31,13 @@ export type CartLine = {
   quantity: number
   /** Canonical two-decimal string, live from the product row. Never a number. */
   unitPrice: string
+  /**
+   * The seventh list, item 2 — the UNDISCOUNTED unit price, always present.
+   * Equal to `unitPrice` byte-for-byte when no discount applies; the row
+   * strikes it through beside the member price when the two STRINGS differ.
+   * 🔴 The client compares, never subtracts (§3.4).
+   */
+  baseUnitPrice: string
   /** Computed SERVER-SIDE. The client does not multiply money. */
   lineTotal: string
   isActive: boolean
@@ -79,6 +86,13 @@ export type Cart = {
    * member (the server's empty constant) — hints render only beside items.
    */
   clubMember: boolean
+  /**
+   * The seventh list, item 2 — the club's worth on this cart, SERVER-computed
+   * over the purchasable lines (§3.4: the client renders it, never derives
+   * it). For a member: what the discount is saving now. For a non-member:
+   * what joining would save on the same cart. '0.00' hides the row.
+   */
+  clubSavings: string
   /**
    * 🔴 PURCHASABLE LINES ONLY, and therefore EQUAL to `shipping.basis` —
    * DEC-059 answer 3, applied to the DTO at Checkpoint F1: an unpurchasable
@@ -162,6 +176,7 @@ export const EMPTY_CART: Cart = {
   items: [],
   totalQuantity: 0,
   clubMember: false,
+  clubSavings: '0.00',
   subtotal: '0.00',
   hasBlockingLine: false,
   shipping: {

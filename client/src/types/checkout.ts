@@ -49,6 +49,13 @@ export type CheckoutQuoteLine = {
 
 export type CheckoutQuote = {
   lines: readonly CheckoutQuoteLine[]
+  /**
+   * The seventh list, item 2 — mirrors the server's quote: whether the
+   * figures are member prices, and what the club is worth on this order.
+   * Copy + one display row; the client derives nothing from them (§3.4).
+   */
+  clubMember: boolean
+  clubSavings: string
   /** The purchasable total the free-shipping threshold is measured on. */
   basis: string
   shipping: CheckoutShipping

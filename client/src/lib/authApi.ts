@@ -91,6 +91,8 @@ export interface RegistrationPayload {
   confirmPassword: string
   phone: string
   acceptedTerms: boolean
+  /** The seventh list, item 1 / DEC-086 — the register-form club opt-in. */
+  joinClub: boolean
 }
 
 export function register(payload: RegistrationPayload) {

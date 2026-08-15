@@ -77,6 +77,9 @@ function isQuote(value: unknown): value is CheckoutQuote {
   if (!isPlainObject(value)) return false
   if (!Array.isArray(value.lines) || !value.lines.every(isQuoteLine)) return false
   if (!isMoney(value.basis) || !isMoney(value.totalAmount)) return false
+  // The seventh list, item 2 — strict like the cart transport's clubMember:
+  // a missing flag must be a broken response, never a silent "not a member".
+  if (typeof value.clubMember !== 'boolean' || !isMoney(value.clubSavings)) return false
   if (!isDeliveryMethodName(value.deliveryMethod)) return false
   if (!isEstimate(value.estimate)) return false
   // 🔴 A quote without a fingerprint is unusable: `/pay` refuses anything that

@@ -25,6 +25,7 @@ function cartWith(quantity: number): Cart {
         imageFile: null,
         quantity,
         unitPrice: '10.00',
+        baseUnitPrice: '10.00',
         lineTotal: `${(10 * quantity).toFixed(2)}`,
         isActive: true,
         stockQuantity: 3,
@@ -33,6 +34,7 @@ function cartWith(quantity: number): Cart {
     ],
     totalQuantity: quantity,
     clubMember: false,
+    clubSavings: '0.00',
     subtotal: `${(10 * quantity).toFixed(2)}`,
     hasBlockingLine: false,
     shipping: {
@@ -167,6 +169,7 @@ describe('🔴 the server decides the quantity — §3.4', () => {
           items: [],
           totalQuantity: 0,
           clubMember: false,
+          clubSavings: '0.00',
           subtotal: '0.00',
           hasBlockingLine: false,
           shipping: {

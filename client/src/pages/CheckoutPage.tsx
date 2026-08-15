@@ -558,6 +558,25 @@ export function CheckoutPage() {
           </ul>
 
           <dl className="flex flex-col gap-1 border-t border-border-hairline pt-3 text-sm">
+            {/*
+              The seventh list, item 2 — the included club discount, stated
+              rather than implied. It is NOT a subtractable row: the item
+              total below is ALREADY the member figure, and the label says
+              "included" so nobody re-derives the total minus it. The
+              SERVER zeroes this figure for non-members (review finding —
+              the wire cannot express a join pitch on a confirm-and-pay
+              screen), so the '0.00' gate covers both readings; clubMember
+              stays in the condition as belt-and-braces against a consumer
+              of an older cached quote. String comparison, §3.4.
+            */}
+            {state.quote.clubMember && state.quote.clubSavings !== '0.00' && (
+              <div className="flex items-baseline justify-between gap-2">
+                <dt className="text-state-commerce">{t('savings.checkout', { ns: 'club' })}</dt>
+                <dd>
+                  <PriceBlock price={state.quote.clubSavings} />
+                </dd>
+              </div>
+            )}
             <div className="flex items-baseline justify-between gap-2">
               <dt className="text-text-muted">{t('summary.itemsTotal')}</dt>
               <dd>

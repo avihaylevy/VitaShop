@@ -33,6 +33,8 @@ const QUOTE = {
       lineTotal: '100.00',
     },
   ],
+  clubMember: false,
+  clubSavings: '0.00',
   basis: '100.00',
   shipping: {
     cost: '30.00',

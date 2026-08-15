@@ -16,6 +16,7 @@
   "item": {
     "packageQuantity": "Package quantity: {{quantity}}",
     "unitPrice": "Unit price",
+    "fullPrice": "Full price",
     "lineTotal": "Line total",
     "unavailable": "This product is no longer sold. Remove it to continue to checkout.",
     "soldOut": "This product is sold out. Remove it to continue to checkout.",
