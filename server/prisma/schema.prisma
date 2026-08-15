@@ -88,6 +88,11 @@ model User {
   status           UserStatus @default(pending_verification)
   failedLoginCount Int        @default(0) @map("failed_login_count")
   lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz
+  // DEC-086 / MILESTONE-012 — the membership club. Flat single-tier;
+  // membership is read PER REQUEST wherever it prices anything (the
+  // DEC-065 revocation pattern), never cached in the session.
+  isClubMember     Boolean    @default(false) @map("is_club_member")
+  clubJoinedAt     DateTime?  @map("club_joined_at") @db.Timestamptz
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
   addresses               Address[]

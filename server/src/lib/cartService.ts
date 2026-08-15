@@ -3,6 +3,7 @@ import { clampAddition, clampCartQuantity, parseRequestedQuantity } from './cart
 import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 import { computeShipping, toAgorot, type ShippingDto } from './shipping.js'
 import { isPurchasable } from './purchasability.js'
+import { effectiveUnitPrice, readClubMembership } from './clubPricing.js'
 
 /**
  * MILESTONE-007 Checkpoint C — the cart service.
@@ -125,9 +126,14 @@ function toDto(
     brand: { name: string; nameEn: string | null }
     images: { url: string }[]
   } }[],
+  // DEC-086 — the club discount enters HERE and nowhere else in this file:
+  // every priced field below derives from the one effective unit price, so
+  // a member's cart cannot show a mixed opinion about what a line costs.
+  isClubMember: boolean,
 ): CartDto {
   const lines = items.map((item) => {
-    const unit = Number(item.product.price.toFixed(2))
+    const unitPrice = effectiveUnitPrice(item.product.price, isClubMember)
+    const unitAgorot = toAgorot(unitPrice)
     return {
       id: item.id,
       productId: item.product.id,
@@ -139,8 +145,10 @@ function toDto(
       packageQuantity: item.product.packageQuantity,
       imageFile: item.product.images[0]?.url.split('/').pop() ?? null,
       quantity: item.quantity,
-      unitPrice: item.product.price.toFixed(2),
-      lineTotal: (unit * item.quantity).toFixed(2),
+      unitPrice,
+      // Integer-agorot arithmetic — the float multiply this replaces could
+      // land a cent off, and the club discount makes odd unit prices common.
+      lineTotal: ((unitAgorot * item.quantity) / 100).toFixed(2),
       isActive: item.product.isActive,
       stockQuantity: item.product.stockQuantity,
       lowStockThreshold: item.product.lowStockThreshold,
@@ -284,12 +292,17 @@ async function getOrCreateCart(
 export async function getCart(prisma: PrismaClient, identity: CartIdentity): Promise<CartDto> {
   if (!hasIdentity(identity)) return EMPTY_CART
 
-  const cart = await prisma.cart.findFirst({
-    where: whereForIdentity(identity),
-    select: { items: { select: LINE_SELECT, orderBy: { id: 'asc' } } },
-  })
+  // DEC-086 — membership is read per request from the user row (DEC-065's
+  // revocation pattern); a guest identity is never a member.
+  const [cart, isClubMember] = await Promise.all([
+    prisma.cart.findFirst({
+      where: whereForIdentity(identity),
+      select: { items: { select: LINE_SELECT, orderBy: { id: 'asc' } } },
+    }),
+    readClubMembership(prisma, identity.userId),
+  ])
 
-  return cart ? toDto(cart.items) : EMPTY_CART
+  return cart ? toDto(cart.items, isClubMember) : EMPTY_CART
 }
 
 export async function addItem(

@@ -5,6 +5,7 @@ import { generateOrderNumber } from './orderNumber.js'
 import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 import { checkoutFingerprint } from './checkoutFingerprint.js'
 import type { OrderStatusName } from './orderTransitions.js'
+import { effectiveUnitPrice, readClubMembership } from './clubPricing.js'
 
 /**
  * MILESTONE-008 Checkpoint C — order creation. §8, DEC-059.
@@ -619,8 +620,22 @@ async function attemptCreateOrder(
       // ── The money, computed server-side (§3.4) ─────────────────────────────
       // Integer agorot throughout: the ₪249 threshold must not ride on a float,
       // and neither must a total the shopper is charged.
+      //
+      // 🔴 DEC-086 — membership is read INSIDE this transaction, so the frozen
+      // prices and the membership they were computed from commit together, and
+      // the SAME clubPricing seam the cart/quote used prices every figure here.
+      // Divergence between the two sides is not cosmetic: the fingerprint
+      // below re-derives from these numbers, so a one-sided discount would
+      // halt every member payment with CHECKOUT_CHANGED.
+      const isClubMember = await readClubMembership(tx, userId)
+      const effectiveAgorot = new Map(
+        cart.items.map((line) => [
+          line.id,
+          toAgorot(effectiveUnitPrice(line.product.price, isClubMember)),
+        ]),
+      )
       const subtotalAgorot = cart.items.reduce(
-        (sum, line) => sum + toAgorot(line.product.price.toFixed(2)) * line.quantity,
+        (sum, line) => sum + effectiveAgorot.get(line.id)! * line.quantity,
         0,
       )
       const shipping = computeShipping(subtotalAgorot, true, deliveryMethod)
@@ -652,7 +667,7 @@ async function attemptCreateOrder(
             lineId: line.id,
             productId: line.product.id,
             quantity: line.quantity,
-            unitPrice: line.product.price.toFixed(2),
+            unitPrice: (effectiveAgorot.get(line.id)! / 100).toFixed(2),
           })),
         })
         if (actual !== input.expectedFingerprint) {
@@ -713,7 +728,10 @@ async function attemptCreateOrder(
               // 🔴 BOTH LANGUAGES. One column could not say which language it
               // held, in a store that sells in two — an English shopper's
               // history would have shown a Hebrew name forever.
-              unitPriceAtPurchase: line.product.price,
+              // 🔴 DEC-086 — the DISCOUNTED figure is the freeze: it is what
+              // the member actually paid. No "original price" column exists,
+              // deliberately; that would be a new decision.
+              unitPriceAtPurchase: (effectiveAgorot.get(line.id)! / 100).toFixed(2),
               productNameHeAtPurchase: line.product.nameHe,
               productNameEnAtPurchase: line.product.nameEn,
             })),
