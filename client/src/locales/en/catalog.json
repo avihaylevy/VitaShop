@@ -36,8 +36,14 @@
     "allProducts": "All products"
   },
   "home": {
+    "heroTitle": "All your vitamins and supplements in one place",
     "tagline": "Vitamins and dietary supplements in one place — a catalogue organised by categories and health goals.",
     "browseCatalog": "Browse all products",
+    "categoriesTitle": "Shop by category",
+    "statsLabel": "Store facts",
+    "statsProducts": "Products in the catalogue",
+    "statsBrands": "Brands",
+    "statsCategories": "Categories",
     "shopByGoalTitle": "Shop by goal",
     "loading": "Loading categories…",
     "error": "Categories could not be loaded right now.",

@@ -200,10 +200,11 @@ describe('CatalogPage accessibility — loading', () => {
     setCatalogData({ loading: true, products: [product()], totalItems: 1 })
     const html = await renderCatalog()
 
-    // Two now: the loading state's own status region, plus the Checkpoint I
+    // Three now: the loading state's own status region, the Checkpoint I
     // count region — which must be EMPTY here, so nothing is announced for
-    // a query that has not settled.
-    expect(count(html, 'role="status"')).toBe(2)
+    // a query that has not settled — and AddedToCartToast's always-mounted
+    // region (fifth list item 3).
+    expect(count(html, 'role="status"')).toBe(3)
     expect(html).toContain(EMPTY_COUNT_REGION)
     expect(html).not.toContain('role="alert"')
     expect(html).toContain('sr-only')
@@ -213,14 +214,14 @@ describe('CatalogPage accessibility — loading', () => {
 })
 
 describe('CatalogPage accessibility — error', () => {
-  it('renders exactly one role="alert", a real button with an accessible name, and no role="status"', async () => {
+  it('renders exactly one role="alert", a real button with an accessible name, and only the toast status region', async () => {
     setCatalogData({ loading: false, error: new CatalogApiError('UNKNOWN_ERROR', 'boom'), products: [product()] })
     const html = await renderCatalog()
 
     expect(count(html, 'role="alert"')).toBe(1)
     // The only status region is the Checkpoint I count region, and it says
     // nothing — an error is announced by the alert, never as a count.
-    expect(count(html, 'role="status"')).toBe(1)
+    expect(count(html, 'role="status"')).toBe(2) // page region count +1: the toast's always-mounted region
     expect(html).toContain(EMPTY_COUNT_REGION)
     expect(html).toMatch(/<button[^>]*>[\s\S]*?נסה שוב[\s\S]*?<\/button>/)
     // Stale products must not leak through the error branch either.
@@ -265,7 +266,7 @@ describe('CatalogPage accessibility — invalid-category', () => {
     expect(html).not.toMatch(/<section[^>]*aria-label=/)
     // Only the Checkpoint I count region, empty: an invalid category
     // produced no count, so nothing is announced.
-    expect(count(html, 'role="status"')).toBe(1)
+    expect(count(html, 'role="status"')).toBe(2) // page region count +1: the toast's always-mounted region
     expect(html).toContain(EMPTY_COUNT_REGION)
     expect(html).not.toContain('role="alert"')
     // Copy and action preserved exactly.
@@ -282,7 +283,7 @@ describe('CatalogPage accessibility — catalog-empty', () => {
     expect(html).toContain('אין מוצרים להצגה כרגע')
     // The count region is the only one, and it DOES speak here — the query
     // settled with zero results, which is a countable outcome (§10).
-    expect(count(html, 'role="status"')).toBe(1)
+    expect(count(html, 'role="status"')).toBe(2) // page region count +1: the toast's always-mounted region
     // The numeral is LTR-isolated (correction, finding 4).
     expect(html).toContain('נמצאו <span dir="ltr">0</span> מוצרים')
     expect(html).not.toContain('role="alert"')
@@ -302,7 +303,7 @@ describe('CatalogPage accessibility — filtered-empty', () => {
     const html = await renderCatalog('/catalog?category=probiotics')
 
     expect(html).toContain('אין כרגע מוצרים בקטגוריה &quot;פרוביוטיקה&quot;')
-    expect(count(html, 'role="status"')).toBe(1)
+    expect(count(html, 'role="status"')).toBe(2) // page region count +1: the toast's always-mounted region
     // The numeral is LTR-isolated (correction, finding 4).
     expect(html).toContain('נמצאו <span dir="ltr">0</span> מוצרים')
     expect(html).not.toContain('role="alert"')
@@ -311,7 +312,7 @@ describe('CatalogPage accessibility — filtered-empty', () => {
 })
 
 describe('CatalogPage accessibility — ready', () => {
-  it('renders exactly two role="status" regions (add-to-cart + result count) and no role="alert"', async () => {
+  it('renders exactly two page role="status" regions (toast + result count) and no role="alert"', async () => {
     setCatalogData({ products: [product()], totalItems: 1 })
     const html = await renderCatalog()
 

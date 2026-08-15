@@ -16,7 +16,10 @@ export const CATEGORY_TONE: Readonly<Record<string, string>> = {
   'צמחי מרפא': 'var(--tone-herbs)',
 }
 
-export const FALLBACK_TONE = 'var(--surface-page)'
+// DEC-081 made the page ground near-white, so a page-coloured fallback
+// card would vanish against it — the sunken surface keeps an unmapped
+// category visibly a card, just untinted.
+export const FALLBACK_TONE = 'var(--surface-sunken)'
 
 /** Categories already warned about this session — one console.warn per distinct unmapped name. */
 const warnedUnmappedCategories = new Set<string>()

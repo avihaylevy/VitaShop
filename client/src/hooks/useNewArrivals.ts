@@ -38,7 +38,19 @@ export const NEW_ARRIVALS_COUNT = 4
 
 export type NewArrivalsState =
   | { status: 'loading' }
-  | { status: 'ready'; products: readonly ProductCardModel[] }
+  | {
+      status: 'ready'
+      /** The shelf's slice — at most NEW_ARRIVALS_COUNT cards. */
+      products: readonly ProductCardModel[]
+      /**
+       * DEC-082 — the WHOLE fetched page plus the server's total, exposed so
+       * the home page can mine tile imagery and the stats count from the
+       * request this hook already makes, instead of firing the identical
+       * /api/products request a second time (review of the fifth-list diff).
+       */
+      items: readonly CatalogProductDto[]
+      totalItems: number
+    }
   /**
    * 🔴 A FAILURE HERE MUST NOT TAKE THE HOME PAGE DOWN. The categories are the
    * page's actual navigation; new arrivals are a shelf on top of it. The same
@@ -62,7 +74,11 @@ export function useNewArrivals(): NewArrivalsState & { retry: () => void } {
    * working shelf into an error. A language switch must not be a way to lose
    * content.
    */
-  const [dtos, setDtos] = useState<{ status: 'loading' } | { status: 'ready'; items: CatalogProductDto[] } | { status: 'failed' }>({
+  const [dtos, setDtos] = useState<
+    | { status: 'loading' }
+    | { status: 'ready'; items: CatalogProductDto[]; totalItems: number }
+    | { status: 'failed' }
+  >({
     status: 'loading',
   })
   const requestId = useRef(0)
@@ -88,7 +104,9 @@ export function useNewArrivals(): NewArrivalsState & { retry: () => void } {
        * throwing on an unexpected language tag, say — as "the new products
        * could not be loaded", disguising a bug as a network failure.
        */
-      setDtos({ status: 'ready', items: envelope.items.slice(0, NEW_ARRIVALS_COUNT) })
+      // The FULL page is held (DEC-082 mines it for tiles/stats); the
+      // shelf's slice happens at render.
+      setDtos({ status: 'ready', items: envelope.items, totalItems: envelope.totalItems })
     } catch {
       if (id !== requestId.current) return
       setDtos({ status: 'failed' })
@@ -110,7 +128,11 @@ export function useNewArrivals(): NewArrivalsState & { retry: () => void } {
     // Mapped at RENDER, so the toggle is instant and costs no request.
     return {
       status: 'ready',
-      products: dtos.items.map((dto) => mapCatalogProduct(dto, language)),
+      products: dtos.items
+        .slice(0, NEW_ARRIVALS_COUNT)
+        .map((dto) => mapCatalogProduct(dto, language)),
+      items: dtos.items,
+      totalItems: dtos.totalItems,
       retry,
     }
   }

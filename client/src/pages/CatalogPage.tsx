@@ -12,6 +12,7 @@ import { CatalogFilterPanel } from '../components/catalog/CatalogFilterPanel'
 import { CatalogPagination } from '../components/catalog/CatalogPagination'
 import { CatalogFallbackSection } from '../components/catalog/CatalogFallbackSection'
 import { CartDrawer } from '../components/cart/CartDrawer'
+import { AddedToCartToast } from '../components/cart/AddedToCartToast'
 import { useAddToCart } from '../hooks/useAddToCart'
 import { Button } from '../components/ui/Button'
 import { Drawer } from '../components/ui/Drawer'
@@ -523,16 +524,6 @@ export function CatalogPage() {
                 ) : (
                   <>
                     {/*
-                      One shared polite live region for the whole grid, rather
-                      than one per card: a single announcement per add, never a
-                      burst. Visible text, so the confirmation is not carried by
-                      colour or by the badge alone. Renders empty until the first
-                      add, so nothing is announced on load.
-                    */}
-                    <p role="status" className={addedToCartMessage ? 'mt-4 text-sm text-text-ink' : ''}>
-                      {addedToCartMessage}
-                    </p>
-                    {/*
                       ISSUE-053 — the settled grid FADES IN (180ms, opacity
                       only) so a page/filter change visibly hands over to new
                       results instead of swapping in one frame. The branch
@@ -595,6 +586,8 @@ export function CatalogPage() {
         closeDrawer identity.
       */}
       <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
+      {/* Fifth list item 3 — the confirmation POPUP; the one status region for adds on this page. */}
+      <AddedToCartToast message={addedToCartMessage} announceKey={announced} suppress={drawerOpen} />
     </div>
   )
 }

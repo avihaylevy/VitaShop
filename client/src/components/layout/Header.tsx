@@ -32,15 +32,17 @@ export function Header() {
         <SearchBox className="mx-auto" />
         <UtilityCluster className="shrink-0" />
       </div>
+      {/* Fifth list item 5 — the tabs sit CENTRED under the logo, at a
+          larger size, so the row carries more presence. */}
       <nav aria-label={t('nav.mainLabel')} className="border-t border-border-hairline px-7">
-        <ul className="flex items-center gap-6">
+        <ul className="flex items-center justify-center gap-8">
           {NAV_ITEMS.map((item) => (
             <li key={item.key}>
               <NavLink
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  `${FOCUS_RING} flex h-11 items-center border-b-[3px] px-1 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard ${
+                  `${FOCUS_RING} flex h-12 items-center border-b-[3px] px-2 text-base font-medium text-text-ink transition-colors duration-150 ease-standard ${
                     isActive
                       ? 'border-brand-teal bg-surface-sunken font-semibold'
                       : 'border-transparent hover:border-border-hairline hover:bg-surface-sunken/40'

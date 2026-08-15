@@ -30,7 +30,7 @@
     "adminOrders": "ניהול הזמנות"
   },
   "welcome": {
-    "message": "ברוכים הבאים, {{name}}"
+    "message": "ברוך הבא, {{name}}"
   },
   "favourites": {
     "label": "מועדפים",

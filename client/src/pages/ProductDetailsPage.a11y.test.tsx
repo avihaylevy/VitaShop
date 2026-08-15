@@ -133,7 +133,9 @@ describe('ProductDetailsPage — the four §7 states', () => {
     setDetail({ loading: true, product: product() })
     const html = await renderPage()
 
-    expect(count(html, 'role="status"')).toBe(1)
+    // 2 = the loading region + AddedToCartToast's always-mounted region
+    // (fifth list item 3 — the popup replaced the inline add message).
+    expect(count(html, 'role="status"')).toBe(2)
     expect(html).toContain('טוען את פרטי המוצר')
     expect(html).not.toContain('role="alert"')
     // 🔴 No stale product renders underneath the loading state.

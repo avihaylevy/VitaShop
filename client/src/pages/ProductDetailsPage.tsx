@@ -8,6 +8,7 @@ import { ProductImage } from '../components/catalog/ProductImage'
 import { StockState } from '../components/catalog/StockState'
 import { ADD_TO_CART_ATTRIBUTE } from '../components/catalog/ProductCard'
 import { CartDrawer } from '../components/cart/CartDrawer'
+import { AddedToCartToast } from '../components/cart/AddedToCartToast'
 import { resetOnConfirmedAdd, useAddToCart } from '../hooks/useAddToCart'
 import { getStockState } from '../lib/stockState'
 import { Button } from '../components/ui/Button'
@@ -113,25 +114,18 @@ export function ProductDetailsPage() {
       )}
 
       {viewState.state === 'ready' && (
-        <>
-          {/*
-            One polite live region for the page's single add control — the
-            same shape as CatalogPage's. Renders empty until the first add.
-          */}
-          <p role="status" className={addedToCartMessage ? 'mb-4 text-sm text-text-ink' : ''}>
-            {addedToCartMessage}
-          </p>
-          <ProductDetailView
-            product={viewState.product}
-            onBack={goToCatalog}
-            onAddToCart={handleAddToCart}
-          />
-        </>
+        <ProductDetailView
+          product={viewState.product}
+          onBack={goToCatalog}
+          onAddToCart={handleAddToCart}
+        />
       )}
 
       {/* Rendered once, unconditionally — the same CartDrawer contract as
           CatalogPage and HomePage (DEC-047/DEC-073, via useAddToCart). */}
       <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
+      {/* Fifth list item 3 — the confirmation POPUP; the one status region for adds on this page. */}
+      <AddedToCartToast message={addedToCartMessage} announceKey={announced} suppress={drawerOpen} />
     </div>
   )
 }

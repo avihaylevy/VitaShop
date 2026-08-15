@@ -1,83 +1,184 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useCatalogCategories } from '../hooks/useCatalogCategories'
 import { useCatalogFacets } from '../hooks/useCatalogFacets'
-import { useNewArrivals } from '../hooks/useNewArrivals'
-import { CategoryShelf } from '../components/catalog'
+import { useNewArrivals, type NewArrivalsState } from '../hooks/useNewArrivals'
+import { buildShowcase, EMPTY_SHOWCASE } from '../lib/homeShowcase'
 import { ProductGrid } from '../components/catalog/ProductGrid'
+import { ProductImage } from '../components/catalog/ProductImage'
 import { CartDrawer } from '../components/cart/CartDrawer'
+import { AddedToCartToast } from '../components/cart/AddedToCartToast'
 import { useAddToCart } from '../hooks/useAddToCart'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
+import { getCategoryTone } from '../lib/categoryTone'
 import type { SupportedLanguage } from '../i18n'
 
 /**
- * Production home page.
+ * Production home page — REBUILT at DEC-082 (the fifth list, items 6+7:
+ * "the home screen doesn't look good; take inspiration from the reference
+ * sites"). The reference SHAPE, none of their branding (DESIGN_BRIEF's
+ * anti-copy rule): a hero band, category TILES with real product imagery,
+ * shop-by-goal, the new-arrivals shelf, and an honest stats strip whose
+ * numbers are the server's own (no invented claims — DEC-032's bar).
  *
- * ⚠️ THE OLD CONTRACT HERE READ "never GET /api/products", and Checkpoint F4
- * changes it deliberately. ISSUE-054 recorded that this page showed category
- * chips and no products at all; DEC-064 answered it with NEW ARRIVALS, so the
- * page now makes a second request.
- *
- * 🔴 THE SHELF IS NAVIGATIONAL — cards LINK, they do not add to cart. Buying
- * belongs to the catalogue, which owns the drawer, the return-focus
- * choreography and the announcement; a second copy of that machinery here
- * would be two implementations of one behaviour.
- *
- * 🔴 AND IT CANNOT BREAK THE PAGE. The categories are the actual navigation;
- * if new arrivals fail to load, the page still works and says so quietly.
+ * 🔴 DATA GATES NOTHING VISUAL: the showcase fetch (imagery + counts) fails
+ * SILENTLY to tone-only tiles and no strip; the categories fetch keeps its
+ * loud error+retry because the tiles ARE the page's navigation.
  */
 export function HomePage() {
-  const { t } = useTranslation(['common', 'catalog'])
+  const { t, i18n } = useTranslation(['common', 'catalog'])
+  const language = i18n.language as SupportedLanguage
   const { loading, categories, error, retry } = useCatalogCategories()
+  // ONE facets call for the whole page (review of this diff: ShopByGoal had
+  // its own copy of the hook, doubling GET /api/catalog/facets per visit).
+  const { facets } = useCatalogFacets()
+  const arrivals = useNewArrivals()
+  // The visual layer is MINED from the page the shelf already fetched —
+  // never a second identical /api/products request (review of this diff).
+  const showcase = useMemo(
+    () => (arrivals.status === 'ready' ? buildShowcase(arrivals.items, arrivals.totalItems) : EMPTY_SHOWCASE),
+    [arrivals],
+  )
+  /*
+   * The add machinery is the PAGE's (as on every other add surface), so the
+   * drawer and the toast mount at page root — not inside the shelf section,
+   * where the toast's region polluted the shelf's own "one message slot"
+   * contract and its test selector (review of this diff).
+   */
+  const { handleAddToCart, drawerOpen, closeDrawer, returnFocusRef, gridRef, announced } =
+    useAddToCart()
+  const announcedProduct =
+    announced && arrivals.status === 'ready'
+      ? arrivals.products.find((product) => product.slug === announced.slug)
+      : undefined
+  const addedToCartMessage =
+    announced && announcedProduct
+      ? t('addedToCart', { ns: 'catalog', product: announcedProduct.name, count: announced.count })
+      : ''
 
   return (
     <div className="px-7 py-8">
-      <h1 className="heading-page">{t('app.name', { ns: 'common' })}</h1>
-
-      {/*
-        ISSUE-105's "home page content" half (Wave 4). An intro strip: one
-        tagline sentence and a real LINK to the catalogue styled as the
-        primary action — navigation is a link, never a button pretending.
-        No medical claims, no invented copy beyond store positioning
-        (DESIGN_BRIEF: warm + serious, guidance over density).
-      */}
-      <p className="mt-2 max-w-xl text-base text-text-muted">{t('home.tagline', { ns: 'catalog' })}</p>
-      <div className="mt-4">
-        <Link
-          to="/catalog"
-          className={`${FOCUS_RING} inline-flex h-11 items-center rounded-card bg-brand-teal px-5 text-sm font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
-        >
-          {t('home.browseCatalog', { ns: 'catalog' })}
-        </Link>
-      </div>
-
-      {loading && (
-        <p className="mt-6 text-sm text-text-muted" role="status">
-          {t('home.loading', { ns: 'catalog' })}
-        </p>
-      )}
-
-      {!loading && error && (
-        <div className="mt-6 flex flex-col items-start gap-3">
-          <p className="text-sm text-state-error" role="alert">
-            {t('home.error', { ns: 'catalog' })}
-          </p>
-          <Button variant="secondary" onClick={retry}>
-            {t('home.retry', { ns: 'catalog' })}
-          </Button>
+      {/* HERO — headline + tagline + one CTA at the start, a product
+          composition at the end; the composition is decorative and hidden
+          from assistive tech (the CTA is the content). */}
+      <section className="rounded-card bg-surface-section p-6 md:p-10">
+        <div className="grid items-center gap-8 md:grid-cols-[1fr_auto]">
+          <div>
+            <h1 className="heading-page max-w-xl">{t('home.heroTitle', { ns: 'catalog' })}</h1>
+            <p className="mt-3 max-w-xl text-base text-text-muted">
+              {t('home.tagline', { ns: 'catalog' })}
+            </p>
+            <div className="mt-6">
+              <Link
+                to="/catalog"
+                className={`${FOCUS_RING} inline-flex h-12 items-center rounded-card bg-brand-teal px-6 text-base font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
+              >
+                {t('home.browseCatalog', { ns: 'catalog' })}
+              </Link>
+            </div>
+          </div>
+          {showcase.heroImages.length > 0 && (
+            <ul aria-hidden="true" className="hidden items-end gap-3 md:flex">
+              {showcase.heroImages.map((file, index) => (
+                <li key={file} className={index === 1 ? 'w-44' : 'w-32'}>
+                  <ProductImage imageFile={file} alt="" />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
+      </section>
+
+      {/* CATEGORY TILES — the page's real navigation, now with imagery.
+          Tone + TEXT name (the tone is never the sole signal — §1). */}
+      <section aria-labelledby="home-categories-heading" className="mt-10">
+        <h2 id="home-categories-heading" className="heading-section">
+          {t('home.categoriesTitle', { ns: 'catalog' })}
+        </h2>
+
+        {loading && (
+          <p className="mt-4 text-sm text-text-muted" role="status">
+            {t('home.loading', { ns: 'catalog' })}
+          </p>
+        )}
+
+        {!loading && error && (
+          <div className="mt-4 flex flex-col items-start gap-3">
+            <p className="text-sm text-state-error" role="alert">
+              {t('home.error', { ns: 'catalog' })}
+            </p>
+            <Button variant="secondary" onClick={retry}>
+              {t('home.retry', { ns: 'catalog' })}
+            </Button>
+          </div>
+        )}
+
+        {!loading && !error && categories.length > 0 && (
+          <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            {categories.map((category) => (
+              <li key={category.slug}>
+                <Link
+                  to={`/catalog?category=${encodeURIComponent(category.slug)}`}
+                  className={`${FOCUS_RING} group block rounded-card border border-border-card p-3 text-center transition-[box-shadow] duration-200 ease-standard hover:shadow-[var(--shadow-card-hover)]`}
+                  style={{ backgroundColor: getCategoryTone(category.nameHe) }}
+                >
+                  {/* A SMALL image chip, never a full-width white well —
+                      the tile's tone must stay visible around it (review of
+                      this diff); a category with no page-1 image keeps the
+                      reserved height so the row stays level. */}
+                  <div className="mx-auto w-24" aria-hidden="true">
+                    {showcase.categoryImages.get(category.slug) ? (
+                      <ProductImage imageFile={showcase.categoryImages.get(category.slug)!} alt="" />
+                    ) : (
+                      <div className="aspect-[4/3] w-full" />
+                    )}
+                  </div>
+                  <span className="mt-2 block text-sm font-semibold text-text-ink">
+                    {language === 'he' ? category.nameHe : category.nameEn}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <ShopByGoal healthGoals={facets.healthGoals} />
+
+      <NewArrivals state={arrivals} onAddToCart={handleAddToCart} gridRef={gridRef} />
+
+      {/* STATS STRIP — the server's own numbers, nothing invented. Hidden
+          entirely until all three counts exist. */}
+      {showcase.totalItems !== null && facets.brands.length > 0 && categories.length > 0 && (
+        <section
+          aria-label={t('home.statsLabel', { ns: 'catalog' })}
+          className="mt-12 flex flex-wrap items-center justify-center gap-x-12 gap-y-4 border-y border-border-hairline py-6"
+        >
+          <HomeStat value={showcase.totalItems} label={t('home.statsProducts', { ns: 'catalog' })} />
+          <HomeStat value={facets.brands.length} label={t('home.statsBrands', { ns: 'catalog' })} />
+          <HomeStat value={categories.length} label={t('home.statsCategories', { ns: 'catalog' })} />
+        </section>
       )}
 
-      {!loading && !error && (
-        <CategoryShelf categories={categories} className="mt-6" />
-      )}
-
-      <ShopByGoal />
-
-      <NewArrivals />
+      {/* One drawer + one toast, page-owned — the same contract as every
+          other add surface. suppress: the drawer IS the confirmation on the
+          adds that open it. */}
+      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
+      <AddedToCartToast message={addedToCartMessage} announceKey={announced} suppress={drawerOpen} />
     </div>
+  )
+}
+
+function HomeStat({ value, label }: { value: number; label: string }) {
+  return (
+    <p className="text-center">
+      <span dir="ltr" className="block font-display text-2xl font-semibold text-text-ink" style={{ unicodeBidi: 'isolate' }}>
+        {value}
+      </span>
+      <span className="mt-0.5 block text-sm text-text-muted">{label}</span>
+    </p>
   )
 }
 
@@ -96,12 +197,11 @@ export function HomePage() {
  * A facets failure hides the section silently — it is a convenience on top
  * of the page's navigation, the same rule NewArrivals states.
  */
-function ShopByGoal() {
+function ShopByGoal({ healthGoals }: { healthGoals: readonly { id: string; labelHe: string; labelEn: string }[] }) {
   const { t, i18n } = useTranslation('catalog')
   const language = i18n.language as SupportedLanguage
-  const { facets } = useCatalogFacets()
 
-  if (facets.healthGoals.length === 0) return null
+  if (healthGoals.length === 0) return null
 
   return (
     <section aria-labelledby="shop-by-goal-heading" className="mt-10">
@@ -109,7 +209,7 @@ function ShopByGoal() {
         {t('home.shopByGoalTitle')}
       </h2>
       <ul className="mt-4 flex flex-wrap gap-2">
-        {facets.healthGoals.map((goal) => (
+        {healthGoals.map((goal) => (
           <li key={goal.id}>
             <Link
               to={`/catalog?healthGoal=${encodeURIComponent(goal.id)}`}
@@ -129,20 +229,16 @@ function ShopByGoal() {
  * from the categories above — they are fetched independently and fail
  * independently.
  */
-function NewArrivals() {
+function NewArrivals({
+  state,
+  onAddToCart,
+  gridRef,
+}: {
+  state: NewArrivalsState & { retry: () => void }
+  onAddToCart: (slug: string, quantity: number) => void | Promise<boolean>
+  gridRef: React.RefObject<HTMLDivElement | null>
+}) {
   const { t } = useTranslation('catalog')
-  const state = useNewArrivals()
-  const { handleAddToCart, drawerOpen, closeDrawer, returnFocusRef, gridRef, announced } =
-    useAddToCart()
-
-  const announcedProduct =
-    announced && state.status === 'ready'
-      ? state.products.find((product) => product.slug === announced.slug)
-      : undefined
-  const addedToCartMessage =
-    announced && announcedProduct
-      ? t('addedToCart', { product: announcedProduct.name, count: announced.count })
-      : ''
 
   /**
    * 🔴 ISSUE-098 — WHAT PRESSING RETRY DID TO THE USER, which the suite could
@@ -329,26 +425,9 @@ function NewArrivals() {
             ⚠️ NO `emptyState` — it lives in the live region above, so the empty
             sentence is ANNOUNCED and not merely drawn.
           */}
-          <ProductGrid products={state.products} onAddToCart={handleAddToCart} />
+          <ProductGrid products={state.products} onAddToCart={onAddToCart} />
         </div>
       )}
-
-      {/*
-        🔴 ONE DRAWER, rendered unconditionally, exactly as the catalogue does.
-        Its own internal lifecycle governs everything else; this page owns only
-        the slug, the return-focus owner and a stable close identity.
-      */}
-      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
-
-      {/*
-        Announced as slug + count so the sentence re-resolves through i18n on a
-        language toggle instead of freezing in the language it was spoken in.
-        The NAME comes from this page's own list — nothing is invented if the
-        product is not in it.
-      */}
-      <p role="status" className="sr-only">
-        {addedToCartMessage}
-      </p>
 
     </section>
   )

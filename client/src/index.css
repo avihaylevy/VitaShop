@@ -59,25 +59,34 @@
   --font-display: 'Rubik', 'Assistant', system-ui, sans-serif;
   --font-body: 'Assistant', system-ui, sans-serif;
 
-  /* Surfaces — §1 */
-  --surface-page: #EEE8DD;
-  --surface-section: #F7F3EC;
-  --surface-header: #FAF7F1;
+  /*
+   * Surfaces — §1, REBASED by DEC-081 (2026-08-15, the user's fifth list,
+   * item 4: "the background doesn't look good... and makes it hard to tell
+   * product types apart"): a warm NEAR-WHITE ground in the register of the
+   * user's named references, with the colour moved into the CARDS.
+   */
+  --surface-page: #FBFAF7;
+  --surface-section: #F4F1EA;
+  --surface-header: #FFFFFF;
   --well: #FFFFFF;
-  --surface-sunken: #E7E0D3;
-  --border-hairline: #DED6C7;
+  --surface-sunken: #EAE5DB;
+  --border-hairline: #E6E2D9;
   --border-control: #8A8278;
-  --border-card: #E2DACB;
+  --border-card: #E4E0D6;
   --text-ink: #1F252E;
   --text-muted: #5A6270;
 
-  /* Category tones — §1. Bind to Category, never to Product. */
-  --tone-vitamins: #F6EDDD;
-  --tone-minerals: #EFEBE4;
-  --tone-omega: #E4EDE9;
-  --tone-proteins: #F4E8DF;
-  --tone-probiotics: #F3E7E4;
-  --tone-herbs: #E9EDE2;
+  /*
+   * Category tones — §1 at DEC-081 strengths: real chroma so categories
+   * read at a glance on the near-white ground. Still ONE family — hue
+   * rotates, lightness stays level. Bind to Category, never to Product.
+   */
+  --tone-vitamins: #F8E7C3;
+  --tone-minerals: #E7E9EE;
+  --tone-omega: #D9EAE4;
+  --tone-proteins: #F7E0CD;
+  --tone-probiotics: #F7DFDB;
+  --tone-herbs: #E4ECD4;
 
   /* Brand and state — §1. Exactly one meaning each. */
   --brand-teal: #15706A;
@@ -239,12 +248,13 @@
 }
 
 /*
- * ISSUE-120 — the page GROUND, at last. §1's whole lifting mechanism
- * assumes the warm #EEE8DD page base ("measured darker than all six
- * tones, so every tinted card lifts"); until this pass nothing applied
- * it and the site sat on default white — the inverse of the measured
- * system. Every contrast figure in DESIGN_SYSTEM.md §1 is measured
- * against THIS ground. It rides on <body>, so it carries to every tab.
+ * ISSUE-120 + DEC-081 — the page GROUND. It rides on <body>, so it
+ * carries to every tab. 🔴 DEC-081 INVERTED the original §1 mechanism:
+ * the ground is now warm NEAR-WHITE and every category tone sits DARKER
+ * than it — the cards carry the colour, the ground recedes (the user's
+ * fifth-list call, matching their reference sites). §1's DEC-035 contrast
+ * tables predate this; the re-measured teal-on-tone figures live in
+ * DESIGN_SYSTEM.md §15 (4.64-4.86, all above the 4.5 floor).
  */
 body {
   margin: 0;
@@ -370,7 +380,7 @@ body {
  * only; the exit is an unmount (a six-second status message needs no exit
  * choreography). motion-safe-gated at the call site.
  */
-@keyframes welcome-toast-in {
+@keyframes toast-in {
   0% {
     opacity: 0;
     transform: translateY(-8px);

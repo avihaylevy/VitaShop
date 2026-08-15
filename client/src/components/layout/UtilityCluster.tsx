@@ -52,8 +52,11 @@ export function FavouritesControl() {
     >
       <span className="inline-flex items-center gap-1.5 rounded-compact px-1.5 py-1 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard group-hover:bg-surface-sunken">
         <span className="relative inline-flex">
+          {/* Fifth list item 1 — the header heart is NEVER filled; the tab
+              reads as "מועדפים" with its count badge, not as a marked
+              heart. The FILL belongs to per-product hearts only. */}
           <Icon size={18}>
-            <HeartIcon filled={count > 0} />
+            <HeartIcon filled={false} />
           </Icon>
           {count > 0 && (
             <span

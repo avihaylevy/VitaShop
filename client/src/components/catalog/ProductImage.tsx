@@ -25,6 +25,8 @@ export function ProductImage({ imageFile, alt, className = '' }: ProductImagePro
         <img
           src={url}
           alt={alt}
+          loading="lazy"
+          decoding="async"
           onError={() => setFailed(true)}
           // DESIGN_SYSTEM.md §3: card hover scales the image to 1.025. The
           // framing offset above is a static, per-image inline transform, so

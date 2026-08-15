@@ -9,6 +9,7 @@ import { ProductGrid } from '../components/catalog/ProductGrid'
 import { CatalogLoadingState } from '../components/catalog/CatalogLoadingState'
 import { CatalogEmptyState } from '../components/catalog/CatalogEmptyState'
 import { CartDrawer } from '../components/cart/CartDrawer'
+import { AddedToCartToast } from '../components/cart/AddedToCartToast'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import type { CatalogProductDto } from '../types/catalog'
@@ -170,9 +171,6 @@ export function FavouritesPage() {
 
       {state.status === 'ready' && products.length > 0 && (
         <div ref={gridRef} className="mt-6">
-          <p role="status" className="sr-only">
-            {addedToCartMessage}
-          </p>
           <ProductGrid
             products={products}
             onAddToCart={handleAddToCart}
@@ -182,6 +180,8 @@ export function FavouritesPage() {
       )}
 
       <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
+      {/* Fifth list item 3 — the confirmation POPUP; the one status region for adds on this page. */}
+      <AddedToCartToast message={addedToCartMessage} announceKey={announced} suppress={drawerOpen} />
     </div>
   )
 }

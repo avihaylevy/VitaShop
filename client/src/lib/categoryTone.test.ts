@@ -16,7 +16,9 @@ const EXPECTED_TONES: Readonly<Record<string, string>> = {
   'צמחי מרפא': 'var(--tone-herbs)',
 }
 
-const FALLBACK_TONE = 'var(--surface-page)'
+// DEC-081: the near-white page ground would swallow a page-coloured
+// fallback card, so the fallback moved to the sunken surface.
+const FALLBACK_TONE = 'var(--surface-sunken)'
 
 /** Fresh module instance -> fresh warnedUnmappedCategories Set, without a test-only reset export. */
 async function loadFreshGetCategoryTone() {
