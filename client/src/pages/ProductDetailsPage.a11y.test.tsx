@@ -44,6 +44,11 @@ vi.mock('../state/CartContext', () => ({
   useCart: () => mockUseCart(),
 }))
 
+// ISSUE-115 — the page's heart reads favourites from context; inert here.
+vi.mock('../state/FavouritesContext', () => ({
+  useFavourites: () => ({ count: 0, isFavourite: () => false, toggle: async () => 'added' as const }),
+}))
+
 function product(overrides: Partial<ProductDetailModel> = {}): ProductDetailModel {
   return {
     slug: 'solgar-omega-3',

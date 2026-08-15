@@ -63,6 +63,11 @@ vi.mock('../state/CartContext', () => ({
   useCart: () => mockUseCart(),
 }))
 
+// ISSUE-115 — the card reads favourites from context; inert here.
+vi.mock('../state/FavouritesContext', () => ({
+  useFavourites: () => ({ count: 0, isFavourite: () => false, toggle: async () => 'added' as const }),
+}))
+
 // Checkpoint I — the facet payload drives the filter fieldsets. Mocked for
 // the same reason `useCatalogCategories` is: this file renders the real
 // page, and an unmocked hook would leave the option set empty for every

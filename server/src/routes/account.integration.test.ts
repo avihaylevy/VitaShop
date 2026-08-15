@@ -288,6 +288,9 @@ describe('the middleware ORDER, which the file calls the contract', () => {
             seen.push('limiter')
             next()
           },
+          // ISSUE-115 added a second limiter to the shape; this test's
+          // subject is /profile's ordering, so a pass-through suffices.
+          favourites: (_req, _res, next) => next(),
         },
       }),
     )

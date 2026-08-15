@@ -10,6 +10,11 @@ import { ProductGrid } from '../components/catalog/ProductGrid'
 import { DRAWER_SHOWN_SESSION_KEY, useAddToCart } from './useAddToCart'
 import type { ProductCardModel } from '../types/product'
 
+// ISSUE-115 — the card reads favourites from context; inert here.
+vi.mock('../state/FavouritesContext', () => ({
+  useFavourites: () => ({ count: 0, isFavourite: () => false, toggle: async () => 'added' as const }),
+}))
+
 /**
  * 🔴 THIS FILE EXISTS BECAUSE THE BEHAVIOUR IT COVERS HAD NO TEST AT ALL.
  *

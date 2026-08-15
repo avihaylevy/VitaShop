@@ -62,6 +62,11 @@ vi.mock('../state/CartContext', () => ({
   useCart: () => mockUseCart(),
 }))
 
+// ISSUE-115 — the card reads favourites from context; inert here.
+vi.mock('../state/FavouritesContext', () => ({
+  useFavourites: () => ({ count: 0, isFavourite: () => false, toggle: async () => 'added' as const }),
+}))
+
 const CATEGORY_VITAMINS: CatalogCategoryDto = { slug: 'vitamins', nameHe: 'ויטמינים', nameEn: 'Vitamins' }
 const CATEGORIES = [CATEGORY_VITAMINS]
 

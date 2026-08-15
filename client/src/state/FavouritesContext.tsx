@@ -1,42 +1,87 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+import { addFavourite, fetchFavourites, removeFavourite } from '../lib/favouritesApi'
+import { useSession } from './SessionContext'
 
 /**
- * Count-only interim state for the header favourites badge, mirroring
- * CartContext. A `Set` keyed by product id, so toggling the same product
- * twice is idempotent rather than double-counting. (ISSUE-059 sweep:
- * product cards have long existed; what is still missing is any way to ADD a
- * favourite — ISSUE-058, owned by MILESTONE-009, which replaces this
- * count-only interim state.)
+ * ISSUE-115 / REQ-F-034 — REAL favourites, replacing the count-only interim
+ * state that stood here since the header badge shipped (ISSUE-058's
+ * dead-end: a nav entry to a list nothing could add to).
+ *
+ * 🔴 SERVER-CONFIRMED, NEVER OPTIMISTIC — the same rule the cart earned at
+ * DEC-047 D1: the set updates when the server says so, and a failure leaves
+ * the heart exactly as it was.
+ *
+ * 🔴 A10 — the ACTION is gated, never the surface. A guest browsing the
+ * catalogue sees the hearts; pressing one returns 'auth-required' and the
+ * caller navigates to /login. No login wall in front of the catalogue.
+ *
+ * The context carries the SLUG SET (hearts + badge). The favourites PAGE
+ * fetches its own full card list — pages own their data; the context owns
+ * the shared, cheap projection.
  */
 
+export type FavouriteToggleResult = 'added' | 'removed' | 'auth-required' | 'failed'
+
 type FavouritesContextValue = {
+  /** Header badge — the number of favourited products. */
   count: number
-  isFavourite: (productId: string) => boolean
-  toggleFavourite: (productId: string) => void
+  isFavourite: (slug: string) => boolean
+  toggle: (slug: string) => Promise<FavouriteToggleResult>
 }
 
 const FavouritesContext = createContext<FavouritesContextValue | null>(null)
 
 export function FavouritesProvider({ children }: { children: ReactNode }) {
-  const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set())
+  const { isSignedIn } = useSession()
+  const [slugs, setSlugs] = useState<ReadonlySet<string>>(new Set())
 
-  const toggleFavourite = useCallback((productId: string) => {
-    setIds((current) => {
-      const next = new Set(current)
-      if (next.has(productId)) {
-        next.delete(productId)
-      } else {
-        next.add(productId)
-      }
-      return next
+  useEffect(() => {
+    if (!isSignedIn) {
+      // Sign-out (or a guest session): the set empties with the identity.
+      setSlugs(new Set())
+      return
+    }
+    const controller = new AbortController()
+    void fetchFavourites(controller.signal).then((result) => {
+      if (controller.signal.aborted) return
+      // A failed hydration leaves an empty set — hearts render unfilled and
+      // the first toggle still round-trips truthfully.
+      if (result.ok) setSlugs(new Set(result.items.map((item) => item.slug)))
     })
-  }, [])
+    return () => controller.abort()
+  }, [isSignedIn])
 
-  const isFavourite = useCallback((productId: string) => ids.has(productId), [ids])
+  const isFavourite = useCallback((slug: string) => slugs.has(slug), [slugs])
+
+  const toggle = useCallback(
+    async (slug: string): Promise<FavouriteToggleResult> => {
+      if (!isSignedIn) return 'auth-required'
+      const wasFavourite = slugs.has(slug)
+      const result = wasFavourite ? await removeFavourite(slug) : await addFavourite(slug)
+      if (result === 'unauthenticated') return 'auth-required'
+      if (result !== 'ok') return 'failed'
+      setSlugs((previous) => {
+        const next = new Set(previous)
+        if (wasFavourite) next.delete(slug)
+        else next.add(slug)
+        return next
+      })
+      return wasFavourite ? 'removed' : 'added'
+    },
+    [isSignedIn, slugs],
+  )
 
   const value = useMemo<FavouritesContextValue>(
-    () => ({ count: ids.size, isFavourite, toggleFavourite }),
-    [ids, isFavourite, toggleFavourite],
+    () => ({ count: slugs.size, isFavourite, toggle }),
+    [slugs, isFavourite, toggle],
   )
 
   return <FavouritesContext.Provider value={value}>{children}</FavouritesContext.Provider>

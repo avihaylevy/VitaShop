@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import type { PrismaClient } from '@prisma/client'
 import { createAccountRateLimiters, type AccountRateLimiters } from '../lib/rateLimit.js'
+import { mapProductToPublicCatalog } from '../lib/catalogMapper.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireActiveShopper } from './requireActiveShopper.js'
 
@@ -189,6 +190,83 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
        */
       defaultAddress: user.addresses[0] ?? null,
     })
+  })
+
+  /*
+   * ISSUE-115 / REQ-F-034 — favourites, the server half at last. The same
+   * contract as /profile: the SESSION is the only identity (no :userId
+   * anywhere — the IDOR shape TEST-050b names), the shared guards run first,
+   * and the router-level no-store covers every answer.
+   *
+   * 🔴 A10 — favourites GATE THE ACTION, NOT THE SURFACE: these routes are
+   * auth-only, while the catalogue that hosts the heart stays guest-open.
+   * The client sends a guest to /login instead of calling these.
+   */
+
+  /** The list — full card DTOs via the SAME mapper the catalogue uses, so a
+   *  favourite can never render differently from its catalogue card. Only
+   *  ACTIVE products are returned; the rows for soft-deleted products stay
+   *  (INV-03's recoverability — reactivation restores them). */
+  router.get('/favourites', limiters.favourites, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    try {
+      const rows = await prisma.favorite.findMany({
+        where: { userId, product: { isActive: true } },
+        orderBy: { createdAt: 'desc' },
+        include: { product: { include: { category: true, brand: true, images: true } } },
+      })
+      res.json({ items: rows.map((row) => mapProductToPublicCatalog(row.product)) })
+    } catch (error) {
+      console.error(`[account] favourites list failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'FAVOURITES_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
+  /** Add — PUT for idempotence: hearting twice is one favourite, never an
+   *  error and never a duplicate (the DB's @@unique backs the upsert). */
+  router.put('/favourites/:slug', limiters.favourites, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    // Express 5 types a param as string | string[]; a repeated segment is
+    // not a slug, so anything non-string reads as an unknown product.
+    const slug = typeof req.params.slug === 'string' ? req.params.slug : ''
+    try {
+      const product = await prisma.product.findFirst({
+        where: { slug, isActive: true },
+        select: { id: true },
+      })
+      // One answer for absent and inactive — the same rule the detail
+      // page's 404 states: the API must not add a distinction it withholds
+      // elsewhere.
+      if (!product) {
+        res.status(404).json({ error: { code: 'PRODUCT_NOT_FOUND', message: 'Unknown product.' } })
+        return
+      }
+      await prisma.favorite.upsert({
+        where: { userId_productId: { userId, productId: product.id } },
+        create: { userId, productId: product.id },
+        update: {},
+      })
+      res.status(204).end()
+    } catch (error) {
+      console.error(`[account] favourite add failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'FAVOURITES_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
+  /** Remove — idempotent: un-hearting an absent favourite is already the
+   *  state the shopper asked for. ⚠️ A HARD delete of the JOIN row — the
+   *  favourite itself IS the data being removed; INV-03's soft-delete rule
+   *  names Product and Order, not their join rows. */
+  router.delete('/favourites/:slug', limiters.favourites, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    const slug = typeof req.params.slug === 'string' ? req.params.slug : ''
+    try {
+      await prisma.favorite.deleteMany({ where: { userId, product: { slug } } })
+      res.status(204).end()
+    } catch (error) {
+      console.error(`[account] favourite remove failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'FAVOURITES_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
   })
 
   return router

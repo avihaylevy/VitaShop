@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
 import { useProductDetail } from '../hooks/useProductDetail'
@@ -9,8 +9,12 @@ import { StockState } from '../components/catalog/StockState'
 import { ADD_TO_CART_ATTRIBUTE } from '../components/catalog/ProductCard'
 import { CartDrawer } from '../components/cart/CartDrawer'
 import { useAddToCart } from '../hooks/useAddToCart'
+import { useFavourites } from '../state/FavouritesContext'
 import { getStockState } from '../lib/stockState'
 import { Button } from '../components/ui/Button'
+import { IconButton } from '../components/ui/IconButton'
+import { HeartIcon } from '../components/icons'
+import { QuantityStepper } from '../components/catalog/QuantityStepper'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import type { ProductDetailModel } from '../types/product'
 import type { SupportedLanguage } from '../i18n/index'
@@ -137,7 +141,7 @@ export function ProductDetailsPage() {
 type ProductDetailViewProps = {
   product: ProductDetailModel
   onBack: () => void
-  onAddToCart: (slug: string) => void
+  onAddToCart: (slug: string, quantity: number) => void
 }
 
 /**
@@ -148,8 +152,14 @@ type ProductDetailViewProps = {
  */
 function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewProps) {
   const { t } = useTranslation('catalog')
+  const navigate = useNavigate()
   // The same single disable condition as ProductCard: real stock only.
   const isOut = getStockState(product.stockQuantity, product.lowStockThreshold) === 'out'
+  // ISSUE-115 — the ISSUE-035 "decide together" rule's second half arrives:
+  // the detail page favourites through the same context as the cards.
+  const { isFavourite, toggle } = useFavourites()
+  const favourited = isFavourite(product.slug)
+  const [quantity, setQuantity] = useState(1)
 
   return (
     <article>
@@ -249,15 +259,32 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
             <PriceBlock price={product.price} />
             <StockState stockQuantity={product.stockQuantity} lowStockThreshold={product.lowStockThreshold} />
           </div>
-          <div>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* ISSUE-118 — the same shared stepper as the cards. */}
+            <QuantityStepper value={quantity} onChange={setQuantity} />
             <Button
               variant="primary"
               disabled={isOut}
-              onClick={() => onAddToCart(product.slug)}
+              onClick={() => {
+                onAddToCart(product.slug, quantity)
+                setQuantity(1)
+              }}
               {...{ [ADD_TO_CART_ATTRIBUTE]: product.slug }}
             >
               {t('addToCart')}
             </Button>
+            <IconButton
+              icon={<HeartIcon filled={favourited} />}
+              aria-pressed={favourited}
+              aria-label={favourited ? t('favourite.remove') : t('favourite.add')}
+              variant="ghost"
+              onClick={() => {
+                void toggle(product.slug).then((result) => {
+                  if (result === 'auth-required') navigate('/login')
+                })
+              }}
+              className="rounded-round border border-border-hairline"
+            />
           </div>
         </div>
       </div>

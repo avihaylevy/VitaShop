@@ -89,13 +89,16 @@ export function useAddToCart() {
   }, [])
 
   const handleAddToCart = useCallback(
-    (slug: string) => {
+    // ISSUE-118 — the caller may say HOW MANY (the stepper); one is still
+    // the default so every existing call site keeps its meaning. The server
+    // clamps regardless (§3.4).
+    (slug: string, quantity = 1) => {
       const trigger =
         gridRef.current?.querySelector<HTMLElement>(
           `[${ADD_TO_CART_ATTRIBUTE}="${CSS.escape(slug)}"]`,
         ) ?? null
 
-      void addItem(slug, 1).then((result) => {
+      void addItem(slug, quantity).then((result) => {
         if (!result || !mountedRef.current) return
 
         // 🔴 EVERY add is announced — quiet is not silent. The header badge

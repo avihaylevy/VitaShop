@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { ProductGrid } from './ProductGrid'
 import type { ProductCardModel } from '../../types/product'
+
+// ISSUE-115 — the card reads favourites from context; an inert mock keeps
+// this file about the CART action shape.
+vi.mock('../../state/FavouritesContext', () => ({
+  useFavourites: () => ({ count: 0, isFavourite: () => false, toggle: async () => 'added' as const }),
+}))
 
 /**
  * MILESTONE-008 Checkpoint F4 — the guard the TYPE used to be.
@@ -51,17 +57,43 @@ describe('a SHOPPING card', () => {
     expect(screen.getByRole('button', { name: /add to cart/i })).toBeTruthy()
   })
 
-  it('calls back with the slug, not with translated text', () => {
+  it('calls back with the slug and the chosen quantity (default 1)', () => {
     const onAddToCart = vi.fn()
     renderGrid(<ProductGrid products={[MODEL]} onAddToCart={onAddToCart} />)
     screen.getByRole('button', { name: /add to cart/i }).click()
-    expect(onAddToCart).toHaveBeenCalledWith('fixture-product')
+    expect(onAddToCart).toHaveBeenCalledWith('fixture-product', 1)
   })
 
-  it('keeps the "one link + one button" shape the ARIA contract states', () => {
+  it('🔴 ISSUE-118 — the stepper changes HOW MANY one press adds, then resets', () => {
+    const onAddToCart = vi.fn()
+    renderGrid(<ProductGrid products={[MODEL]} onAddToCart={onAddToCart} />)
+    const increase = screen.getByRole('button', { name: /increase quantity/i })
+    fireEvent.click(increase)
+    fireEvent.click(increase)
+    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    expect(onAddToCart).toHaveBeenCalledWith('fixture-product', 3)
+    // Reset after the hand-off: the next press is 1 again.
+    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    expect(onAddToCart).toHaveBeenLastCalledWith('fixture-product', 1)
+  })
+
+  it('the stepper floors at 1 and caps at 10 without disabling the focused button', () => {
+    renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
+    const decrease = screen.getByRole('button', { name: /decrease quantity/i })
+    const increase = screen.getByRole('button', { name: /increase quantity/i })
+    // At the floor: aria-disabled, still a real (focusable) button.
+    expect(decrease.getAttribute('aria-disabled')).toBe('true')
+    expect(decrease.hasAttribute('disabled')).toBe(false)
+    for (let i = 0; i < 12; i++) fireEvent.click(increase)
+    expect(increase.getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByText('10')).toBeTruthy()
+  })
+
+  it('keeps the ARIA shape: one accessible link + heart + stepper pair + add button', () => {
+    // ISSUE-115/118 widened the contract: heart, − , + , add = 4 buttons.
     renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
     expect(screen.getAllByRole('link')).toHaveLength(1)
-    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.getAllByRole('button')).toHaveLength(4)
   })
 })
 
@@ -84,17 +116,20 @@ describe('ISSUE-109 — the image is a click surface for the product, not a seco
 })
 
 describe('a NAVIGATIONAL card', () => {
-  it('renders the link and NO button', () => {
+  it('renders the link and ONLY the favourite button — no cart machinery', () => {
     renderGrid(<ProductGrid products={[MODEL]} navigational />)
     expect(screen.getAllByRole('link')).toHaveLength(1)
-    expect(screen.queryByRole('button')).toBeNull()
+    // The heart is on every card (ISSUE-115); the stepper and add button
+    // are the shopping card's alone.
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /add to cart/i })).toBeNull()
   })
 
   it('🔴 THE CONTROL — the two kinds really differ', () => {
     // Without this pair, either assertion could pass against a card that had
-    // lost its button everywhere, or grown one everywhere.
+    // lost its cart button everywhere, or grown one everywhere.
     const { unmount } = renderGrid(<ProductGrid products={[MODEL]} navigational />)
-    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('button', { name: /add to cart/i })).toBeNull()
     unmount()
 
     renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)

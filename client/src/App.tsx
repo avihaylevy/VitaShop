@@ -10,6 +10,7 @@ import { AdminOrdersPage } from './pages/AdminOrdersPage'
 import { OrderHistoryPage } from './pages/OrderHistoryPage'
 import { OrderDetailPage } from './pages/OrderDetailPage'
 import { RequireAuth } from './components/auth/RequireAuth'
+import { FavouritesPage } from './pages/FavouritesPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
@@ -93,6 +94,20 @@ function App() {
           element={
             <RequireAuth>
               <OrderDetailPage />
+            </RequireAuth>
+          }
+        />
+        {/*
+          ISSUE-115 — the favourites page the header has linked to since
+          MILESTONE-005. Until this route existed the link fell through to
+          the catch-all 404 (ISSUE-058's dead-end). RequireAuth is UX; the
+          routes 401 on their own and A10 keeps the hearts guest-visible.
+        */}
+        <Route
+          path="/favourites"
+          element={
+            <RequireAuth>
+              <FavouritesPage />
             </RequireAuth>
           }
         />

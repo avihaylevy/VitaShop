@@ -356,15 +356,24 @@ export const ADMIN_RATE_LIMITS = {
  */
 export const ACCOUNT_RATE_LIMITS = {
   profile: { windowMs: 15 * MINUTE, limit: 240 },
+  /*
+   * ISSUE-115 — favourites reads share the profile's budget; writes are a
+   * shopper clicking hearts, bounded well below this in any honest session.
+   * One shared ceiling keeps the surface simple; per-route ceilings can
+   * split later if abuse patterns ever differ.
+   */
+  favourites: { windowMs: 15 * MINUTE, limit: 240 },
 } as const
 
 export interface AccountRateLimiters {
   profile: RequestHandler
+  favourites: RequestHandler
 }
 
 export function createAccountRateLimiters(): AccountRateLimiters {
   return {
     profile: rateLimit({ ...SHARED, ...ACCOUNT_RATE_LIMITS.profile, keyGenerator: shopperKey }),
+    favourites: rateLimit({ ...SHARED, ...ACCOUNT_RATE_LIMITS.favourites, keyGenerator: shopperKey }),
   }
 }
 

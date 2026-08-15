@@ -15,6 +15,11 @@ import { NEW_ARRIVALS_COUNT } from '../hooks/useNewArrivals'
  * name it.
  */
 
+// ISSUE-115 — the card reads favourites from context; inert here.
+vi.mock('../state/FavouritesContext', () => ({
+  useFavourites: () => ({ count: 0, isFavourite: () => false, toggle: async () => 'added' as const }),
+}))
+
 function product(index: number) {
   return {
     slug: `product-${index}`,
