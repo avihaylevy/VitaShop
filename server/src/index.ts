@@ -12,6 +12,7 @@ import { cartRouter } from './routes/cart.js'
 import { createCheckoutRouter } from './routes/checkout.js'
 import { createOrderRouter } from './routes/orders.js'
 import { createAdminOrderRouter } from './routes/adminOrders.js'
+import { createAdminProductRouter } from './routes/adminProducts.js'
 import { createAccountRouter } from './routes/account.js'
 
 export const app = express()
@@ -83,6 +84,11 @@ app.use('/api/orders', createOrderRouter({ prisma }))
 // ⚠️ NO SCREENS — the admin UI is MILESTONE-010's; a minimal orders screen
 // comes with Checkpoint F.
 app.use('/api/admin/orders', createAdminOrderRouter({ prisma }))
+
+// MILESTONE-010 / DEC-088 — the product-admin routes (ISSUE-111): edit,
+// stock, price, the INV-03 activation toggle, create. Same per-request
+// role read; the seed remains the dev catalogue's reset (DEC-088 O1).
+app.use('/api/admin/products', createAdminProductRouter({ prisma }))
 
 // MILESTONE-008 Checkpoint F2b — REQ-F-041's pre-filled checkout details.
 // 🔴 The first route serving PERSONAL data. The session is the only identity

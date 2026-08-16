@@ -7,6 +7,8 @@ import { ProductDetailsPage } from './pages/ProductDetailsPage'
 import { CartPage } from './components/cart'
 import { CheckoutPage } from './pages/CheckoutPage'
 import { AdminOrdersPage } from './pages/AdminOrdersPage'
+import { AdminProductsPage } from './pages/AdminProductsPage'
+import { AdminProductNewPage } from './pages/AdminProductNewPage'
 import { OrderHistoryPage } from './pages/OrderHistoryPage'
 import { OrderDetailPage } from './pages/OrderDetailPage'
 import { RequireAuth } from './components/auth/RequireAuth'
@@ -70,6 +72,28 @@ function App() {
           element={
             <RequireAuth>
               <AdminOrdersPage />
+            </RequireAuth>
+          }
+        />
+        {/*
+          MILESTONE-010 / DEC-088 — the product-admin screens, linked from
+          the admin's menu the day they ship (the ISSUE-097/102/104 family).
+          RequireAuth is UX; the routes 403 on their own per request
+          (DEC-065), same as /admin/orders above.
+        */}
+        <Route
+          path="/admin/products"
+          element={
+            <RequireAuth>
+              <AdminProductsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/products/new"
+          element={
+            <RequireAuth>
+              <AdminProductNewPage />
             </RequireAuth>
           }
         />

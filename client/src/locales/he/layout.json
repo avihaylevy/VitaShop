@@ -30,7 +30,8 @@
     "signedInGreeting": "מחוברים",
     "myOrders": "ההזמנות שלי",
     "club": "מועדון החברות",
-    "adminOrders": "ניהול הזמנות"
+    "adminOrders": "ניהול הזמנות",
+    "adminProducts": "ניהול מוצרים"
   },
   "welcome": {
     "message": "ברוך הבא, {{name}}"

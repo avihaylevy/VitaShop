@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
+import { Pager } from '../components/ui/Pager'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import {
   reconcileStuckOrders as reconcileApi,
@@ -566,22 +567,14 @@ export function AdminOrdersPage() {
             </ul>
           )}
 
-          {state.page.totalPages > 1 && (
-            <div className="flex items-center gap-3">
-              <Button disabled={state.page.page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                {t('pager.previous')}
-              </Button>
-              <span className="text-sm text-text-muted">
-                {t('pager.position', { page: state.page.page, total: state.page.totalPages })}
-              </span>
-              <Button
-                disabled={state.page.page >= state.page.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                {t('pager.next')}
-              </Button>
-            </div>
-          )}
+          {/* The shared Pager (M-010 review) — it also replaced this page's
+              native `disabled`, which blurred the focused button at either
+              end of the range (the Chromium disable-blur family). */}
+          <Pager
+            page={state.page.page}
+            totalPages={state.page.totalPages}
+            onPage={(next) => setPage(next)}
+          />
         </>
       )}
     </main>

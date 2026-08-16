@@ -200,55 +200,65 @@ export function AccountMenu() {
           <div ref={menuRef} role="menu" aria-label={t('account.menuLabel')} onKeyDown={handleMenuKeyDown}>
           {isSignedIn ? (
             <>
-              <Link
-                role="menuitem"
-                /*
-                 * 🔴 ISSUE-102 — THIS POINTED AT `/account`, WHICH HAS NO
-                 * ROUTE. Every signed-in shopper who opened this menu and
-                 * clicked landed on the 404 page, and had done since the menu
-                 * shipped. Checkpoint G2 built `/account/orders`, so the link
-                 * now goes somewhere and the label says what it does.
-                 *
-                 * ⚠️ The personal area REQ-F-051 describes — profile,
-                 * addresses, favourites — is still unbuilt. Naming this "my
-                 * orders" is the honest description of what exists.
-                 */
-                to="/account/orders"
-                onClick={() => setOpen(false)}
-                className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
-              >
-                {t('account.myOrders')}
-              </Link>
-              {/* MILESTONE-012 Checkpoint B — linked the day it shipped. */}
-              <Link
-                role="menuitem"
-                to="/account/club"
-                onClick={() => setOpen(false)}
-                className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
-              >
-                {t('account.club')}
-              </Link>
               {/*
-                🔴 ISSUE-097 CLOSED — the admin screen has existed since F3b
-                with NOTHING linking to it, so an admin signing in found a site
-                that behaved exactly like a shopper's. The user reported it as
-                "I cannot do anything as an admin".
+                MILESTONE-010 / DEC-088 O3 (ISSUE-111's first half, the
+                user's own report: "as an admin I don't need a My-orders
+                tab"). An ADMIN'S menu is the role's toolbox — manage
+                orders + manage products — and the shopper entries are
+                HIDDEN for the role, not merely de-emphasised.
 
-                🔴 THIS LINK IS UX, NOT SECURITY. `isAdmin` comes from the
-                session response (DEC-071) and only decides whether the entry is
-                DRAWN. Every admin route re-reads `User.role` from the database
-                per request (DEC-065), so a demoted admin who still has this
-                markup cached gets a 403 the moment they use it.
+                🔴 THE SPLIT IS UX, NOT SECURITY (the ISSUE-097 comment's
+                rule stands): `isAdmin` comes from the session response
+                (DEC-071) and only decides what is DRAWN. Every admin route
+                re-reads User.role per request (DEC-065); a shopper who
+                forges the markup gets a 403 on use, and a demoted admin's
+                cached menu dies the same way.
               */}
-              {isAdmin && (
-                <Link
-                  role="menuitem"
-                  to="/admin/orders"
-                  onClick={() => setOpen(false)}
-                  className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
-                >
-                  {t('account.adminOrders')}
-                </Link>
+              {isAdmin ? (
+                <>
+                  <Link
+                    role="menuitem"
+                    to="/admin/orders"
+                    onClick={() => setOpen(false)}
+                    className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+                  >
+                    {t('account.adminOrders')}
+                  </Link>
+                  <Link
+                    role="menuitem"
+                    to="/admin/products"
+                    onClick={() => setOpen(false)}
+                    className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+                  >
+                    {t('account.adminProducts')}
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    role="menuitem"
+                    /*
+                     * 🔴 ISSUE-102 — THIS POINTED AT `/account`, WHICH HAS NO
+                     * ROUTE; every signed-in shopper landed on the 404 page.
+                     * Checkpoint G2 built `/account/orders`; the label says
+                     * what exists (REQ-F-051's fuller area is still unbuilt).
+                     */
+                    to="/account/orders"
+                    onClick={() => setOpen(false)}
+                    className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+                  >
+                    {t('account.myOrders')}
+                  </Link>
+                  {/* MILESTONE-012 Checkpoint B — linked the day it shipped. */}
+                  <Link
+                    role="menuitem"
+                    to="/account/club"
+                    onClick={() => setOpen(false)}
+                    className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+                  >
+                    {t('account.club')}
+                  </Link>
+                </>
               )}
               <button
                 role="menuitem"

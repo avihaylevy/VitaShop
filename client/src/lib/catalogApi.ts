@@ -17,7 +17,9 @@ import type {
   ProductDetailDto,
 } from '../types/catalog.js'
 
-const DOSAGE_FORM_KEYS: readonly DosageFormKey[] = ['CAPSULE', 'TABLET', 'DROPS', 'POWDER', 'SYRUP']
+// Exported since MILESTONE-010: the admin create form offers the same
+// list, and a second client copy is the drift the review flagged.
+export const DOSAGE_FORM_KEYS: readonly DosageFormKey[] = ['CAPSULE', 'TABLET', 'DROPS', 'POWDER', 'SYRUP']
 
 /**
  * Typed catalogue-request failure. `code` is either a server-issued

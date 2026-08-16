@@ -385,6 +385,29 @@ export function createAccountRateLimiters(): AccountRateLimiters {
   }
 }
 
+/**
+ * MILESTONE-010 — the product-admin router's ceilings. The same two shapes
+ * the order router established: a READ an admin refreshes while working
+ * (list, 240) and a HUMAN-DRIVEN WRITE (write, 60 — the `status` pacing;
+ * every write here edits one product an admin is looking at).
+ */
+export const ADMIN_PRODUCT_RATE_LIMITS = {
+  list: { windowMs: 15 * MINUTE, limit: 240 },
+  write: { windowMs: 15 * MINUTE, limit: 60 },
+} as const
+
+export interface AdminProductRateLimiters {
+  list: RequestHandler
+  write: RequestHandler
+}
+
+export function createAdminProductRateLimiters(): AdminProductRateLimiters {
+  return {
+    list: rateLimit({ ...SHARED, ...ADMIN_PRODUCT_RATE_LIMITS.list, keyGenerator: shopperKey }),
+    write: rateLimit({ ...SHARED, ...ADMIN_PRODUCT_RATE_LIMITS.write, keyGenerator: shopperKey }),
+  }
+}
+
 export interface AdminRateLimiters {
   status: RequestHandler
   list: RequestHandler

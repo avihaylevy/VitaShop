@@ -30,7 +30,8 @@
     "signedInGreeting": "Signed in",
     "myOrders": "My orders",
     "club": "Membership club",
-    "adminOrders": "Manage orders"
+    "adminOrders": "Manage orders",
+    "adminProducts": "Manage products"
   },
   "welcome": {
     "message": "Welcome, {{name}}"

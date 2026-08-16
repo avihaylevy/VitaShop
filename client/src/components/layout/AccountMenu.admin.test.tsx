@@ -64,6 +64,33 @@ describe('the account menu', () => {
     expect(entry.getAttribute('href')).toBe('/admin/orders')
   })
 
+  it('🔴 DEC-088 O3 — an ADMIN gets the toolbox and NO shopper entries', async () => {
+    respondSession({ authenticated: true, role: 'admin' })
+    renderMenu()
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /account menu/i })).toBeTruthy())
+    await openMenu()
+
+    const products = await screen.findByRole('menuitem', { name: /manage products/i })
+    expect(products.getAttribute('href')).toBe('/admin/products')
+    // ISSUE-111's own report: "as an admin I don't need a My-orders tab".
+    expect(screen.queryByRole('menuitem', { name: /my orders/i })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /membership club/i })).toBeNull()
+    // Sign out is a person's, not a role's — it stays.
+    expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeTruthy()
+  })
+
+  it('🔴 the CONTROL — a shopper sees no products entry, and keeps their own entries', async () => {
+    respondSession({ authenticated: true, role: 'customer' })
+    renderMenu()
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /account menu/i })).toBeTruthy())
+    await openMenu()
+
+    expect(await screen.findByRole('menuitem', { name: /my orders/i })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: /manage products/i })).toBeNull()
+  })
+
   it('🔴 hides it from an ordinary shopper', async () => {
     respondSession({ authenticated: true, role: 'customer' })
     renderMenu()
