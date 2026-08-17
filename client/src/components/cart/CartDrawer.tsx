@@ -5,7 +5,7 @@ import { useCart } from '../../state/CartContext'
 import { toCartLineDisplay, type CartLineDisplay } from '../../lib/cartDisplay'
 import type { SupportedLanguage } from '../../i18n'
 import { PriceBlock } from '../catalog/PriceBlock'
-import { Drawer } from '../ui/Drawer'
+import { CenterDialog } from '../ui/CenterDialog'
 import { FOCUS_RING } from '../ui/focusRing'
 import { CartItemRow } from './CartItemRow'
 import { useCartOutcomeMessage } from './CartOutcomeNotice'
@@ -121,7 +121,10 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
   }, [removedName])
 
   return (
-    <Drawer open={open} onClose={onClose} title={t('drawer.title')} returnFocusRef={returnFocusRef}>
+    // The user's call (2026-08-16): a centered compact dialog, not the
+    // edge drawer. Everything inside is untouched — DEC-073's editing
+    // panel contract lives in the content, not the frame.
+    <CenterDialog open={open} onClose={onClose} title={t('drawer.title')} returnFocusRef={returnFocusRef}>
       <div className="flex flex-col gap-4 p-4">
         {lines.length === 0 ? (
           <p className="text-sm text-text-muted">{t('drawer.empty')}</p>
@@ -243,6 +246,6 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
           {t('drawer.continue')}
         </button>
       </div>
-    </Drawer>
+    </CenterDialog>
   )
 }
