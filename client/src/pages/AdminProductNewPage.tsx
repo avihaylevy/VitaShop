@@ -327,13 +327,29 @@ export function AdminProductNewPage() {
             picked file goes up immediately and the returned server path
             lands in the imageUrl input above, visible and editable. One
             downstream pipeline for both.
+
+            🔴 A visible BUTTON drives it (the user's report: the bare
+            native file input did not read as clickable). The input stays
+            in the DOM, visually hidden but focusable-by-proxy: the button
+            clicks it, so the browser's file picker and the change event
+            are untouched.
           */}
           <FieldRow id="np-image-file" label={t('products.form.imageFile')} hint={t('products.form.imageFileHint')}>
+            <Button
+              type="button"
+              variant="secondary"
+              loading={uploading}
+              onClick={() => document.getElementById('np-image-file')?.click()}
+            >
+              {uploading ? t('products.form.uploading') : t('products.form.imagePick')}
+            </Button>
             <input
               id="np-image-file"
               type="file"
               accept="image/png,image/jpeg,image/webp"
               aria-busy={uploading || undefined}
+              className="sr-only"
+              tabIndex={-1}
               onChange={(event) => {
                 const file = event.target.files?.[0]
                 if (!file || uploading) return
@@ -364,7 +380,6 @@ export function AdminProductNewPage() {
                   }
                 })
               }}
-              className={`${FOCUS_RING} rounded-card text-sm`}
             />
           </FieldRow>
           {/* ALWAYS mounted — a live region that mounts with its message

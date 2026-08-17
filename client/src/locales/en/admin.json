@@ -95,6 +95,7 @@
       "imageUrl": "Product image link (optional)",
       "imageUrlHint": "A full http(s) address of an image, or the path an upload returned. Empty = the product shows without an image",
       "imageFile": "Or upload an image file",
+      "imagePick": "Choose an image file…",
       "imageFileHint": "PNG / JPEG / WebP up to 5MB. The file is stored on the server and the path fills the link field",
       "uploading": "Uploading the image…",
       "uploaded": "The image was uploaded and the link field was filled.",
