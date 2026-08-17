@@ -24,11 +24,21 @@ import type { AdminProductOptions, AdminProductRow } from '../types/adminProduct
  * the form RESETS for the next product rather than unmounting.
  */
 
+/**
+ * The brand select's "new company" sentinel — never a real row id (uuid).
+ * Picking it reveals the two new-brand fields; the payload then carries
+ * newBrandName/newBrandNameEn INSTEAD of brandId (user report 2026-08-17:
+ * a product from a company not yet in the DB was uncreatable).
+ */
+const NEW_BRAND_VALUE = '__new__'
+
 const EMPTY_FORM = {
   nameHe: '',
   nameEn: '',
   categoryId: '',
   brandId: '',
+  newBrandName: '',
+  newBrandNameEn: '',
   dosageForm: 'CAPSULE',
   packageQuantity: '',
   usageInstructions: '',
@@ -38,7 +48,14 @@ const EMPTY_FORM = {
   descriptionEn: '',
   warningsAllergens: '',
   imageUrl: '',
+  // DEC-083 amended — tri-state dietary claims: '' = no claim (null),
+  // 'true'/'false' = the admin's stated claim.
+  isKosher: '',
+  isGlutenFree: '',
+  isVegan: '',
 }
+
+const DIETARY_KEYS = ['isKosher', 'isGlutenFree', 'isVegan'] as const
 
 type OptionsState =
   | { status: 'loading' }
@@ -49,6 +66,11 @@ export function AdminProductNewPage() {
   const { t, i18n } = useTranslation('admin')
   const [optionsState, setOptionsState] = useState<OptionsState>({ status: 'loading' })
   const [form, setForm] = useState(EMPTY_FORM)
+  /** EXISTING goals ticked, by id. */
+  const [goalIds, setGoalIds] = useState<string[]>([])
+  /** NEW goals queued for this product — both names required (DEC-017). */
+  const [newGoals, setNewGoals] = useState<{ nameHe: string; nameEn: string }[]>([])
+  const [goalDraft, setGoalDraft] = useState({ nameHe: '', nameEn: '' })
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
   /** '' | uploading-text | uploaded-text — read by an ALWAYS-mounted status. */
@@ -80,6 +102,34 @@ export function AdminProductNewPage() {
   // from it silently degraded a specific message to the generic one).
   const codeMessage = (code: string) => t([`products.errors.${code}`, 'products.failure.server'])
 
+  /**
+   * Queue the drafted new goal. Shared by the add-button AND Enter inside
+   * the draft inputs — review finding: Enter in a text input submits the
+   * FORM, which would have created the product WITHOUT the goal the admin
+   * was mid-typing.
+   */
+  function addDraftGoal() {
+    const nameHe = goalDraft.nameHe.trim()
+    const nameEn = goalDraft.nameEn.trim()
+    if (nameHe === '' || nameEn === '') return
+    setNewGoals((current) =>
+      current.some(
+        (goal) =>
+          goal.nameHe.toLowerCase() === nameHe.toLowerCase() ||
+          goal.nameEn.toLowerCase() === nameEn.toLowerCase(),
+      )
+        ? current
+        : [...current, { nameHe, nameEn }],
+    )
+    setGoalDraft({ nameHe: '', nameEn: '' })
+  }
+
+  function addGoalOnEnter(event: React.KeyboardEvent) {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    addDraftGoal()
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     // 🔴 uploading blocks too (review finding): submitting mid-upload
@@ -101,7 +151,16 @@ export function AdminProductNewPage() {
       nameHe: form.nameHe,
       nameEn: form.nameEn,
       categoryId: form.categoryId,
-      brandId: form.brandId,
+      // Exactly ONE brand shape travels (the server's superRefine rule):
+      // an existing row's id, or the new company's name(s).
+      ...(form.brandId === NEW_BRAND_VALUE
+        ? {
+            newBrandName: form.newBrandName,
+            ...(form.newBrandNameEn.trim() === ''
+              ? {}
+              : { newBrandNameEn: form.newBrandNameEn.trim() }),
+          }
+        : { brandId: form.brandId }),
       dosageForm: form.dosageForm,
       packageQuantity: asNumber(form.packageQuantity),
       usageInstructions: form.usageInstructions,
@@ -110,6 +169,13 @@ export function AdminProductNewPage() {
       descriptionHe: form.descriptionHe,
       descriptionEn: form.descriptionEn,
       warningsAllergens: form.warningsAllergens,
+      // Tri-state claims: '' (no claim) is OMITTED — the column's null is
+      // the server-side default, never a value this client invents.
+      ...(form.isKosher === '' ? {} : { isKosher: form.isKosher === 'true' }),
+      ...(form.isGlutenFree === '' ? {} : { isGlutenFree: form.isGlutenFree === 'true' }),
+      ...(form.isVegan === '' ? {} : { isVegan: form.isVegan === 'true' }),
+      ...(goalIds.length > 0 ? { healthGoalIds: goalIds } : {}),
+      ...(newGoals.length > 0 ? { newHealthGoals: newGoals } : {}),
       // DEC-089b — absent means the placeholder; an empty field is not a URL.
       ...(form.imageUrl.trim() === '' ? {} : { imageUrl: form.imageUrl.trim() }),
     })
@@ -142,7 +208,31 @@ export function AdminProductNewPage() {
     // Success: announced (keyed, re-announces on repeat), form cleared for
     // the next product — the form itself never unmounts.
     setCreated((previous) => ({ product: result.product, id: (previous?.id ?? 0) + 1 }))
+    // A just-created company joins the picker so the NEXT product can pick
+    // it without a reload (the server answers the resolved brand row).
+    setOptionsState((current) =>
+      current.status === 'ready' &&
+      !current.options.brands.some((brand) => brand.id === result.product.brand.id)
+        ? {
+            status: 'ready',
+            options: {
+              ...current.options,
+              brands: [...current.options.brands, result.product.brand],
+            },
+          }
+        : current,
+    )
+    // New goals now exist server-side but the create DTO does not carry
+    // them — re-fetch the pickers so the NEXT product can tick them.
+    if (newGoals.length > 0) {
+      void requestAdminProductOptions().then((options) => {
+        if (options.ok) setOptionsState({ status: 'ready', options: options.options })
+      })
+    }
     setForm(EMPTY_FORM)
+    setGoalIds([])
+    setNewGoals([])
+    setGoalDraft({ nameHe: '', nameEn: '' })
   }
 
   const inputClass = `${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`
@@ -232,9 +322,44 @@ export function AdminProductNewPage() {
                     {brand.nameEn ?? brand.name}
                   </option>
                 ))}
+                <option value={NEW_BRAND_VALUE}>{t('products.form.brandNew')}</option>
               </select>
             </FieldRow>
           </div>
+
+          {/* The new-company fields — revealed by the admin's own pick, so
+              this mount/unmount is user-driven, not an async success (the
+              saveAddress-checkbox precedent). */}
+          {form.brandId === NEW_BRAND_VALUE && (
+            <div className="flex flex-wrap gap-4">
+              <FieldRow
+                id="np-brand-new-name"
+                label={t('products.form.brandNewName')}
+                className="min-w-48 flex-1"
+              >
+                <input
+                  id="np-brand-new-name"
+                  value={form.newBrandName}
+                  onChange={(e) => set('newBrandName', e.target.value)}
+                  className={inputClass}
+                />
+              </FieldRow>
+              <FieldRow
+                id="np-brand-new-name-en"
+                label={t('products.form.brandNewNameEn')}
+                hint={t('products.form.brandNewNameEnHint')}
+                className="min-w-48 flex-1"
+              >
+                <input
+                  id="np-brand-new-name-en"
+                  value={form.newBrandNameEn}
+                  onChange={(e) => set('newBrandNameEn', e.target.value)}
+                  className={inputClass}
+                  dir="ltr"
+                />
+              </FieldRow>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-4">
             <FieldRow id="np-dosage" label={t('products.form.dosageForm')} className="min-w-40 flex-1">
@@ -395,6 +520,126 @@ export function AdminProductNewPage() {
               className={areaClass}
             />
           </FieldRow>
+
+          {/* DEC-083 amended — the admin's tri-state dietary claims. "No
+              claim" is the default and travels as NOTHING (null column). */}
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-text-ink">{t('products.form.dietary')}</legend>
+            <p className="text-xs text-text-muted">{t('products.form.dietaryHint')}</p>
+            <div className="flex flex-wrap gap-4">
+              {DIETARY_KEYS.map((key) => (
+                <FieldRow
+                  key={key}
+                  id={`np-${key}`}
+                  label={t(`products.form.${key}`)}
+                  className="min-w-40 flex-1"
+                >
+                  <select
+                    id={`np-${key}`}
+                    value={form[key]}
+                    onChange={(e) => set(key, e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">{t('products.form.claimNone')}</option>
+                    <option value="true">{t('products.form.claimYes')}</option>
+                    <option value="false">{t('products.form.claimNo')}</option>
+                  </select>
+                </FieldRow>
+              ))}
+            </div>
+          </fieldset>
+
+          {/* Health goals — tick existing, and/or queue NEW bilingual
+              goals (user decision 2026-08-17). Queued-goal removal is a
+              user-driven control, not an async success unmount. */}
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-text-ink">{t('products.form.healthGoals')}</legend>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {optionsState.options.healthGoals.map((goal) => (
+                <label key={goal.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className={FOCUS_RING}
+                    checked={goalIds.includes(goal.id)}
+                    onChange={(e) =>
+                      setGoalIds((current) =>
+                        e.target.checked
+                          ? [...current, goal.id]
+                          : current.filter((id) => id !== goal.id),
+                      )
+                    }
+                  />
+                  {i18n.language === 'he' ? goal.nameHe : goal.nameEn}
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-end gap-4">
+              <FieldRow
+                id="np-goal-new-he"
+                label={t('products.form.goalNewHe')}
+                className="min-w-40 flex-1"
+              >
+                <input
+                  id="np-goal-new-he"
+                  value={goalDraft.nameHe}
+                  onChange={(e) => setGoalDraft((d) => ({ ...d, nameHe: e.target.value }))}
+                  onKeyDown={addGoalOnEnter}
+                  className={inputClass}
+                />
+              </FieldRow>
+              <FieldRow
+                id="np-goal-new-en"
+                label={t('products.form.goalNewEn')}
+                className="min-w-40 flex-1"
+              >
+                <input
+                  id="np-goal-new-en"
+                  value={goalDraft.nameEn}
+                  onChange={(e) => setGoalDraft((d) => ({ ...d, nameEn: e.target.value }))}
+                  onKeyDown={addGoalOnEnter}
+                  className={inputClass}
+                  dir="ltr"
+                />
+              </FieldRow>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-disabled={
+                  goalDraft.nameHe.trim() === '' || goalDraft.nameEn.trim() === '' || undefined
+                }
+                onClick={addDraftGoal}
+              >
+                {t('products.form.goalAdd')}
+              </Button>
+            </div>
+            <p className="text-xs text-text-muted">{t('products.form.goalNewHint')}</p>
+            {newGoals.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {newGoals.map((goal) => (
+                  <li
+                    key={goal.nameEn}
+                    className="flex items-center gap-2 rounded-card border border-border-control px-2 py-1"
+                  >
+                    <span>
+                      {goal.nameHe} · <span dir="ltr">{goal.nameEn}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className={`${FOCUS_RING} rounded-compact text-state-error`}
+                      onClick={() =>
+                        setNewGoals((current) => current.filter((g) => g.nameEn !== goal.nameEn))
+                      }
+                      aria-label={t('products.form.goalRemove', {
+                        name: i18n.language === 'he' ? goal.nameHe : goal.nameEn,
+                      })}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </fieldset>
 
           <Button
             type="submit"

@@ -54,6 +54,17 @@ const packageQuantitySchema = z
   .positive('PACKAGE_QUANTITY_INVALID')
   .max(MAX_PACKAGE_QUANTITY, 'PACKAGE_QUANTITY_INVALID')
 
+/**
+ * DEC-083 AMENDED (user decision 2026-08-17): the admin IS a legitimate
+ * writer of the dietary claims now — a tri-state per flag, exactly the
+ * column's shape: null = no claim (the default), true/false = the admin's
+ * stated claim, their responsibility like price (DEC-077) and warnings
+ * already are. The filters keep matching `true` only, so a product joins
+ * a dietary filter only when the admin actively marks it.
+ */
+const dietarySchema = (code: string) =>
+  z.union([z.boolean(), z.null()], { message: code }).optional()
+
 const FIELD_SCHEMAS = {
   nameHe: z.string({ message: 'NAME_HE_REQUIRED' }).trim().min(1, 'NAME_HE_REQUIRED'),
   nameEn: z.string({ message: 'NAME_EN_REQUIRED' }).trim().min(1, 'NAME_EN_REQUIRED'),
@@ -72,15 +83,15 @@ const FIELD_SCHEMAS = {
   price: priceSchema,
   stockQuantity: stockSchema,
   packageQuantity: packageQuantitySchema,
+  isKosher: dietarySchema('KOSHER_INVALID'),
+  isGlutenFree: dietarySchema('GLUTEN_FREE_INVALID'),
+  isVegan: dietarySchema('VEGAN_INVALID'),
 } as const
 
 /**
- * 🔴 DIETARY FLAGS ARE DELIBERATELY ABSENT — from BOTH schemas (review
- * finding). DEC-083 makes them SOURCED-ONLY claims: a value is written
- * only when a manufacturer page states it, and an admin free-typing
- * "kosher" is an invented claim about a real product. The CSV+seed remain
- * the flags' only writers; `.strict()` below makes a body carrying them a
- * named refusal rather than a silent no-op.
+ * ⚠️ DEC-088 O1 still applies to the flags exactly as to price/stock: a
+ * `prisma db seed` converges a SEEDED product's flags back to the CSV.
+ * Admin edits are the live-DB truth between resets.
  */
 
 /**
@@ -102,14 +113,38 @@ export type ProductPatchInput = z.infer<typeof productPatchSchema>
 
 /**
  * CREATE — DEC-088 O2: the full bilingual form, no image (ISSUE-008), the
- * category and brand chosen from EXISTING rows by id. The slug is NOT a
- * field: DEC-088 O4 derives it from nameEn server-side.
+ * category chosen from EXISTING rows by id. The slug is NOT a field:
+ * DEC-088 O4 derives it from nameEn server-side.
+ *
+ * 🔴 BRAND: either an EXISTING row by id (`brandId`) or a NEW company by
+ * name (`newBrandName`, optional Latin form `newBrandNameEn`) — exactly
+ * one of the two (user report 2026-08-17: a product from a company not
+ * yet in the DB was uncreatable; categories stay canonical-only, brands
+ * are open taxonomy). The superRefine below owns the exactly-one rule so
+ * each shape failure carries its own name.
  */
 export const productCreateSchema = z.strictObject({
   nameHe: FIELD_SCHEMAS.nameHe,
   nameEn: FIELD_SCHEMAS.nameEn,
   categoryId: z.string({ message: 'CATEGORY_REQUIRED' }).min(1, 'CATEGORY_REQUIRED'),
-  brandId: z.string({ message: 'BRAND_REQUIRED' }).min(1, 'BRAND_REQUIRED'),
+  brandId: z.string({ message: 'BRAND_REQUIRED' }).min(1, 'BRAND_REQUIRED').optional(),
+  newBrandName: z
+    .string({ message: 'NEW_BRAND_NAME_REQUIRED' })
+    .trim()
+    .min(1, 'NEW_BRAND_NAME_REQUIRED')
+    .optional(),
+  // The manufacturer's Latin form (DEC-080's column) — the admin's claim,
+  // like every other admin-typed field. Empty is "none yet" (the column is
+  // nullable), so it collapses to absent the way imageUrl's empty does.
+  newBrandNameEn: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() : value),
+    z
+      .union([
+        z.literal('').transform(() => undefined),
+        z.string({ message: 'NEW_BRAND_NAME_EN_INVALID' }),
+      ])
+      .optional(),
+  ),
   dosageForm: z.enum(DOSAGE_FORMS, { message: 'DOSAGE_FORM_INVALID' }),
   packageQuantity: packageQuantitySchema,
   usageInstructions: FIELD_SCHEMAS.usageInstructions,
@@ -118,6 +153,36 @@ export const productCreateSchema = z.strictObject({
   descriptionHe: FIELD_SCHEMAS.descriptionHe,
   descriptionEn: FIELD_SCHEMAS.descriptionEn,
   warningsAllergens: FIELD_SCHEMAS.warningsAllergens.default(''),
+  // The admin's dietary claims (DEC-083 amended) — absent means null,
+  // which is exactly "no claim" in the column's own vocabulary.
+  isKosher: FIELD_SCHEMAS.isKosher,
+  isGlutenFree: FIELD_SCHEMAS.isGlutenFree,
+  isVegan: FIELD_SCHEMAS.isVegan,
+  /**
+   * Health goals (user decision 2026-08-17): EXISTING goals by id, and/or
+   * NEW goals by bilingual name pair — HealthGoal carries a required
+   * nameHe AND nameEn (DEC-017's paired columns), so a new goal must
+   * arrive with both. Bounded so a runaway payload is a named 400.
+   */
+  healthGoalIds: z
+    .array(z.string({ message: 'HEALTH_GOAL_IDS_INVALID' }).min(1, 'HEALTH_GOAL_IDS_INVALID'), {
+      message: 'HEALTH_GOAL_IDS_INVALID',
+    })
+    .max(20, 'HEALTH_GOAL_IDS_INVALID')
+    .optional(),
+  newHealthGoals: z
+    .array(
+      z.strictObject(
+        {
+          nameHe: z.string({ message: 'NEW_HEALTH_GOAL_INVALID' }).trim().min(1, 'NEW_HEALTH_GOAL_INVALID'),
+          nameEn: z.string({ message: 'NEW_HEALTH_GOAL_INVALID' }).trim().min(1, 'NEW_HEALTH_GOAL_INVALID'),
+        },
+        { message: 'NEW_HEALTH_GOAL_INVALID' },
+      ),
+      { message: 'NEW_HEALTH_GOAL_INVALID' },
+    )
+    .max(20, 'NEW_HEALTH_GOAL_INVALID')
+    .optional(),
   /**
    * DEC-089b/c — an OPTIONAL image: an absolute http(s) URL (external
    * link) or a server-hosted upload path ('/uploads/products/<name>', the
@@ -147,6 +212,26 @@ export const productCreateSchema = z.strictObject({
       .optional(),
   ),
 })
+  /**
+   * Exactly one brand shape per create. Both present is a contradiction
+   * (which brand did the admin mean?); neither is the old BRAND_REQUIRED;
+   * a stray Latin form beside a brandId is the same contradiction — the
+   * client never sends it, so only a raw API caller can, and it refuses
+   * loudly rather than silently dropping a field.
+   */
+  .superRefine((data, ctx) => {
+    const hasId = data.brandId !== undefined
+    const hasNew = data.newBrandName !== undefined
+    if (!hasId && !hasNew) {
+      ctx.addIssue({ code: 'custom', path: ['brandId'], message: 'BRAND_REQUIRED' })
+    }
+    if (hasId && hasNew) {
+      ctx.addIssue({ code: 'custom', path: ['brandId'], message: 'BRAND_CONFLICT' })
+    }
+    if (hasId && data.newBrandNameEn !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['newBrandNameEn'], message: 'BRAND_CONFLICT' })
+    }
+  })
 
 export type ProductCreateInput = z.infer<typeof productCreateSchema>
 

@@ -226,7 +226,7 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
    */
   router.get('/options', limiters.list, requireShopper, requireAdmin, async (_req, res) => {
     try {
-      const [categories, brands] = await Promise.all([
+      const [categories, brands, healthGoals] = await Promise.all([
         prisma.category.findMany({
           select: { id: true, nameHe: true, nameEn: true },
           orderBy: { nameHe: 'asc' },
@@ -234,6 +234,10 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
         prisma.brand.findMany({
           select: { id: true, name: true, nameEn: true },
           orderBy: { name: 'asc' },
+        }),
+        prisma.healthGoal.findMany({
+          select: { id: true, nameHe: true, nameEn: true },
+          orderBy: { nameHe: 'asc' },
         }),
       ])
       res.json({
@@ -248,6 +252,7 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
           (category) => findCanonicalCategoryByNameHe(category.nameHe) !== undefined,
         ),
         brands,
+        healthGoals,
       })
     } catch (error) {
       console.error('[admin] listing product options failed', error)
@@ -412,10 +417,11 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
   })
 
   /**
-   * CREATE — DEC-088 O2 (no image; the shop's imageless placeholder
-   * renders) and O4 (slug derived from nameEn, immutable, uniqueness by
-   * numeric suffix). Category and brand must be EXISTING rows: inventing
-   * taxonomy stays a seed affair in v1 (§10.5).
+   * CREATE — DEC-088 O4 (slug derived from nameEn, immutable, uniqueness
+   * by numeric suffix) as amended by the 2026-08-17 user decisions:
+   * DEC-089b's optional image, a NEW company by name (§10.2 amendment),
+   * and DEC-092's dietary claims + health goals incl. inline new goals.
+   * Only CATEGORIES remain existing-canonical-rows-only.
    */
   router.post('/', limiters.write, requireShopper, requireAdmin, async (req, res) => {
     const parsed = parseProductCreate(req.body ?? {})
@@ -446,13 +452,10 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
     }
 
     try {
-      const [category, brand] = await Promise.all([
-        prisma.category.findUnique({
-          where: { id: input.categoryId },
-          select: { id: true, nameHe: true },
-        }),
-        prisma.brand.findUnique({ where: { id: input.brandId }, select: { id: true } }),
-      ])
+      const category = await prisma.category.findUnique({
+        where: { id: input.categoryId },
+        select: { id: true, nameHe: true },
+      })
       if (!category) {
         res.status(400).json({
           error: { code: 'CATEGORY_NOT_FOUND', message: 'No such category.' },
@@ -474,19 +477,155 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
         })
         return
       }
-      if (!brand) {
-        res.status(400).json({ error: { code: 'BRAND_NOT_FOUND', message: 'No such brand.' } })
-        return
+
+      /*
+       * The brand — an EXISTING row by id, or a NEW company by name (user
+       * report 2026-08-17). A new name is first matched CASE-INSENSITIVELY
+       * against both stored forms: "solgar" typed again must attach to the
+       * existing סולגאר row, not mint a duplicate — Brand.name carries no
+       * unique constraint, so this lookup is the only dedupe there is.
+       * The unmatched-new-brand row is created NESTED inside the product
+       * create below, so a refused or failed create leaves no orphan
+       * brand (the DEC-089b image-row reasoning, applied to taxonomy).
+       * ⚠️ Two simultaneous creates of the same new name can still race
+       * past the lookup into two rows — accepted: a single-admin dev
+       * surface, and the fix (a unique index) is a schema decision.
+       */
+      let brandRef: Prisma.BrandCreateNestedOneWithoutProductsInput
+      if (input.brandId !== undefined) {
+        const brand = await prisma.brand.findUnique({
+          where: { id: input.brandId },
+          select: { id: true },
+        })
+        if (!brand) {
+          res.status(400).json({ error: { code: 'BRAND_NOT_FOUND', message: 'No such brand.' } })
+          return
+        }
+        brandRef = { connect: { id: brand.id } }
+      } else {
+        const newName = input.newBrandName
+        if (newName === undefined) {
+          // Unreachable past the schema's exactly-one refine; kept so this
+          // route never trusts a parser it cannot see from here.
+          res.status(400).json({ error: { code: 'BRAND_REQUIRED', message: 'Pick or name a brand.' } })
+          return
+        }
+        // 🔴 The typed LATIN form dedupes too (review finding): name
+        // "אלטמן" + Latin "Altman" must attach to the existing Altman row,
+        // or the pickers and the shop brand filter render two identical
+        // "Altman" entries (DEC-085 displays nameEn ?? name).
+        const newNameEn = input.newBrandNameEn
+        const existing = await prisma.brand.findFirst({
+          where: {
+            OR: [
+              { name: { equals: newName, mode: 'insensitive' } },
+              { nameEn: { equals: newName, mode: 'insensitive' } },
+              ...(newNameEn !== undefined
+                ? [
+                    { name: { equals: newNameEn, mode: 'insensitive' as const } },
+                    { nameEn: { equals: newNameEn, mode: 'insensitive' as const } },
+                  ]
+                : []),
+            ],
+          },
+          select: { id: true },
+        })
+        brandRef = existing
+          ? { connect: { id: existing.id } }
+          : { create: { name: newName, nameEn: newNameEn ?? null } }
       }
+
+      /*
+       * Health goals (user decision 2026-08-17) — the same shape as the
+       * brand: EXISTING goals validated by id (a stale id is a named 400,
+       * not a DB error), NEW goals deduped case-insensitively against
+       * BOTH stored names, and unmatched ones created NESTED inside the
+       * product insert so a refused create leaves no orphan goal. The
+       * connect set is unique-ified: the join's (productId, healthGoalId)
+       * PK would otherwise P2002 when a picked id and a deduped new name
+       * resolve to the same row.
+       */
+      const goalConnectIds = new Set<string>()
+      const goalCreates: { nameHe: string; nameEn: string }[] = []
+      if (input.healthGoalIds !== undefined && input.healthGoalIds.length > 0) {
+        const uniqueIds = [...new Set(input.healthGoalIds)]
+        const found = await prisma.healthGoal.findMany({
+          where: { id: { in: uniqueIds } },
+          select: { id: true },
+        })
+        if (found.length !== uniqueIds.length) {
+          res.status(400).json({
+            error: { code: 'HEALTH_GOAL_NOT_FOUND', message: 'No such health goal.' },
+          })
+          return
+        }
+        for (const goal of found) goalConnectIds.add(goal.id)
+      }
+      if (input.newHealthGoals !== undefined && input.newHealthGoals.length > 0) {
+        // ONE query for the whole batch (review finding: a per-goal
+        // findFirst was up to 20 sequential round-trips), matched in
+        // memory with the same insensitive both-names rule.
+        const matches = await prisma.healthGoal.findMany({
+          where: {
+            OR: input.newHealthGoals.flatMap((goal) => [
+              { nameHe: { equals: goal.nameHe, mode: 'insensitive' as const } },
+              { nameEn: { equals: goal.nameEn, mode: 'insensitive' as const } },
+            ]),
+          },
+          select: { id: true, nameHe: true, nameEn: true },
+        })
+        for (const goal of input.newHealthGoals) {
+          const existing = matches.find(
+            (row) =>
+              row.nameHe.toLowerCase() === goal.nameHe.toLowerCase() ||
+              row.nameEn.toLowerCase() === goal.nameEn.toLowerCase(),
+          )
+          if (existing) {
+            goalConnectIds.add(existing.id)
+          } else if (
+            !goalCreates.some(
+              (pending) =>
+                pending.nameHe.toLowerCase() === goal.nameHe.toLowerCase() ||
+                pending.nameEn.toLowerCase() === goal.nameEn.toLowerCase(),
+            )
+          ) {
+            goalCreates.push(goal)
+          }
+        }
+      }
+      const healthGoalJoins = [
+        ...[...goalConnectIds].map((id) => ({ healthGoal: { connect: { id } } })),
+        ...goalCreates.map((goal) => ({ healthGoal: { create: goal } })),
+      ]
 
       // The parsed input IS the create payload minus slug (review finding:
       // a field-by-field copy silently drops any future schema addition).
       // DEC-089b — imageUrl is NOT a Product column; it becomes the
       // product's first ProductImage row, created in the SAME insert so a
-      // failed create leaves no orphan image row.
-      const { imageUrl, ...productFields } = input
+      // failed create leaves no orphan image row. category/brand travel as
+      // RELATION connects (checked input) so the nested brand create above
+      // can ride the same atomic insert.
+      const {
+        imageUrl,
+        categoryId,
+        brandId,
+        newBrandName,
+        newBrandNameEn,
+        healthGoalIds,
+        newHealthGoals,
+        ...productFields
+      } = input
+      void categoryId
+      void brandId
+      void newBrandName
+      void newBrandNameEn
+      void healthGoalIds
+      void newHealthGoals
       const data = {
         ...productFields,
+        category: { connect: { id: category.id } },
+        brand: brandRef,
+        ...(healthGoalJoins.length > 0 ? { healthGoals: { create: healthGoalJoins } } : {}),
         ...(imageUrl ? { images: { create: { url: imageUrl, sortOrder: 0 } } } : {}),
         /*
          * 🔴 allergenInfoIncomplete: TRUE, deliberately (review finding).

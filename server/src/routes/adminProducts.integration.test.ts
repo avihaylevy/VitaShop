@@ -15,6 +15,7 @@ import { NullEmailProvider } from '../lib/emailService.js'
 import { getCart } from '../lib/cartService.js'
 import { findActiveProductBySlug } from '../lib/catalogProductLookup.js'
 import { deriveSlug } from '../lib/adminProductForm.js'
+import { buildProductWhere } from '../lib/catalogFilterWhere.js'
 import { TEST_FIXTURE_SLUG_PREFIX } from '../lib/testFixturePrefix.js'
 
 /**
@@ -78,7 +79,28 @@ async function cleanupCreated(): Promise<void> {
   const ids = created.map((p) => p.id)
   await prisma.cartItem.deleteMany({ where: { productId: { in: ids } } })
   await prisma.productImage.deleteMany({ where: { productId: { in: ids } } })
+  await prisma.productHealthGoal.deleteMany({ where: { productId: { in: ids } } })
   await prisma.product.deleteMany({ where: { id: { in: ids } } })
+  // Goal rows the NEW-goal create path minted — same insensitive,
+  // prefix-scoped, childless-only sweep as the brands below.
+  await prisma.healthGoal.deleteMany({
+    where: {
+      nameEn: { startsWith: TEST_FIXTURE_SLUG_PREFIX, mode: 'insensitive' },
+      products: { none: {} },
+    },
+  })
+  // Brand rows the NEW-company create path minted (prefix-scoped names,
+  // DEC-063) — after their products, and only ones no product still holds.
+  // ⚠️ INSENSITIVE, because the dedupe tests deliberately create the name
+  // in other casings and a case-sensitive sweep leaves those rows behind
+  // to poison the next run (observed live: one mutation-test run's
+  // uppercase row survived and every later dedupe attached to it).
+  await prisma.brand.deleteMany({
+    where: {
+      name: { startsWith: TEST_FIXTURE_SLUG_PREFIX, mode: 'insensitive' },
+      products: { none: {} },
+    },
+  })
 }
 
 beforeAll(async () => {
@@ -335,14 +357,17 @@ describe('🔴 PATCH — the edit reaches the next read, and frozen figures neve
       'STOCK_INVALID',
     )
 
-    // 🔴 DEC-083 — dietary flags are SOURCED-ONLY; an admin body carrying
-    // one is refused by .strict(), never silently applied or ignored.
+    // DEC-083 AMENDED 2026-08-17 (user decision) — the admin IS a writer
+    // of the tri-state claims now; only a NON-tri-state value refuses.
     const dietary = await api(`/${productId}`, {
       method: 'PATCH',
       cookie,
-      body: { isKosher: true },
+      body: { isKosher: 'yes' },
     })
     expect(dietary.status).toBe(400)
+    expect(((await dietary.json()) as { error: { codes: string[] } }).error.codes).toContain(
+      'KOSHER_INVALID',
+    )
 
     const stock = await api(`/${productId}`, {
       method: 'PATCH',
@@ -691,5 +716,390 @@ describe('CREATE — DEC-088 O2/O4', () => {
     expect(codes).toContain('NAME_HE_REQUIRED')
     expect(codes).toContain('PRICE_INVALID')
     expect(codes).toContain('PACKAGE_QUANTITY_INVALID')
+  })
+})
+
+describe('CREATE — a NEW company by name (user report 2026-08-17)', () => {
+  // Prefix-scoped (DEC-063) so cleanupCreated can retire it. Mixed case on
+  // purpose — the dedupe below must be proven case-insensitive.
+  const NEW_BRAND = `${TEST_FIXTURE_SLUG_PREFIX}New-Brand Co`
+  const NEW_BRAND_EN = `${TEST_FIXTURE_SLUG_PREFIX}newbrand-latin`
+
+  it('🔴 creates the brand row WITH the product, and the DTO answers it', async () => {
+    const cookie = await signIn(ADMIN)
+    const r = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        brandId: undefined, // JSON.stringify drops it — exactly one shape travels
+        newBrandName: NEW_BRAND,
+        newBrandNameEn: NEW_BRAND_EN,
+      }),
+    })
+    expect(r.status).toBe(201)
+    const { product } = (await r.json()) as {
+      product: { brand: { id: string; name: string; nameEn: string | null } }
+    }
+    expect(product.brand.name).toBe(NEW_BRAND)
+    expect(product.brand.nameEn).toBe(NEW_BRAND_EN)
+    const row = await prisma.brand.findUniqueOrThrow({
+      where: { id: product.brand.id },
+      select: { name: true, nameEn: true },
+    })
+    expect(row).toEqual({ name: NEW_BRAND, nameEn: NEW_BRAND_EN })
+  })
+
+  it('🔴 the same name AGAIN (different case) attaches to the existing row — no duplicate brand', async () => {
+    const cookie = await signIn(ADMIN)
+    const first = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ brandId: undefined, newBrandName: NEW_BRAND }),
+    })
+    expect(first.status).toBe(201)
+    const second = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ brandId: undefined, newBrandName: NEW_BRAND.toUpperCase() }),
+    })
+    expect(second.status).toBe(201)
+    const a = ((await first.json()) as { product: { brand: { id: string } } }).product.brand.id
+    const b = ((await second.json()) as { product: { brand: { id: string } } }).product.brand.id
+    expect(b).toBe(a)
+    const count = await prisma.brand.count({
+      where: { name: { equals: NEW_BRAND, mode: 'insensitive' } },
+    })
+    expect(count).toBe(1)
+  })
+
+  it('the LATIN form also dedupes — typing the nameEn attaches to the same row', async () => {
+    const cookie = await signIn(ADMIN)
+    const first = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        brandId: undefined,
+        newBrandName: NEW_BRAND,
+        newBrandNameEn: NEW_BRAND_EN,
+      }),
+    })
+    expect(first.status).toBe(201)
+    const second = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ brandId: undefined, newBrandName: NEW_BRAND_EN }),
+    })
+    expect(second.status).toBe(201)
+    const a = ((await first.json()) as { product: { brand: { id: string } } }).product.brand.id
+    const b = ((await second.json()) as { product: { brand: { id: string } } }).product.brand.id
+    expect(b).toBe(a)
+    // And the TYPED Latin form dedupes too (review finding): a different
+    // market name whose newBrandNameEn matches the existing row must
+    // attach, or the pickers render two identical Latin entries.
+    const third = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        brandId: undefined,
+        newBrandName: 'שם שוק אחר לגמרי',
+        newBrandNameEn: NEW_BRAND_EN.toUpperCase(),
+      }),
+    })
+    expect(third.status).toBe(201)
+    const c = ((await third.json()) as { product: { brand: { id: string } } }).product.brand.id
+    expect(c).toBe(a)
+  })
+
+  it('🔴 a FAILED create leaves no orphan brand — the row rides the product insert', async () => {
+    // ⚠️ The failure must fire AFTER brand resolution (the atomicity
+    // lesson from the goal twin below): exhaust the slug-suffix loop so
+    // the INSERT itself fails, and the brand must not exist.
+    const cookie = await signIn(ADMIN)
+    const nameEn = `${TEST_FIXTURE_SLUG_PREFIX}created brand exhausted`
+    const base = deriveSlug(nameEn)
+    const seeded = await prisma.product.findFirstOrThrow({
+      where: { isActive: true },
+      select: { categoryId: true, brandId: true },
+    })
+    await prisma.product.createMany({
+      data: Array.from({ length: 50 }, (_, i) => ({
+        slug: i === 0 ? base : `${base}-${i + 1}`,
+        nameHe: 'תופס מזהה',
+        nameEn,
+        categoryId: seeded.categoryId,
+        brandId: seeded.brandId,
+        dosageForm: 'TABLET' as const,
+        packageQuantity: 1,
+        usageInstructions: 'בדיקה',
+        price: '10.00',
+        stockQuantity: 0,
+        descriptionHe: 'בדיקה',
+        descriptionEn: 'slug squatter',
+        warningsAllergens: '',
+        isActive: false,
+      })),
+    })
+    const r = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ nameEn, brandId: undefined, newBrandName: NEW_BRAND }),
+    })
+    expect(r.status).toBe(503)
+    const count = await prisma.brand.count({
+      where: { name: { equals: NEW_BRAND, mode: 'insensitive' } },
+    })
+    expect(count).toBe(0)
+  })
+
+  it('BOTH shapes at once is BRAND_CONFLICT; NEITHER is BRAND_REQUIRED', async () => {
+    const cookie = await signIn(ADMIN)
+    const both = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ newBrandName: NEW_BRAND }), // brandId stays too
+    })
+    expect(both.status).toBe(400)
+    expect(((await both.json()) as { error: { codes: string[] } }).error.codes).toContain(
+      'BRAND_CONFLICT',
+    )
+    const neither = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ brandId: undefined }),
+    })
+    expect(neither.status).toBe(400)
+    expect(((await neither.json()) as { error: { codes: string[] } }).error.codes).toContain(
+      'BRAND_REQUIRED',
+    )
+  })
+
+  it('a present-but-blank new name is its own named refusal', async () => {
+    const cookie = await signIn(ADMIN)
+    const r = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ brandId: undefined, newBrandName: '   ' }),
+    })
+    expect(r.status).toBe(400)
+    expect(((await r.json()) as { error: { codes: string[] } }).error.codes).toContain(
+      'NEW_BRAND_NAME_REQUIRED',
+    )
+  })
+})
+
+describe('CREATE — dietary claims + health goals reach the SHOP FILTERS (user report 2026-08-17)', () => {
+  const GOAL_HE = 'מטרת בדיקה זמנית'
+  const GOAL_EN = `${TEST_FIXTURE_SLUG_PREFIX}test-goal`
+
+  /** The REAL filter seam — the same where-builder GET /api/products runs. */
+  function whereFor(partial: Partial<Parameters<typeof buildProductWhere>[0]>) {
+    return buildProductWhere(
+      {
+        q: undefined,
+        brand: [],
+        ingredient: [],
+        healthGoal: [],
+        dosageForm: [],
+        minPrice: undefined,
+        maxPrice: undefined,
+        inStock: undefined,
+        kosher: undefined,
+        glutenFree: undefined,
+        vegan: undefined,
+        ...partial,
+      },
+      undefined,
+    )
+  }
+
+  it('🔴 tri-state claims land on the row, and kosher=true MATCHES the filter where-clause', async () => {
+    const cookie = await signIn(ADMIN)
+    const r = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ isKosher: true, isVegan: false }),
+    })
+    expect(r.status).toBe(201)
+    const { product } = (await r.json()) as { product: { slug: string } }
+    const row = await prisma.product.findUniqueOrThrow({
+      where: { slug: product.slug },
+      select: { isKosher: true, isGlutenFree: true, isVegan: true },
+    })
+    // true = claimed, false = claimed-negative, absent = null (no claim).
+    expect(row).toEqual({ isKosher: true, isGlutenFree: null, isVegan: false })
+
+    const kosherMatches = await prisma.product.findMany({
+      where: whereFor({ kosher: true }),
+      select: { slug: true },
+    })
+    expect(kosherMatches.some((p) => p.slug === product.slug)).toBe(true)
+    // And the CONTROL: the claimed-false and no-claim filters must NOT match.
+    const veganMatches = await prisma.product.findMany({
+      where: whereFor({ vegan: true }),
+      select: { slug: true },
+    })
+    expect(veganMatches.some((p) => p.slug === product.slug)).toBe(false)
+    const glutenMatches = await prisma.product.findMany({
+      where: whereFor({ glutenFree: true }),
+      select: { slug: true },
+    })
+    expect(glutenMatches.some((p) => p.slug === product.slug)).toBe(false)
+  })
+
+  it('claims ABSENT stay null — no invented value (DEC-083 default intact)', async () => {
+    const cookie = await signIn(ADMIN)
+    const r = await api('/', { method: 'POST', cookie, body: await createBody() })
+    expect(r.status).toBe(201)
+    const { product } = (await r.json()) as { product: { slug: string } }
+    const row = await prisma.product.findUniqueOrThrow({
+      where: { slug: product.slug },
+      select: { isKosher: true, isGlutenFree: true, isVegan: true },
+    })
+    expect(row).toEqual({ isKosher: null, isGlutenFree: null, isVegan: null })
+  })
+
+  it('🔴 a NEW goal AND a picked EXISTING goal both join, and the healthGoal filter finds each', async () => {
+    const cookie = await signIn(ADMIN)
+    const seededGoal = await prisma.healthGoal.findFirstOrThrow({
+      where: { nameEn: { not: { startsWith: TEST_FIXTURE_SLUG_PREFIX } } },
+      select: { id: true },
+    })
+    const r = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        healthGoalIds: [seededGoal.id],
+        newHealthGoals: [{ nameHe: GOAL_HE, nameEn: GOAL_EN }],
+      }),
+    })
+    expect(r.status).toBe(201)
+    const { product } = (await r.json()) as { product: { id: string; slug: string } }
+    const goal = await prisma.healthGoal.findFirstOrThrow({
+      where: { nameEn: { equals: GOAL_EN, mode: 'insensitive' } },
+      select: { id: true, nameHe: true },
+    })
+    expect(goal.nameHe).toBe(GOAL_HE)
+
+    for (const goalId of [goal.id, seededGoal.id]) {
+      const matches = await prisma.product.findMany({
+        where: whereFor({ healthGoal: [goalId] }),
+        select: { slug: true },
+      })
+      expect(matches.some((p) => p.slug === product.slug)).toBe(true)
+    }
+  })
+
+  it('a new goal name that EXISTS (any case, either language) attaches — no duplicate goal', async () => {
+    const cookie = await signIn(ADMIN)
+    const first = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ newHealthGoals: [{ nameHe: GOAL_HE, nameEn: GOAL_EN }] }),
+    })
+    expect(first.status).toBe(201)
+    const second = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        newHealthGoals: [{ nameHe: 'שם עברי אחר לגמרי', nameEn: GOAL_EN.toUpperCase() }],
+      }),
+    })
+    expect(second.status).toBe(201)
+    const count = await prisma.healthGoal.count({
+      where: { nameEn: { startsWith: TEST_FIXTURE_SLUG_PREFIX, mode: 'insensitive' } },
+    })
+    expect(count).toBe(1)
+  })
+
+  it('🔴 a refused create leaves NO orphan goal — the row rides the product insert', async () => {
+    // ⚠️ The refusal must fire AFTER the goal-resolution code, or the test
+    // proves nothing about atomicity (first draft used a bad categoryId,
+    // which refuses BEFORE goals — an eager-create mutation sailed green
+    // through it). The only post-goal failure is the INSERT itself, so
+    // exhaust the slug-suffix loop: every slug the route may try is
+    // pre-taken, the create 503s, and the goal must not exist.
+    const cookie = await signIn(ADMIN)
+    const nameEn = `${TEST_FIXTURE_SLUG_PREFIX}created exhausted`
+    const base = deriveSlug(nameEn)
+    const seeded = await prisma.product.findFirstOrThrow({
+      where: { isActive: true },
+      select: { categoryId: true, brandId: true },
+    })
+    await prisma.product.createMany({
+      data: Array.from({ length: 50 }, (_, i) => ({
+        slug: i === 0 ? base : `${base}-${i + 1}`,
+        nameHe: 'תופס מזהה',
+        nameEn,
+        categoryId: seeded.categoryId,
+        brandId: seeded.brandId,
+        dosageForm: 'TABLET' as const,
+        packageQuantity: 1,
+        usageInstructions: 'בדיקה',
+        price: '10.00',
+        stockQuantity: 0,
+        descriptionHe: 'בדיקה',
+        descriptionEn: 'slug squatter',
+        warningsAllergens: '',
+        isActive: false,
+      })),
+    })
+    const r = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        nameEn,
+        newHealthGoals: [{ nameHe: GOAL_HE, nameEn: GOAL_EN }],
+      }),
+    })
+    expect(r.status).toBe(503)
+    const count = await prisma.healthGoal.count({
+      where: { nameEn: { equals: GOAL_EN, mode: 'insensitive' } },
+    })
+    expect(count).toBe(0)
+  })
+
+  it('an unknown goal id and a half-named new goal are NAMED refusals', async () => {
+    const cookie = await signIn(ADMIN)
+    const unknown = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ healthGoalIds: ['no-such-goal'] }),
+    })
+    expect(unknown.status).toBe(400)
+    expect(((await unknown.json()) as { error: { code: string } }).error.code).toBe(
+      'HEALTH_GOAL_NOT_FOUND',
+    )
+    const halfNamed = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ newHealthGoals: [{ nameHe: GOAL_HE, nameEn: '' }] }),
+    })
+    expect(halfNamed.status).toBe(400)
+    expect(((await halfNamed.json()) as { error: { codes: string[] } }).error.codes).toContain(
+      'NEW_HEALTH_GOAL_INVALID',
+    )
+  })
+
+  it('PATCH flips a claim, and PATCHING null WITHDRAWS it', async () => {
+    const cookie = await signIn(ADMIN)
+    const created = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ isKosher: true }),
+    })
+    expect(created.status).toBe(201)
+    const { product } = (await created.json()) as { product: { id: string; slug: string } }
+
+    const withdraw = await api(`/${product.id}`, {
+      method: 'PATCH',
+      cookie,
+      body: { isKosher: null, isVegan: true },
+    })
+    expect(withdraw.status).toBe(200)
+    const row = await prisma.product.findUniqueOrThrow({
+      where: { slug: product.slug },
+      select: { isKosher: true, isVegan: true },
+    })
+    expect(row).toEqual({ isKosher: null, isVegan: true })
   })
 })

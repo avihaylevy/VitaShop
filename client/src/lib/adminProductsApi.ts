@@ -259,7 +259,12 @@ export async function requestAdminProductOptions(): Promise<AdminProductOptionsR
   if (raw.status !== 200) return { ok: false, failure: listFailure(raw.status) }
 
   const body = raw.body
-  if (!isPlainObject(body) || !Array.isArray(body.categories) || !Array.isArray(body.brands)) {
+  if (
+    !isPlainObject(body) ||
+    !Array.isArray(body.categories) ||
+    !Array.isArray(body.brands) ||
+    !Array.isArray(body.healthGoals)
+  ) {
     return { ok: false, failure: { kind: 'unavailable' } }
   }
   const categories = body.categories.filter(
@@ -276,5 +281,12 @@ export async function requestAdminProductOptions(): Promise<AdminProductOptionsR
       typeof b.name === 'string' &&
       (b.nameEn === null || typeof b.nameEn === 'string'),
   )
-  return { ok: true, options: { categories, brands } }
+  const healthGoals = body.healthGoals.filter(
+    (g): g is { id: string; nameHe: string; nameEn: string } =>
+      isPlainObject(g) &&
+      typeof g.id === 'string' &&
+      typeof g.nameHe === 'string' &&
+      typeof g.nameEn === 'string',
+  )
+  return { ok: true, options: { categories, brands, healthGoals } }
 }

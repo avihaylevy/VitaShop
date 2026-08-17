@@ -61,6 +61,7 @@ export type AdminProductWriteResult =
 export type AdminProductOptions = {
   categories: { id: string; nameHe: string; nameEn: string }[]
   brands: { id: string; name: string; nameEn: string | null }[]
+  healthGoals: { id: string; nameHe: string; nameEn: string }[]
 }
 
 export type AdminProductOptionsResult =
@@ -72,7 +73,12 @@ export type AdminProductCreatePayload = {
   nameHe: string
   nameEn: string
   categoryId: string
-  brandId: string
+  /** An EXISTING brand's id — or omit it and name a NEW company instead. */
+  brandId?: string
+  /** A NEW company's market name (user report 2026-08-17). Exactly one of brandId/newBrandName. */
+  newBrandName?: string
+  /** The new company's Latin form (DEC-080's nullable column); optional. */
+  newBrandNameEn?: string
   dosageForm: string
   packageQuantity: number
   usageInstructions: string
@@ -81,6 +87,14 @@ export type AdminProductCreatePayload = {
   descriptionHe: string
   descriptionEn: string
   warningsAllergens: string
+  /** DEC-083 amended — the admin's tri-state dietary claims; omitted = no claim (null). */
+  isKosher?: boolean | null
+  isGlutenFree?: boolean | null
+  isVegan?: boolean | null
+  /** EXISTING goals by id. */
+  healthGoalIds?: string[]
+  /** NEW goals — HealthGoal requires BOTH names (DEC-017 pairing). */
+  newHealthGoals?: { nameHe: string; nameEn: string }[]
   /** DEC-089b — optional absolute http(s) image URL; omitted = placeholder. */
   imageUrl?: string
 }
