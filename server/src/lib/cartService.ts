@@ -4,6 +4,7 @@ import { isUniqueViolationOn } from './prismaUniqueViolation.js'
 import { computeShipping, toAgorot, type ShippingDto } from './shipping.js'
 import { isPurchasable } from './purchasability.js'
 import { clubSavingsPerUnitAgorot, effectiveUnitPrice, readClubMembership } from './clubPricing.js'
+import { toImageRef } from './catalogMapper.js'
 
 /**
  * MILESTONE-007 Checkpoint C — the cart service.
@@ -171,7 +172,11 @@ function toDto(
       brandName: item.product.brand.name,
       brandNameEn: item.product.brand.nameEn ?? null,
       packageQuantity: item.product.packageQuantity,
-      imageFile: item.product.images[0]?.url.split('/').pop() ?? null,
+      // DEC-089b — the catalogue's ONE image-ref rule: a basename for the
+      // build-time assets, an absolute URL passed through for admin-added
+      // products (an inline split('/').pop() here mangled URLs to their
+      // last segment).
+      imageFile: item.product.images[0] ? toImageRef(item.product.images[0].url) : null,
       quantity: item.quantity,
       unitPrice,
       baseUnitPrice: item.product.price.toFixed(2),

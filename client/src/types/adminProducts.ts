@@ -81,4 +81,6 @@ export type AdminProductCreatePayload = {
   descriptionHe: string
   descriptionEn: string
   warningsAllergens: string
+  /** DEC-089b — optional absolute http(s) image URL; omitted = placeholder. */
+  imageUrl?: string
 }

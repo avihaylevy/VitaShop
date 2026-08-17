@@ -1,4 +1,8 @@
-import { Router } from 'express'
+import { randomUUID } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { Router, type ErrorRequestHandler } from 'express'
+import multer from 'multer'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import {
   createAdminProductRateLimiters,
@@ -11,6 +15,7 @@ import {
 } from '../lib/adminProductForm.js'
 import { isUniqueViolationOn } from '../lib/prismaUniqueViolation.js'
 import { findCanonicalCategoryByNameHe } from '../lib/catalogCategories.js'
+import { PRODUCTS_UPLOAD_DIR, mintUploadUrl } from '../lib/uploadPaths.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireAdmin } from './requireAdmin.js'
 
@@ -54,6 +59,39 @@ const MAX_PAGE = 1_000_000
 
 /** Bounded attempts at a unique slug before giving up loudly. */
 const SLUG_SUFFIX_ATTEMPTS = 50
+
+/**
+ * DEC-089c — the upload contract. 🔴 The NAME is a fresh UUID and the
+ * EXTENSION comes from the SNIFFED content type: nothing of the client's
+ * filename OR its claimed Content-Type survives (review finding: the
+ * first build trusted `file.mimetype`, which is just a header the
+ * uploader wrote — §3.4's client-is-not-truth applies to admins too).
+ * 5MB cap; multer holds the file in MEMORY and the route writes it only
+ * after the bytes identify themselves.
+ */
+const UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+
+/** Magic-byte identification — the CONTENT decides the extension. */
+function sniffImageExtension(buffer: Buffer): string | null {
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(PNG_SIGNATURE)) return 'png'
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'jpg'
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString('latin1') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('latin1') === 'WEBP'
+  ) {
+    return 'webp'
+  }
+  return null
+}
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+const uploadParser = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: UPLOAD_MAX_BYTES, files: 1 },
+})
 
 const PRODUCT_SELECT = {
   id: true,
@@ -220,6 +258,69 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
   })
 
   /**
+   * DEC-089c — the image upload. Answers `{ url: '/uploads/products/<name>' }`;
+   * the CREATE then carries that path through the normal imageUrl field, so
+   * upload and external-link images share ONE downstream pipeline.
+   *
+   * ⚠️ Multer's own failures (size cap, extra parts) surface through its
+   * error middleware below as named 400s, never a raw 500.
+   */
+  router.post(
+    '/image',
+    limiters.write,
+    requireShopper,
+    requireAdmin,
+    uploadParser.single('image'),
+    async (req, res) => {
+      const file = req.file
+      if (!file) {
+        res.status(400).json({
+          error: { code: 'IMAGE_FILE_REQUIRED', message: 'Attach an image file as "image".' },
+        })
+        return
+      }
+      // The BYTES decide, not the claimed Content-Type (review finding).
+      const extension = sniffImageExtension(file.buffer)
+      if (!extension) {
+        res.status(400).json({
+          error: {
+            code: 'IMAGE_TYPE_INVALID',
+            message: 'Only PNG, JPEG and WebP images are accepted.',
+          },
+        })
+        return
+      }
+
+      const name = `${randomUUID()}.${extension}`
+      try {
+        await mkdir(PRODUCTS_UPLOAD_DIR, { recursive: true })
+        await writeFile(path.join(PRODUCTS_UPLOAD_DIR, name), file.buffer)
+        res.status(201).json({ url: mintUploadUrl(name) })
+      } catch (error) {
+        console.error('[admin] image upload failed', error)
+        res.status(503).json({
+          error: { code: 'IMAGE_UPLOAD_UNAVAILABLE', message: 'Try again shortly.' },
+        })
+      }
+    },
+  )
+
+  // Multer refusals (size cap, unexpected field) → named 400s, never a
+  // raw 500. Registered after the upload route; the four-argument
+  // signature is what makes Express treat it as an error handler.
+  // ⚠️ It covers only routes registered ABOVE it in this router — a
+  // future multer-using route must be added above this line or its
+  // errors fall through to a raw 500.
+  const uploadErrorHandler: ErrorRequestHandler = (error, _req, res, next) => {
+    if (error instanceof multer.MulterError) {
+      res.status(400).json({ error: { code: 'IMAGE_UPLOAD_REJECTED', message: error.code } })
+      return
+    }
+    next(error)
+  }
+  router.use(uploadErrorHandler)
+
+  /**
    * PATCH — the partial edit. Present fields only; an omitted field is
    * never touched. Price and stock are the headline case (ISSUE-111), the
    * rest of the CSV-editable text rides the same envelope.
@@ -380,8 +481,13 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
 
       // The parsed input IS the create payload minus slug (review finding:
       // a field-by-field copy silently drops any future schema addition).
+      // DEC-089b — imageUrl is NOT a Product column; it becomes the
+      // product's first ProductImage row, created in the SAME insert so a
+      // failed create leaves no orphan image row.
+      const { imageUrl, ...productFields } = input
       const data = {
-        ...input,
+        ...productFields,
+        ...(imageUrl ? { images: { create: { url: imageUrl, sortOrder: 0 } } } : {}),
         /*
          * 🔴 allergenInfoIncomplete: TRUE, deliberately (review finding).
          * `false` is a POSITIVE sourced claim — "the official page was

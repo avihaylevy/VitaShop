@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DOSAGE_FORM_VALUES } from './catalogQuery.js'
+import { UPLOAD_REF_PATTERN } from './uploadPaths.js'
 
 /**
  * MILESTONE-010 / DEC-088 — the product-admin forms, validated SERVER-SIDE.
@@ -117,6 +118,34 @@ export const productCreateSchema = z.strictObject({
   descriptionHe: FIELD_SCHEMAS.descriptionHe,
   descriptionEn: FIELD_SCHEMAS.descriptionEn,
   warningsAllergens: FIELD_SCHEMAS.warningsAllergens.default(''),
+  /**
+   * DEC-089b/c — an OPTIONAL image: an absolute http(s) URL (external
+   * link) or a server-hosted upload path ('/uploads/products/<name>', the
+   * shape the upload route mints — never a client-invented path outside
+   * it). Empty/absent means the imageless placeholder (DEC-088 O2's
+   * default stands). The shop renders whatever this address serves, so it
+   * is the admin's claim, not the system's.
+   */
+  imageUrl: z.preprocess(
+    // Trimmed BEFORE the union, so the empty-check and the URL-check test
+    // the same value (review finding: '  ' was a 400 while '' was
+    // accepted-as-absent — two branches judging two different strings).
+    (value) => (typeof value === 'string' ? value.trim() : value),
+    z
+      .union([
+        z.literal('').transform(() => undefined),
+        z
+          .string({ message: 'IMAGE_URL_INVALID' })
+          .max(2000, 'IMAGE_URL_INVALID')
+          .regex(
+            // Absolute http(s), or the upload route's own minted shape —
+            // built from uploadPaths so the two cannot drift.
+            new RegExp(`^(https?:\\/\\/\\S+)$|${UPLOAD_REF_PATTERN.source}`),
+            'IMAGE_URL_INVALID',
+          ),
+      ])
+      .optional(),
+  ),
 })
 
 export type ProductCreateInput = z.infer<typeof productCreateSchema>

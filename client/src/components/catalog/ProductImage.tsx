@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react'
+import { getApiBaseUrl } from '../../lib/apiBaseUrl'
 import { getProductImageUrl } from '../../lib/productImages'
 import { getImageFraming } from '../../lib/imageFraming'
 
@@ -15,8 +16,27 @@ type ProductImageProps = {
  */
 export function ProductImage({ imageFile, alt, className = '' }: ProductImageProps) {
   const [failed, setFailed] = useState(false)
-  const url = getProductImageUrl(imageFile)
-  const framing = getImageFraming(imageFile)
+  /*
+   * DEC-089b/c — the reference is one of THREE shapes, and the server's
+   * `toImageRef` is the other half of this rule:
+   *   · a build-time asset FILENAME — resolved through the
+   *     import.meta.glob pipeline, with its measured per-image framing;
+   *   · an ABSOLUTE http(s) URL (admin link) — rendered as-is;
+   *   · a '/uploads/...' path (admin upload) — prefixed with the API base
+   *     URL, kept relative in the DB so a host change cannot strand it.
+   * The two admin shapes get the default framing.
+   */
+  const isExternal = imageFile !== null && /^https?:\/\//.test(imageFile)
+  const isUpload = imageFile !== null && imageFile.startsWith('/uploads/')
+  const base = getApiBaseUrl()
+  const url = isExternal
+    ? imageFile
+    : isUpload
+      ? base.ok
+        ? `${base.value}${imageFile}`
+        : null
+      : getProductImageUrl(imageFile)
+  const framing = getImageFraming(isExternal || isUpload ? null : imageFile)
   const showImage = url !== null && !failed
 
   return (

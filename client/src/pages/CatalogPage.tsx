@@ -600,11 +600,13 @@ export function CatalogPage() {
 
       {/*
         🔴 Rendered exactly once, unconditionally, regardless of loading or
-        error state — never re-keyed per product, never duplicated, no
-        second CartDrawer anywhere. Its own internal open/closed and
-        missing-line lifecycle (SLICE_8_PLAN.md §4) governs everything else;
-        CatalogPage owns only drawerOpen, returnFocusRef and the stable
-        closeDrawer identity.
+        error state — never re-keyed per product, never duplicated. (Since
+        DEC-089a the two header CartControls ALSO each mount a CartDrawer —
+        closed instances render null, only one dialog can be open, and the
+        add-to-cart flow still owns exactly THIS instance.) Its own
+        internal open/closed and missing-line lifecycle (SLICE_8_PLAN.md
+        §4) governs everything else; CatalogPage owns only drawerOpen,
+        returnFocusRef and the stable closeDrawer identity.
       */}
       <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
       {/* Fifth list item 3 — the confirmation POPUP; the one status region for adds on this page. */}

@@ -1,9 +1,11 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { HeartIcon, CartIcon, GlobeIcon } from '../icons'
 import { Icon } from '../ui/Icon'
 import { FOCUS_RING } from '../ui/focusRing'
 import { AccountMenu } from './AccountMenu'
+import { CartDrawer } from '../cart/CartDrawer'
 import { useCart } from '../../state/CartContext'
 import { useFavourites } from '../../state/FavouritesContext'
 import { applyDocumentDirection, type SupportedLanguage } from '../../i18n'
@@ -88,35 +90,76 @@ export function CartControl() {
   const ariaLabel =
     totalQuantity > 0 ? t('cart.ariaLabelWithCount', { count: totalQuantity }) : t('cart.ariaLabelEmpty')
 
+  /*
+   * DEC-089a (user, 2026-08-16) — the header's cart control opens the
+   * DRAWER instead of navigating to /cart. CartDrawer is already the
+   * full editing panel (DEC-073); the page stays reachable through the
+   * drawer's own "go to cart" link for shipping detail and undo.
+   *
+   * Each CartControl instance (desktop header, mobile header) owns its
+   * drawer — only the pressed one opens, and the trigger doubles as the
+   * DEC-047-A return-focus target so closing lands back on the button.
+   */
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+
+  /*
+   * 🔴 CLOSE ON ANY md-BREAKPOINT CROSSING (review finding). Modal renders
+   * in place, so this drawer lives inside a CSS-hidden header on the other
+   * side of the breakpoint: resize/rotate with it open would display:none
+   * the dialog while its scroll-lock and background-inert stayed active —
+   * a frozen page with an invisible focus trap. A crossing always hides
+   * whichever header owns the open drawer, so closing on either direction
+   * is exact (the MobileMenu/useCloseAboveBreakpoint precedent).
+   */
+  useEffect(() => {
+    if (!drawerOpen) return
+    const query = window.matchMedia('(min-width: 768px)')
+    const close = () => setDrawerOpen(false)
+    query.addEventListener('change', close)
+    return () => query.removeEventListener('change', close)
+  }, [drawerOpen])
+
   return (
-    <Link
-      to="/cart"
-      aria-label={ariaLabel}
-      className={`${FOCUS_RING} group relative flex h-11 min-w-11 items-center justify-center rounded-card text-text-ink`}
-    >
-      <span className="inline-flex items-center justify-center rounded-compact px-1.5 py-1 transition-colors duration-150 ease-standard group-hover:bg-surface-sunken">
-        <Icon size={20}>
-          <CartIcon />
-        </Icon>
-      </span>
-      {totalQuantity > 0 && (
-        /*
-         * ISSUE-113 — keyed by the committed total so every change REMOUNTS
-         * the span and restarts the pop animation (index.css). motion-safe:
-         * gates the animation only; under prefers-reduced-motion the number
-         * still changes, statically. aria-hidden stays — the add-to-cart
-         * announcement is the audible confirmation, and animating must not
-         * add a second one.
-         */
-        <span
-          key={totalQuantity}
-          aria-hidden="true"
-          className="absolute -top-1 -end-1 flex h-5 min-w-5 items-center justify-center rounded-round bg-brand-teal px-1 text-[11px] font-medium leading-none text-white motion-safe:animate-[cart-badge-pop_300ms_var(--ease-standard)]"
-        >
-          {totalQuantity}
+    <>
+      <button
+        type="button"
+        ref={triggerRef}
+        onClick={() => setDrawerOpen(true)}
+        aria-label={ariaLabel}
+        aria-haspopup="dialog"
+        aria-expanded={drawerOpen}
+        className={`${FOCUS_RING} group relative flex h-11 min-w-11 items-center justify-center rounded-card text-text-ink`}
+      >
+        <span className="inline-flex items-center justify-center rounded-compact px-1.5 py-1 transition-colors duration-150 ease-standard group-hover:bg-surface-sunken">
+          <Icon size={20}>
+            <CartIcon />
+          </Icon>
         </span>
-      )}
-    </Link>
+        {totalQuantity > 0 && (
+          /*
+           * ISSUE-113 — keyed by the committed total so every change REMOUNTS
+           * the span and restarts the pop animation (index.css). motion-safe:
+           * gates the animation only; under prefers-reduced-motion the number
+           * still changes, statically. aria-hidden stays — the add-to-cart
+           * announcement is the audible confirmation, and animating must not
+           * add a second one.
+           */
+          <span
+            key={totalQuantity}
+            aria-hidden="true"
+            className="absolute -top-1 -end-1 flex h-5 min-w-5 items-center justify-center rounded-round bg-brand-teal px-1 text-[11px] font-medium leading-none text-white motion-safe:animate-[cart-badge-pop_300ms_var(--ease-standard)]"
+          >
+            {totalQuantity}
+          </span>
+        )}
+      </button>
+      <CartDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        returnFocusRef={triggerRef}
+      />
+    </>
   )
 }
 

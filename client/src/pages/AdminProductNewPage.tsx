@@ -3,7 +3,11 @@ import { Link } from 'react-router'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
-import { createAdminProduct, requestAdminProductOptions } from '../lib/adminProductsApi'
+import {
+  createAdminProduct,
+  requestAdminProductOptions,
+  uploadAdminProductImage,
+} from '../lib/adminProductsApi'
 import { DOSAGE_FORM_KEYS } from '../lib/catalogApi'
 import type { AdminProductOptions, AdminProductRow } from '../types/adminProducts'
 
@@ -33,6 +37,7 @@ const EMPTY_FORM = {
   descriptionHe: '',
   descriptionEn: '',
   warningsAllergens: '',
+  imageUrl: '',
 }
 
 type OptionsState =
@@ -45,6 +50,9 @@ export function AdminProductNewPage() {
   const [optionsState, setOptionsState] = useState<OptionsState>({ status: 'loading' })
   const [form, setForm] = useState(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  /** '' | uploading-text | uploaded-text — read by an ALWAYS-mounted status. */
+  const [uploadStatus, setUploadStatus] = useState('')
   const [failureText, setFailureText] = useState('')
   const [created, setCreated] = useState<{ product: AdminProductRow; id: number } | null>(null)
 
@@ -74,7 +82,10 @@ export function AdminProductNewPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    if (submitting) return
+    // 🔴 uploading blocks too (review finding): submitting mid-upload
+    // created the product IMAGELESS, and with no PATCH imageUrl surface
+    // the image was unattachable afterwards — a silent permanent loss.
+    if (submitting || uploading) return
     setSubmitting(true)
     setFailureText('')
 
@@ -99,6 +110,8 @@ export function AdminProductNewPage() {
       descriptionHe: form.descriptionHe,
       descriptionEn: form.descriptionEn,
       warningsAllergens: form.warningsAllergens,
+      // DEC-089b — absent means the placeholder; an empty field is not a URL.
+      ...(form.imageUrl.trim() === '' ? {} : { imageUrl: form.imageUrl.trim() }),
     })
     setSubmitting(false)
 
@@ -298,6 +311,67 @@ export function AdminProductNewPage() {
               dir="ltr"
             />
           </FieldRow>
+          <FieldRow id="np-image-url" label={t('products.form.imageUrl')} hint={t('products.form.imageUrlHint')}>
+            <input
+              id="np-image-url"
+              type="url"
+              inputMode="url"
+              value={form.imageUrl}
+              onChange={(e) => set('imageUrl', e.target.value)}
+              className={inputClass}
+              dir="ltr"
+            />
+          </FieldRow>
+          {/*
+            DEC-089c — upload as the OTHER way to fill the same field: the
+            picked file goes up immediately and the returned server path
+            lands in the imageUrl input above, visible and editable. One
+            downstream pipeline for both.
+          */}
+          <FieldRow id="np-image-file" label={t('products.form.imageFile')} hint={t('products.form.imageFileHint')}>
+            <input
+              id="np-image-file"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              aria-busy={uploading || undefined}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (!file || uploading) return
+                setUploading(true)
+                setUploadStatus(t('products.form.uploading'))
+                setFailureText('')
+                void uploadAdminProductImage(file).then((result) => {
+                  setUploading(false)
+                  // The same input can pick again either way.
+                  event.target.value = ''
+                  if (result.ok) {
+                    set('imageUrl', result.url)
+                    // 🔴 Success is SAID (review finding: filling a
+                    // different field silently left a screen-reader admin
+                    // with no signal the upload finished).
+                    setUploadStatus(t('products.form.uploaded'))
+                    return
+                  }
+                  setUploadStatus('')
+                  if (result.failure.kind === 'invalid') {
+                    setFailureText(codeMessage(result.failure.code))
+                  } else if (result.failure.kind === 'rateLimited') {
+                    setFailureText(t('state.rateLimited'))
+                  } else if (result.failure.kind === 'offline') {
+                    setFailureText(t('state.offline'))
+                  } else {
+                    setFailureText(t('products.failure.server'))
+                  }
+                })
+              }}
+              className={`${FOCUS_RING} rounded-card text-sm`}
+            />
+          </FieldRow>
+          {/* ALWAYS mounted — a live region that mounts with its message
+              says nothing (the async-control family). */}
+          <p role="status" aria-live="polite" className="text-xs text-text-muted">
+            {uploadStatus}
+          </p>
           <FieldRow id="np-warnings" label={t('products.form.warnings')} hint={t('products.form.warningsHint')}>
             <textarea
               id="np-warnings"
@@ -307,7 +381,12 @@ export function AdminProductNewPage() {
             />
           </FieldRow>
 
-          <Button type="submit" loading={submitting} className="mt-2">
+          <Button
+            type="submit"
+            loading={submitting}
+            aria-disabled={uploading || undefined}
+            className="mt-2"
+          >
             {submitting ? t('products.form.submitting') : t('products.form.submit')}
           </Button>
         </form>

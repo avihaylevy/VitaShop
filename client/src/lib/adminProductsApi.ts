@@ -207,6 +207,52 @@ export async function createAdminProduct(
   return writeResult(await call('/api/admin/products', { method: 'POST', body: payload }))
 }
 
+export type AdminImageUploadResult =
+  | { ok: true; url: string }
+  | { ok: false; failure: { kind: 'invalid'; code: string } | AdminProductsFailure | { kind: 'server' } }
+
+/**
+ * DEC-089c — the image upload. Multipart, so this does NOT ride `call`
+ * (fetch must set its own multipart boundary; a manual content-type would
+ * break it). Answers the server-minted '/uploads/products/<name>' path,
+ * which then travels through the ordinary imageUrl create field.
+ */
+export async function uploadAdminProductImage(file: File): Promise<AdminImageUploadResult> {
+  const base = getApiBaseUrl()
+  if (!base.ok) return { ok: false, failure: { kind: 'offline' } }
+
+  const body = new FormData()
+  body.append('image', file)
+
+  try {
+    const response = await fetch(`${base.value}/api/admin/products/image`, {
+      method: 'POST',
+      credentials: 'include',
+      body,
+    })
+    let payload: unknown = null
+    try {
+      payload = await response.json()
+    } catch {
+      payload = null
+    }
+
+    if (response.status === 201 && isPlainObject(payload) && typeof payload.url === 'string') {
+      return { ok: true, url: payload.url }
+    }
+    if (response.status === 401) return { ok: false, failure: { kind: 'unauthenticated' } }
+    if (response.status === 403) return { ok: false, failure: { kind: 'notAdmin' } }
+    if (response.status === 429) return { ok: false, failure: { kind: 'rateLimited' } }
+    if (response.status === 400) {
+      const { code } = errorOf(payload)
+      return { ok: false, failure: { kind: 'invalid', code: code ?? 'IMAGE_UPLOAD_REJECTED' } }
+    }
+    return { ok: false, failure: { kind: 'server' } }
+  } catch {
+    return { ok: false, failure: { kind: 'offline' } }
+  }
+}
+
 export async function requestAdminProductOptions(): Promise<AdminProductOptionsResult> {
   const raw = await call('/api/admin/products/options')
   if (raw === null) return { ok: false, failure: { kind: 'offline' } }

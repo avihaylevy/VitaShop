@@ -68,9 +68,17 @@ function api(path: string, init: { method?: string; cookie?: string; body?: unkn
 async function cleanupCreated(): Promise<void> {
   // Rows this suite creates through the CREATE route carry derived slugs
   // from the fixture-prefixed English name, so the prefix scopes them too.
-  await prisma.product.deleteMany({
+  // Children first (DEC-089b image rows, this suite's own cart lines) —
+  // the FK RESTRICT otherwise fails the product delete.
+  const created = await prisma.product.findMany({
     where: { slug: { startsWith: deriveSlug(`${TEST_FIXTURE_SLUG_PREFIX}created`) } },
+    select: { id: true },
   })
+  if (created.length === 0) return
+  const ids = created.map((p) => p.id)
+  await prisma.cartItem.deleteMany({ where: { productId: { in: ids } } })
+  await prisma.productImage.deleteMany({ where: { productId: { in: ids } } })
+  await prisma.product.deleteMany({ where: { id: { in: ids } } })
 }
 
 beforeAll(async () => {
@@ -185,6 +193,7 @@ describe('🔴 the guard — who gets through (the adminOrders precedent)', () =
   it('anonymous is 401 on every route', async () => {
     expect((await api('/')).status).toBe(401)
     expect((await api('/options')).status).toBe(401)
+    expect((await fetch(`${baseUrl}/api/admin/products/image`, { method: 'POST' })).status).toBe(401)
     expect((await api(`/${productId}`, { method: 'PATCH', body: { price: '60.00' } })).status).toBe(401)
     expect(
       (await api(`/${productId}/active`, { method: 'PATCH', body: { isActive: false } })).status,
@@ -421,28 +430,116 @@ describe('the create pickers — /options', () => {
   })
 })
 
-describe('CREATE — DEC-088 O2/O4', () => {
-  async function createBody(overrides: Record<string, unknown> = {}) {
-    const seeded = await prisma.product.findFirstOrThrow({
-      where: { isActive: true },
-      select: { categoryId: true, brandId: true },
+async function createBody(overrides: Record<string, unknown> = {}) {
+  const seeded = await prisma.product.findFirstOrThrow({
+    where: { isActive: true },
+    select: { categoryId: true, brandId: true },
+  })
+  return {
+    nameHe: 'מוצר חדש לבדיקה',
+    nameEn: `${TEST_FIXTURE_SLUG_PREFIX}created product`,
+    categoryId: seeded.categoryId,
+    brandId: seeded.brandId,
+    dosageForm: 'TABLET',
+    packageQuantity: 30,
+    usageInstructions: 'בדיקה',
+    price: '25.50',
+    stockQuantity: 7,
+    descriptionHe: 'תיאור בדיקה',
+    descriptionEn: 'created in a test',
+    ...overrides,
+  }
+}
+
+
+describe('DEC-089c — the image upload', () => {
+  // A 1x1 PNG, bytes verbatim.
+  const PNG_BYTES = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  )
+
+  async function upload(cookie: string, type: string, field = 'image') {
+    const body = new FormData()
+    body.append(field, new Blob([PNG_BYTES], { type }), 'ignored-client-name.png')
+    return fetch(`${baseUrl}/api/admin/products/image`, {
+      method: 'POST',
+      headers: { cookie },
+      body,
     })
-    return {
-      nameHe: 'מוצר חדש לבדיקה',
-      nameEn: `${TEST_FIXTURE_SLUG_PREFIX}created product`,
-      categoryId: seeded.categoryId,
-      brandId: seeded.brandId,
-      dosageForm: 'TABLET',
-      packageQuantity: 30,
-      usageInstructions: 'בדיקה',
-      price: '25.50',
-      stockQuantity: 7,
-      descriptionHe: 'תיאור בדיקה',
-      descriptionEn: 'created in a test',
-      ...overrides,
-    }
   }
 
+  it('🔴 a shopper is 403; an admin gets a server-minted /uploads path and the file SERVES', async () => {
+    const shopperCookie = await signIn(SHOPPER)
+    expect((await upload(shopperCookie, 'image/png')).status).toBe(403)
+
+    const cookie = await signIn(ADMIN)
+    const r = await upload(cookie, 'image/png')
+    expect(r.status).toBe(201)
+    const { url } = (await r.json()) as { url: string }
+    // Server-minted name: uuid + extension from the VERIFIED type — nothing
+    // of the client's filename survives.
+    expect(url).toMatch(/^\/uploads\/products\/[0-9a-f-]{36}\.png$/)
+    expect(url).not.toContain('ignored-client-name')
+
+    // The static route serves what the upload stored. (No static mount in
+    // this test app — assert the file landed where index.ts serves from.)
+    const { readFile } = await import('node:fs/promises')
+    const path = await import('node:path')
+    const { PRODUCTS_UPLOAD_DIR } = await import('../lib/uploadPaths.js')
+    const stored = await readFile(path.join(PRODUCTS_UPLOAD_DIR, url.split('/').pop()!))
+    expect(Buffer.compare(stored, PNG_BYTES)).toBe(0)
+    await (await import('node:fs/promises')).rm(
+      path.join(PRODUCTS_UPLOAD_DIR, url.split('/').pop()!),
+    )
+  })
+
+  it('🔴 the BYTES decide, not the claimed header — non-image bytes labelled image/png are refused, and nothing is written', async () => {
+    const cookie = await signIn(ADMIN)
+    const path = await import('node:path')
+    const { readdir, mkdir } = await import('node:fs/promises')
+    const { PRODUCTS_UPLOAD_DIR } = await import('../lib/uploadPaths.js')
+    await mkdir(PRODUCTS_UPLOAD_DIR, { recursive: true })
+    void path
+    const before = await readdir(PRODUCTS_UPLOAD_DIR)
+
+    const body = new FormData()
+    body.append('image', new Blob([Buffer.from('<html>not an image</html>')], { type: 'image/png' }), 'x.png')
+    const r = await fetch(`${baseUrl}/api/admin/products/image`, {
+      method: 'POST',
+      headers: { cookie },
+      body,
+    })
+    expect(r.status).toBe(400)
+    expect(((await r.json()) as { error: { code: string } }).error.code).toBe('IMAGE_TYPE_INVALID')
+    // "Nothing is written" — verified, not just titled (review finding).
+    expect(await readdir(PRODUCTS_UPLOAD_DIR)).toEqual(before)
+  })
+
+  it('the uploaded path is a VALID create imageUrl and flows through the cart unmangled', async () => {
+    const cookie = await signIn(ADMIN)
+    const uploaded = await upload(cookie, 'image/webp')
+    expect(uploaded.status).toBe(201)
+    const { url } = (await uploaded.json()) as { url: string }
+
+    const r = await api('/', { method: 'POST', cookie, body: await createBody({ imageUrl: url }) })
+    expect(r.status).toBe(201)
+    const { product } = (await r.json()) as { product: { id: string } }
+    const images = await prisma.productImage.findMany({
+      where: { productId: product.id },
+      select: { url: true },
+    })
+    expect(images).toEqual([{ url }])
+
+    const path = await import('node:path')
+    const { PRODUCTS_UPLOAD_DIR } = await import('../lib/uploadPaths.js')
+    await (await import('node:fs/promises')).rm(
+      path.join(PRODUCTS_UPLOAD_DIR, url.split('/').pop()!),
+    )
+  })
+})
+
+describe('CREATE — DEC-088 O2/O4', () => {
   it('creates with a DERIVED slug, and the product is live on the shop path', async () => {
     const cookie = await signIn(ADMIN)
     const r = await api('/', { method: 'POST', cookie, body: await createBody() })
@@ -533,6 +630,53 @@ describe('CREATE — DEC-088 O2/O4', () => {
     expect(row.allergenInfoIncomplete).toBe(true)
     // DEC-083: no sourced claim means NULL, and no admin path may invent one.
     expect(row.isKosher).toBeNull()
+  })
+
+  it('DEC-089b — an image URL creates the ProductImage row, and the cart passes it through UNMANGLED', async () => {
+    const cookie = await signIn(ADMIN)
+    const imageUrl = 'https://example.test/images/omega.png'
+    const r = await api('/', { method: 'POST', cookie, body: await createBody({ imageUrl }) })
+    expect(r.status).toBe(201)
+    const { product } = (await r.json()) as { product: { id: string; slug: string } }
+
+    const images = await prisma.productImage.findMany({
+      where: { productId: product.id },
+      select: { url: true, sortOrder: true },
+    })
+    expect(images).toEqual([{ url: imageUrl, sortOrder: 0 }])
+
+    // The catalogue DTO must carry the FULL URL — the old basename
+    // reduction would have handed the client "omega.png", a filename its
+    // bundle has never heard of.
+    const detail = await findActiveProductBySlug(prisma, product.slug)
+    expect(detail).not.toBeNull()
+
+    // And the cart line's imageFile too (the shared toImageRef rule).
+    const cart = await prisma.cart.upsert({
+      where: { userId: shopperId },
+      create: { userId: shopperId },
+      update: {},
+      select: { id: true },
+    })
+    await prisma.cartItem.create({
+      data: { cartId: cart.id, productId: product.id, quantity: 1 },
+      select: { id: true },
+    })
+    const dto = await getCart(prisma, { userId: shopperId })
+    expect(dto.items[0]!.imageFile).toBe(imageUrl)
+  })
+
+  it('DEC-089b — a NON-http image link is refused with its named code', async () => {
+    const cookie = await signIn(ADMIN)
+    const r = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ imageUrl: 'ftp://example.test/x.png' }),
+    })
+    expect(r.status).toBe(400)
+    expect(((await r.json()) as { error: { codes: string[] } }).error.codes).toContain(
+      'IMAGE_URL_INVALID',
+    )
   })
 
   it('validation refusals carry the named codes', async () => {

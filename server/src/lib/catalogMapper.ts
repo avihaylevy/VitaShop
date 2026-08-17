@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client'
 import { findCanonicalCategoryByNameHe } from './catalogCategories.js'
+import { isUploadRef } from './uploadPaths.js'
 
 // Thrown when an active product's category is not one of the six REQ-F-001
 // canonical categories. The route layer catches this and returns
@@ -116,7 +117,25 @@ export interface PublicProductDetail extends PublicCatalogProduct {
 
 // Basename of a stored "assets/products/<file>" url. Never returns a path —
 // only the filename, per the Slice 6 Checkpoint A contract.
-function toImageFileBasename(url: string): string {
+/**
+ * DEC-089b — an image reference is either a build-time asset FILENAME
+ * (seeded products; the client resolves it through its import.meta.glob
+ * pipeline) or an ABSOLUTE http(s) URL (admin-added products). A URL
+ * passes through untouched — reducing it to its basename would hand the
+ * client a filename its bundle has never heard of.
+ *
+ * 🔴 Exported as THE one rule: cartService's line DTO uses this same
+ * function, so the cart can never disagree with the catalogue about what
+ * an image reference is.
+ */
+export function toImageRef(url: string): string {
+  if (/^https?:\/\//.test(url)) return url
+  // DEC-089c — a server-hosted upload passes through as a ROOT-RELATIVE
+  // path; the client prefixes its API base URL. Stored relative on
+  // purpose: an absolute URL would fossilize whatever host the server had
+  // on upload day (the stale-LAN-IP lesson, 2026-08-16). The prefix check
+  // is uploadPaths' — one fact, one place.
+  if (isUploadRef(url)) return url
   const segments = url.split('/')
   return segments[segments.length - 1] ?? url
 }
@@ -130,7 +149,7 @@ function sortedImages(images: ProductWithCatalogRelations['images']): ProductWit
 
 function firstImageFile(images: ProductWithCatalogRelations['images']): string | null {
   const [first] = sortedImages(images)
-  return first ? toImageFileBasename(first.url) : null
+  return first ? toImageRef(first.url) : null
 }
 
 // Throws CatalogIntegrityError if the product's category is not canonical —
@@ -178,7 +197,7 @@ export function mapProductToPublicDetail(product: ProductWithDetailRelations): P
     // Field 01 (§7b) — the existing Product.id under a public, read-only name.
     serialNumber: product.id,
     usageInstructions: product.usageInstructions,
-    images: sortedImages(product.images).map((image) => toImageFileBasename(image.url)),
+    images: sortedImages(product.images).map((image) => toImageRef(image.url)),
     descriptionHe: product.descriptionHe,
     descriptionEn: product.descriptionEn,
     warningsAllergens: product.warningsAllergens,

@@ -13,6 +13,7 @@ import { createCheckoutRouter } from './routes/checkout.js'
 import { createOrderRouter } from './routes/orders.js'
 import { createAdminOrderRouter } from './routes/adminOrders.js'
 import { createAdminProductRouter } from './routes/adminProducts.js'
+import { PRODUCTS_UPLOAD_DIR } from './lib/uploadPaths.js'
 import { createAccountRouter } from './routes/account.js'
 
 export const app = express()
@@ -89,6 +90,19 @@ app.use('/api/admin/orders', createAdminOrderRouter({ prisma }))
 // stock, price, the INV-03 activation toggle, create. Same per-request
 // role read; the seed remains the dev catalogue's reset (DEC-088 O1).
 app.use('/api/admin/products', createAdminProductRouter({ prisma }))
+
+// DEC-089c — admin-uploaded product images, served statically. WRITING is
+// admin-gated (the upload route); reading is public exactly like the
+// bundled product images. Scoped to the PRODUCTS subdir — the one whose
+// contents the upload route vouches for; anything else dropped under
+// uploads/ stays private (review finding). nosniff pins the extension-
+// derived content type so nothing re-interprets stored bytes.
+app.use(
+  '/uploads/products',
+  express.static(PRODUCTS_UPLOAD_DIR, {
+    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+  }),
+)
 
 // MILESTONE-008 Checkpoint F2b — REQ-F-041's pre-filled checkout details.
 // 🔴 The first route serving PERSONAL data. The session is the only identity
