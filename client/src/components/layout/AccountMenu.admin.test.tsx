@@ -76,6 +76,9 @@ describe('the account menu', () => {
     // ISSUE-111's own report: "as an admin I don't need a My-orders tab".
     expect(screen.queryByRole('menuitem', { name: /my orders/i })).toBeNull()
     expect(screen.queryByRole('menuitem', { name: /membership club/i })).toBeNull()
+    // M-009's profile entry is shopper-only too — the enumeration must
+    // grow with the menu or the O3 guarantee quietly narrows (review).
+    expect(screen.queryByRole('menuitem', { name: /my profile/i })).toBeNull()
     // Sign out is a person's, not a role's — it stays.
     expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeTruthy()
   })
@@ -88,6 +91,7 @@ describe('the account menu', () => {
     await openMenu()
 
     expect(await screen.findByRole('menuitem', { name: /my orders/i })).toBeTruthy()
+    expect(await screen.findByRole('menuitem', { name: /my profile/i })).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: /manage products/i })).toBeNull()
   })
 

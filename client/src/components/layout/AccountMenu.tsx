@@ -235,13 +235,21 @@ export function AccountMenu() {
                 </>
               ) : (
                 <>
+                  {/* M-009 — REQ-F-051's profile, linked the day it shipped. */}
+                  <Link
+                    role="menuitem"
+                    to="/account/profile"
+                    onClick={() => setOpen(false)}
+                    className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+                  >
+                    {t('account.profile')}
+                  </Link>
                   <Link
                     role="menuitem"
                     /*
                      * 🔴 ISSUE-102 — THIS POINTED AT `/account`, WHICH HAS NO
                      * ROUTE; every signed-in shopper landed on the 404 page.
-                     * Checkpoint G2 built `/account/orders`; the label says
-                     * what exists (REQ-F-051's fuller area is still unbuilt).
+                     * Checkpoint G2 built `/account/orders`.
                      */
                     to="/account/orders"
                     onClick={() => setOpen(false)}

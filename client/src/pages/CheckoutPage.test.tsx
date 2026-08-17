@@ -113,6 +113,13 @@ describe('🔴 out-of-order quotes cannot reach the screen', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
+        // M-009 added a mount-time /addresses fetch; without this branch it
+        // consumed quoteCall 1 and the delayed-quote scenario went VACUOUS —
+        // the exact hole this test's own comment records for the profile
+        // fetch, reopened by the next fetch (review finding).
+        if (String(url).includes('/api/account/addresses')) {
+          return { status: 200, json: async () => ({ addresses: [], cap: 5 }) } as unknown as Response
+        }
         if (String(url).includes('/api/account/profile')) {
           return { status: 200, json: async () => PROFILE_NONE } as unknown as Response
         }
@@ -145,16 +152,36 @@ describe('🔴 out-of-order quotes cannot reach the screen', () => {
 })
 
 describe('F2b — the address form and the REQ-F-041 pre-fill', () => {
-  function withProfile(profile: unknown) {
+  /**
+   * M-009: the pre-fill's source moved from profile.defaultAddress to the
+   * ADDRESS BOOK (GET /api/account/addresses) — the saved rows render as a
+   * labelled picker and the default arrives selected. `book` mirrors that
+   * endpoint; the profile still supplies the name/phone line.
+   */
+  function withProfile(profile: unknown, book: unknown[] = []) {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
+        if (String(url).includes('/api/account/addresses')) {
+          return {
+            status: 200,
+            json: async () => ({ addresses: book, cap: 5 }),
+          } as unknown as Response
+        }
         if (String(url).includes('/api/account/profile')) {
           return { status: 200, json: async () => profile } as unknown as Response
         }
         return { status: 200, json: async () => quote() } as unknown as Response
       }),
     )
+  }
+
+  const SAVED_ROW = {
+    id: 'addr-1',
+    line1: 'רחוב אליס 1',
+    city: 'תל אביב',
+    zipCode: '6100000',
+    isDefault: true,
   }
 
   const SAVED = {
@@ -164,13 +191,18 @@ describe('F2b — the address form and the REQ-F-041 pre-fill', () => {
     defaultAddress: { line1: 'רחוב אליס 1', city: 'תל אביב', zipCode: '6100000' },
   }
 
-  it('pre-fills the address when the account has one', async () => {
-    withProfile(SAVED)
+  it('M-009 — the saved DEFAULT arrives as a SELECTED picker row, copied into the fields', async () => {
+    withProfile(SAVED, [SAVED_ROW])
     renderPage()
     const line1 = await screen.findByLabelText(/street and number/i)
     await waitFor(() => expect((line1 as HTMLInputElement).value).toBe('רחוב אליס 1'))
     expect((screen.getByLabelText(/^city$/i) as HTMLInputElement).value).toBe('תל אביב')
-    expect(screen.getByText(/filled in from your account/i)).toBeTruthy()
+    // The prefill is LABELLED now, not mysterious: the picker row is checked.
+    const saved = screen.getByRole('radio', { name: /רחוב אליס 1/ }) as HTMLInputElement
+    expect(saved.checked).toBe(true)
+    // And "a new address" clears the fields — the pick is a real choice.
+    fireEvent.click(screen.getByRole('radio', { name: /a new address/i }))
+    expect((line1 as HTMLInputElement).value).toBe('')
   })
 
   it('🔴 SAYS SO when nothing is saved, rather than showing a mysteriously empty form', async () => {
@@ -224,7 +256,7 @@ describe('F2b — the address form and the REQ-F-041 pre-fill', () => {
   it('🔴 THE CONTROL — a FILLED field that is blurred raises nothing', async () => {
     // Without this, "shows an error on blur" would pass against a form that
     // errored on every blur regardless of content.
-    withProfile(SAVED)
+    withProfile(SAVED, [SAVED_ROW])
     renderPage()
     const line1 = await screen.findByLabelText(/street and number/i)
     await waitFor(() => expect((line1 as HTMLInputElement).value).not.toBe(''))
@@ -236,10 +268,13 @@ describe('F2b — the address form and the REQ-F-041 pre-fill', () => {
 })
 
 describe('F2b — the review findings, each with a control', () => {
-  function routed(profileStatus: number, profile: unknown) {
+  function routed(profileStatus: number, profile: unknown, book: unknown[] = []) {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
+        if (String(url).includes('/api/account/addresses')) {
+          return { status: 200, json: async () => ({ addresses: book, cap: 5 }) } as unknown as Response
+        }
         if (String(url).includes('/api/account/profile')) {
           return { status: profileStatus, json: async () => profile } as unknown as Response
         }
@@ -311,8 +346,10 @@ describe('F2b — the review findings, each with a control', () => {
 
   it('🔴 THE CONTROL — an UNTOUCHED form still receives the saved address', async () => {
     // Without this, "does not overwrite" would pass against a pre-fill that
-    // never ran at all.
-    routed(200, SAVED_PROFILE)
+    // never ran at all. M-009: the source is the BOOK's default row.
+    routed(200, SAVED_PROFILE, [
+      { id: 'addr-1', line1: 'רחוב אליס 1', city: 'תל אביב', zipCode: '6100000', isDefault: true },
+    ])
     renderPage()
     const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
     await waitFor(() => expect(line1.value).toBe('רחוב אליס 1'))

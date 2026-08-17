@@ -14,6 +14,7 @@ import { OrderDetailPage } from './pages/OrderDetailPage'
 import { RequireAuth } from './components/auth/RequireAuth'
 import { FavouritesPage } from './pages/FavouritesPage'
 import { ClubPage } from './pages/ClubPage'
+import { ProfilePage } from './pages/ProfilePage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
@@ -127,6 +128,19 @@ function App() {
           element={
             <RequireAuth>
               <ClubPage />
+            </RequireAuth>
+          }
+        />
+        {/*
+          MILESTONE-009 / DEC-090 — REQ-F-051's profile + address book,
+          linked from the account menu the day it ships (the
+          ISSUE-097/102/104 family). RequireAuth is UX; the routes 401.
+        */}
+        <Route
+          path="/account/profile"
+          element={
+            <RequireAuth>
+              <ProfilePage />
             </RequireAuth>
           }
         />

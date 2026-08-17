@@ -5,6 +5,15 @@ import { CatalogIntegrityError, mapProductToPublicCatalog } from '../lib/catalog
 import { CATALOG_RELATIONS_INCLUDE } from '../lib/catalogProductLookup.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireActiveShopper } from './requireActiveShopper.js'
+import { parseProfilePatch } from '../lib/profileForm.js'
+import {
+  ADDRESS_CAP,
+  ADDRESS_SELECT,
+  addAddressRow,
+  deleteAddress,
+  parseAddress,
+  setDefaultAddress,
+} from '../lib/addressBook.js'
 
 /**
  * MILESTONE-008 Checkpoint F2b — REQ-F-041's pre-filled details.
@@ -100,14 +109,13 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
            * one back. Ordering degrades to "the oldest one"; filtering
            * degrades to null.
            *
-           * 🔴 AND TODAY THAT DISTINCTION IS THEORETICAL, WHICH IS WORTH
-           * SAYING OUT LOUD: **no application code writes an `Address` row at
-           * all.** Checkout stores the address as free text on the `Order` and
-           * never saves it to the user, so `defaultAddress` is `null` for
-           * every real shopper and the only rows that exist were inserted by
-           * this route's own tests. REQ-F-041's pre-fill therefore delivers
-           * the NAME and PHONE today and nothing more — ISSUE-093, and F2c is
-           * where the address gets persisted.
+           * 🔴 HISTORY, corrected 2026-08-16 (M-009 review): this comment
+           * once said "no application code writes an Address row" — true
+           * before F2c's saveShopperAddress and VERY false since M-009's
+           * address book. `defaultAddress` is now a LEGACY convenience:
+           * the checkout picker reads GET /addresses instead, and this
+           * take-1 shape survives because tests pin it and removing a
+           * response field is its own decision.
            */
           addresses: {
             select: { line1: true, city: true, zipCode: true },
@@ -359,6 +367,157 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
     } catch (error) {
       console.error(`[account] club ${action} failed for ${userId}`, error)
       res.status(503).json({ error: { code: 'CLUB_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
+  // ═══════ MILESTONE-009 / DEC-090 — the profile edit + the address book ═══
+
+  /**
+   * REQ-F-051 "update personal details" — name and phone, Table 3's rules
+   * re-enforced with the registration form's exact vocabulary. 🔴 EMAIL is
+   * refused by the schema's .strict() (DEC-090 O2: the identity anchor).
+   */
+  router.patch('/profile', limiters.profileWrite, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    const parsed = parseProfilePatch(req.body)
+    if (!parsed.ok) {
+      res.status(400).json({
+        error: { code: 'PROFILE_INVALID', message: 'The profile failed validation.', codes: parsed.codes },
+      })
+      return
+    }
+    try {
+      const user = await prisma.user.update({
+        where: { id: userId },
+        data: parsed.value,
+        select: { firstName: true, lastName: true, phone: true },
+      })
+      res.json({ profile: user })
+    } catch (error) {
+      console.error(`[account] profile update failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'PROFILE_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
+  /** The whole book, default first — what the profile page renders. */
+  router.get('/addresses', limiters.addresses, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    try {
+      const addresses = await prisma.address.findMany({
+        where: { userId },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+        select: ADDRESS_SELECT,
+      })
+      res.json({ addresses, cap: ADDRESS_CAP })
+    } catch (error) {
+      console.error(`[account] listing addresses failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'ADDRESSES_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
+  /**
+   * Add. 🔴 CAPPED AT FIVE (DEC-090 O5) with a named refusal — the same
+   * bound-with-a-name shape as the cart's line cap. The first row of an
+   * empty book becomes the default (the saveShopperAddress rule).
+   */
+  router.post('/addresses', limiters.addresses, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    const parsed = parseAddress(req.body)
+    if (!parsed.ok) {
+      res.status(400).json({
+        error: { code: 'ADDRESS_INVALID', message: 'The address failed validation.', codes: parsed.codes },
+      })
+      return
+    }
+    try {
+      // Cap + first-default decided INSIDE one serializable transaction
+      // (review finding: count-then-create raced into 6 rows / 2 defaults).
+      const result = await addAddressRow(prisma, userId, parsed.value)
+      if (!result.ok) {
+        res.status(400).json({
+          error: { code: 'ADDRESS_CAP_REACHED', message: `At most ${ADDRESS_CAP} addresses.` },
+        })
+        return
+      }
+      res.status(201).json({ address: result.address })
+    } catch (error) {
+      console.error(`[account] adding an address failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'ADDRESSES_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
+  /** Edit fields. 🔴 IDOR-scoped: a foreign id is a 404, never a 403. */
+  router.patch('/addresses/:id', limiters.addresses, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    const addressId = String(req.params.id ?? '')
+    const parsed = parseAddress(req.body)
+    if (!parsed.ok) {
+      res.status(400).json({
+        error: { code: 'ADDRESS_INVALID', message: 'The address failed validation.', codes: parsed.codes },
+      })
+      return
+    }
+    try {
+      const updated = await prisma.address.updateMany({
+        where: { id: addressId, userId },
+        data: parsed.value,
+      })
+      if (updated.count === 0) {
+        res.status(404).json({ error: { code: 'ADDRESS_NOT_FOUND', message: 'No such address.' } })
+        return
+      }
+      /*
+       * Scoped re-read, nullable (review findings ×2): the id-only
+       * findUniqueOrThrow broke the router's session-only-identity
+       * convention, and a row deleted between the write and this read
+       * threw P2025 into the catch — a 503 for what is honestly a 404.
+       */
+      const address = await prisma.address.findFirst({
+        where: { id: addressId, userId },
+        select: ADDRESS_SELECT,
+      })
+      if (!address) {
+        res.status(404).json({ error: { code: 'ADDRESS_NOT_FOUND', message: 'No such address.' } })
+        return
+      }
+      res.json({ address })
+    } catch (error) {
+      console.error(`[account] editing address ${addressId} failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'ADDRESSES_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
+  /** Hard-delete (DEC-090 O4); deleting the default promotes the newest. */
+  router.delete('/addresses/:id', limiters.addresses, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    const addressId = String(req.params.id ?? '')
+    try {
+      const outcome = await deleteAddress(prisma, userId, addressId)
+      if (outcome === 'notFound') {
+        res.status(404).json({ error: { code: 'ADDRESS_NOT_FOUND', message: 'No such address.' } })
+        return
+      }
+      res.json({ removed: true })
+    } catch (error) {
+      console.error(`[account] deleting address ${addressId} failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'ADDRESSES_UNAVAILABLE', message: 'Try again shortly.' } })
+    }
+  })
+
+  /** Exclusive default — transactional, so two can never coexist. */
+  router.put('/addresses/:id/default', limiters.addresses, requireShopper, requireActiveShopper, async (req, res) => {
+    const userId = req.session!.userId!
+    const addressId = String(req.params.id ?? '')
+    try {
+      const outcome = await setDefaultAddress(prisma, userId, addressId)
+      if (outcome === 'notFound') {
+        res.status(404).json({ error: { code: 'ADDRESS_NOT_FOUND', message: 'No such address.' } })
+        return
+      }
+      res.json({ ok: true })
+    } catch (error) {
+      console.error(`[account] setting default address ${addressId} failed for ${userId}`, error)
+      res.status(503).json({ error: { code: 'ADDRESSES_UNAVAILABLE', message: 'Try again shortly.' } })
     }
   })
 

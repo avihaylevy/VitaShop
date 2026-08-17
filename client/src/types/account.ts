@@ -7,11 +7,11 @@
  * to the address on the account chosen server-side, and the endpoint's own
  * tests assert it never travels.
  *
- * ⚠️ `defaultAddress` IS ALWAYS NULL TODAY. No application code writes an
- * `Address` row — checkout freezes the address onto the order as free text and
- * never saves it to the shopper (ISSUE-093). The field is modelled because the
- * endpoint returns it and F2c is where it starts being populated; until then
- * the pre-fill delivers a name and a phone.
+ * ⚠️ `defaultAddress` is LEGACY since M-009: the checkout picker reads the
+ * address BOOK (GET /api/account/addresses) instead. The field survives
+ * because the endpoint still returns it and tests pin it — retiring a
+ * response field is its own decision. (Its old comment claimed no code
+ * writes Address rows; false since F2c, corrected 2026-08-16.)
  */
 export type ShopperAddress = {
   line1: string
@@ -50,3 +50,37 @@ export type ClubStatus = {
 export type ClubStatusResult =
   | { ok: true; status: ClubStatus }
   | { ok: false; failure: 'unauthenticated' | 'unavailable' }
+
+/*
+ * MILESTONE-009 / DEC-090 — the address book + the profile edit.
+ */
+
+/** A managed row — ShopperAddress plus identity and the default flag. */
+export type ManagedAddress = ShopperAddress & {
+  id: string
+  isDefault: boolean
+}
+
+export type AddressBook = {
+  addresses: ManagedAddress[]
+  /** The server's cap (DEC-090 O5) — rendered, never re-derived. */
+  cap: number
+}
+
+export type AddressBookResult =
+  | { ok: true; book: AddressBook }
+  | { ok: false; failure: 'unauthenticated' | 'unavailable' }
+
+export type AddressWriteResult =
+  | { ok: true; address: ManagedAddress }
+  | { ok: false; failure: 'unauthenticated' | 'unavailable' | 'gone' | 'capReached' }
+  | { ok: false; failure: 'invalid'; codes: string[] }
+
+export type AddressActionResult =
+  | { ok: true }
+  | { ok: false; failure: 'unauthenticated' | 'unavailable' | 'gone' }
+
+export type ProfileWriteResult =
+  | { ok: true; profile: Pick<ShopperProfile, 'firstName' | 'lastName' | 'phone'> }
+  | { ok: false; failure: 'unauthenticated' | 'unavailable' }
+  | { ok: false; failure: 'invalid'; codes: string[] }

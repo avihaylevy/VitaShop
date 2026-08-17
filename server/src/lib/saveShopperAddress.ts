@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
+import { ADDRESS_CAP, CITY_MAX, LINE1_MAX } from './addressBook.js'
 
 /**
  * MILESTONE-008 Checkpoint F2c — ISSUE-093, the missing writer.
@@ -43,7 +44,7 @@ export type SaveAddressInput = {
 export async function saveShopperAddress(
   prisma: PrismaClient,
   input: SaveAddressInput,
-): Promise<'saved' | 'skipped-empty' | 'skipped-duplicate' | 'failed'> {
+): Promise<'saved' | 'skipped-empty' | 'skipped-duplicate' | 'skipped-cap' | 'skipped-invalid' | 'failed'> {
   const { userId, address } = input
   // Self pickup carries no address, and a blank one is not an address.
   if (!address || address.line1.trim() === '' || address.city.trim() === '') {
@@ -52,6 +53,12 @@ export async function saveShopperAddress(
 
   const line1 = address.line1.trim()
   const city = address.city.trim()
+
+  // 🔴 THE BOOK'S OWN BOUNDS (review finding): checkout's order address is
+  // free text by design (INV-02 freezes whatever the order used), but a row
+  // the book's PATCH would refuse must not enter the book through this side
+  // door. Skipped, never failed — post-commit convenience, as ever.
+  if (line1.length > LINE1_MAX || city.length > CITY_MAX) return 'skipped-invalid'
   const zipCode = address.zipCode?.trim() ? address.zipCode.trim() : null
 
   try {
@@ -70,6 +77,11 @@ export async function saveShopperAddress(
       (row) => row.line1 === line1 && row.city === city && (row.zipCode ?? null) === zipCode,
     )
     if (duplicate) return 'skipped-duplicate'
+
+    // DEC-090 O5 — the book's cap binds here too. SKIPPED, never failed:
+    // this runs post-commit and must not disturb the order; the profile
+    // page is where a full book gets managed.
+    if (existing.length >= ADDRESS_CAP) return 'skipped-cap'
 
     /*
      * 🔴 THE FIRST ADDRESS IS THE DEFAULT; LATER ONES ARE NOT. Choosing between

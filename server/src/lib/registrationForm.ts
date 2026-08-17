@@ -26,7 +26,9 @@ const passwordSchema = z
  * `05XXXXXXXX`, normalised before storage. Both accepted; normalised to
  * digits-only on the way in.
  */
-const PHONE_PATTERN = /^05\d-?\d{7}$/
+// Exported since M-009: the profile edit re-enforces the SAME rule —
+// a second copy is how field 25's format would drift between surfaces.
+export const PHONE_PATTERN = /^05\d-?\d{7}$/
 
 export function normalisePhone(raw: string): string {
   return raw.replace(/-/g, '')

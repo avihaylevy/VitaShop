@@ -375,6 +375,10 @@ export interface AccountRateLimiters {
   profile: RequestHandler
   favourites: RequestHandler
   club: RequestHandler
+  /** M-009 — profile edits: human-driven writes, the admin `write` pacing. */
+  profileWrite: RequestHandler
+  /** M-009 — the address book: reads + small writes while managing. */
+  addresses: RequestHandler
 }
 
 export function createAccountRateLimiters(): AccountRateLimiters {
@@ -382,6 +386,18 @@ export function createAccountRateLimiters(): AccountRateLimiters {
     profile: rateLimit({ ...SHARED, ...ACCOUNT_RATE_LIMITS.profile, keyGenerator: shopperKey }),
     favourites: rateLimit({ ...SHARED, ...ACCOUNT_RATE_LIMITS.favourites, keyGenerator: shopperKey }),
     club: rateLimit({ ...SHARED, ...ACCOUNT_RATE_LIMITS.club, keyGenerator: shopperKey }),
+    profileWrite: rateLimit({
+      ...SHARED,
+      windowMs: 15 * MINUTE,
+      limit: 60,
+      keyGenerator: shopperKey,
+    }),
+    addresses: rateLimit({
+      ...SHARED,
+      windowMs: 15 * MINUTE,
+      limit: 120,
+      keyGenerator: shopperKey,
+    }),
   }
 }
 

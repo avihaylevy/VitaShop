@@ -1,0 +1,53 @@
+{
+  "title": "My profile",
+  "state": {
+    "loading": "Loading…",
+    "loadFailed": "The data could not be loaded.",
+    "retry": "Try again",
+    "unauthenticated": "Sign in to view this page."
+  },
+  "details": {
+    "heading": "Personal details",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "phone": "Mobile phone",
+    "phoneHint": "For example: 050-9871234",
+    "emailNote": "Your email address is your sign-in identity and cannot be changed.",
+    "save": "Save details",
+    "saving": "Saving…",
+    "saved": "Your details were saved."
+  },
+  "addresses": {
+    "heading": "Shipping addresses",
+    "intro": "Up to {{cap}} addresses. The default one pre-fills at checkout.",
+    "empty": "No saved addresses yet.",
+    "defaultBadge": "Default",
+    "makeDefault": "Make default",
+    "edit": "Edit",
+    "remove": "Delete",
+    "addHeading": "Add an address",
+    "editHeading": "Edit address",
+    "line1": "Street, house number and apartment",
+    "line1Hint": "For example: Herzl 12, apt. 3",
+    "city": "City",
+    "zip": "Zip code (optional)",
+    "add": "Add",
+    "saveEdit": "Save changes",
+    "cancelEdit": "Cancel",
+    "added": "The address was added.",
+    "updated": "The address was updated.",
+    "removed": "The address was deleted.",
+    "defaulted": "The default was updated.",
+    "capReached": "You reached the cap of {{cap}} addresses. Delete one to add another.",
+    "gone": "The address was not found. The list may be out of date."
+  },
+  "errors": {
+    "generic": "The action failed. Please try again.",
+    "FIRST_NAME_REQUIRED": "Enter a first name.",
+    "LAST_NAME_REQUIRED": "Enter a last name.",
+    "PHONE_INVALID": "The phone must be a valid Israeli mobile number.",
+    "LINE1_REQUIRED": "Enter a street and house number.",
+    "CITY_REQUIRED": "Enter a city.",
+    "ZIP_INVALID": "The zip code is not valid."
+  }
+}

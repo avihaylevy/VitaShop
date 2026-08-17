@@ -292,6 +292,8 @@ describe('the middleware ORDER, which the file calls the contract', () => {
           // test's subject is /profile's ordering, so pass-throughs suffice.
           favourites: (_req, _res, next) => next(),
           club: (_req, _res, next) => next(),
+          profileWrite: (_req, _res, next) => next(),
+          addresses: (_req, _res, next) => next(),
         },
       }),
     )

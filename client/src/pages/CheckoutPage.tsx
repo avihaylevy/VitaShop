@@ -17,8 +17,8 @@ import {
   type CardFieldProblem,
 } from '../lib/cardValidation'
 import { orderStatusLabelKey } from '../lib/orderStatus'
-import { requestShopperProfile } from '../lib/accountApi'
-import type { ShopperProfile } from '../types/account'
+import { requestAddressBook, requestShopperProfile } from '../lib/accountApi'
+import type { ManagedAddress, ShopperProfile } from '../types/account'
 import {
   DELIVERY_METHOD_NAMES,
   type CheckoutQuote,
@@ -99,9 +99,9 @@ export function CheckoutPage() {
    * CHECKOUT — it is a convenience, and the shopper can type the same details.
    * Only `unauthenticated` matters, and the quote below reports that anyway.
    *
-   * ⚠️ `defaultAddress` is null for every real shopper today: nothing writes an
-   * `Address` row (ISSUE-093). The name and phone arrive; the address does not,
-   * and the form says so rather than looking mysteriously empty.
+   * ⚠️ Since M-009 the ADDRESS half comes from the address book (the
+   * labelled picker below), not from `defaultAddress` — that field is
+   * legacy. The profile supplies the name/phone line only.
    */
   /*
    * 🔴 THREE STATES, NOT A BOOLEAN. `profileLoaded` plus a null profile said
@@ -114,6 +114,15 @@ export function CheckoutPage() {
     { status: 'loading' } | { status: 'ready'; profile: ShopperProfile } | { status: 'unavailable' }
   >({ status: 'loading' })
   const [address, setAddress] = useState({ line1: '', city: '', zipCode: '' })
+  /**
+   * M-009 / DEC-090 O3 — REQ-F-051: "at order time the user picks a saved
+   * address or enters a new one." `null` until the book loads (or when it
+   * fails/is empty — the form alone then, exactly as before this
+   * milestone). Picking a row COPIES it into the fields; the FIELDS remain
+   * the single source of what `/pay` receives, so the wire is unchanged.
+   */
+  const [savedAddresses, setSavedAddresses] = useState<ManagedAddress[] | null>(null)
+  const [pickedAddressId, setPickedAddressId] = useState<string | 'new'>('new')
   /*
    * 🔴 VALIDATION FIRES ON BLUR, BY DECISION. (ISSUE-059 sweep: this once
    * read "not on a submit that does not exist yet" — F2c's confirm step has
@@ -188,27 +197,72 @@ export function CheckoutPage() {
         return
       }
       setProfileState({ status: 'ready', profile: result.profile })
-      const saved = result.profile.defaultAddress
-      if (!saved) return
+    })
+    /*
+     * M-009 — the ADDRESS BOOK replaces the old silent defaultAddress
+     * prefill: the default row arrives SELECTED and labelled instead of
+     * appearing as mysteriously pre-typed text. A failed/empty book leaves
+     * the plain form — the picker is a convenience, never a gate.
+     *
+     * 🔴 NEVER OVERWRITE WHAT THE SHOPPER HAS ALREADY TYPED: the book
+     * resolves asynchronously, so the default is copied into the fields
+     * only while they are still empty (the original prefill's rule).
+     */
+    void requestAddressBook().then((result) => {
+      if (!live || !result.ok || result.book.addresses.length === 0) return
+      setSavedAddresses(result.book.addresses)
+      const preferred = result.book.addresses.find((a) => a.isDefault) ?? result.book.addresses[0]!
       /*
-       * 🔴 NEVER OVERWRITE WHAT THE SHOPPER HAS ALREADY TYPED. The profile
-       * resolves asynchronously; a shopper who starts typing a street while it
-       * is in flight had their words replaced by the saved address.
-       *
-       * ⚠️ LATENT TODAY ONLY BECAUSE `defaultAddress` IS ALWAYS NULL
-       * (ISSUE-093). It goes live the moment F2c starts persisting addresses,
-       * which is precisely when nobody would be looking for it.
+       * 🔴 THE PICK AND THE COPY SHARE ONE CONDITION (review finding): the
+       * pick was unconditional while the copy respected typed fields, so a
+       * shopper typing during the load ended with the radio claiming an
+       * address the payload did not carry — and the save-checkbox hidden.
+       * A functional update reads the CURRENT fields, then both happen or
+       * neither does.
        */
-      setAddress((current) =>
-        current.line1 === '' && current.city === '' && current.zipCode === ''
-          ? { line1: saved.line1, city: saved.city, zipCode: saved.zipCode ?? '' }
-          : current,
-      )
+      setAddress((current) => {
+        const untouched = current.line1 === '' && current.city === '' && current.zipCode === ''
+        if (!untouched) return current
+        setPickedAddressId(preferred.id)
+        return { line1: preferred.line1, city: preferred.city, zipCode: preferred.zipCode ?? '' }
+      })
     })
     return () => {
       live = false
     }
   }, [])
+
+  function pickAddress(value: string) {
+    setPickedAddressId(value)
+    if (value === 'new') {
+      setAddress({ line1: '', city: '', zipCode: '' })
+      setTouched({ line1: false, city: false })
+      return
+    }
+    const row = savedAddresses?.find((a) => a.id === value)
+    if (row) {
+      // A deliberate pick OVERWRITES — that is what picking means.
+      setAddress({ line1: row.line1, city: row.city, zipCode: row.zipCode ?? '' })
+      setTouched({ line1: false, city: false })
+      /*
+       * 🔴 THE SAVE CONSENT DIES WITH ITS CHECKBOX (review finding): the
+       * box renders only on 'new', and a true left behind travelled in
+       * the /pay body with no visible control consenting to it.
+       */
+      setSaveAddress(false)
+    }
+  }
+
+  /**
+   * 🔴 EDITING UNPICKS (review finding): a field change after picking a
+   * saved row left the radio asserting an address the payload no longer
+   * matched — and kept the save offer hidden for what is genuinely a new
+   * address. Every address-field onChange routes through here.
+   */
+  function editAddressField(patch: Partial<{ line1: string; city: string; zipCode: string }>) {
+    setAddress((a) => ({ ...a, ...patch }))
+    setPickedAddressId((current) => (current === 'new' ? current : 'new'))
+  }
 
   const load = useCallback(async (next: DeliveryMethodName) => {
     const id = ++requestId.current
@@ -254,7 +308,8 @@ export function CheckoutPage() {
       address: quote.deliveryMethod === 'self_pickup' ? null : { ...address, zipCode: address.zipCode || null },
       idempotencyKey: idempotencyKey.current,
       simulatedOutcome: outcome,
-      saveAddress,
+      // Belt to the checkbox gate: consent is only meaningful for 'new'.
+      saveAddress: saveAddress && pickedAddressId === 'new',
     })
 
     /*
@@ -442,14 +497,48 @@ export function CheckoutPage() {
             </p>
           )}
 
-          {profileState.status !== 'loading' && (
+          {profileState.status !== 'loading' && savedAddresses === null && (
             <p className="mb-2 text-xs text-text-muted">
               {profileState.status === 'unavailable'
                 ? t('address.unavailable')
-                : profileState.profile.defaultAddress
-                  ? t('address.prefilled')
-                  : t('address.noSavedAddress')}
+                : t('address.noSavedAddress')}
             </p>
+          )}
+
+          {/* M-009 — the saved-address PICKER (REQ-F-051's own wording). */}
+          {savedAddresses !== null && (
+            <div className="mb-3 flex flex-col gap-2" role="radiogroup" aria-label={t('address.pickerLegend')}>
+              {savedAddresses.map((saved) => (
+                <label key={saved.id} className="flex min-h-11 items-center gap-2 text-sm text-text-ink">
+                  <input
+                    type="radio"
+                    name="savedAddress"
+                    value={saved.id}
+                    checked={pickedAddressId === saved.id}
+                    disabled={payState.status === 'paying'}
+                    onChange={() => pickAddress(saved.id)}
+                    className={`${FOCUS_RING} size-4 shrink-0 accent-brand-teal`}
+                  />
+                  <span>
+                    {saved.line1}, {saved.city}
+                    {saved.zipCode ? `, ${saved.zipCode}` : ''}
+                    {saved.isDefault ? ` · ${t('address.pickerDefault')}` : ''}
+                  </span>
+                </label>
+              ))}
+              <label className="flex min-h-11 items-center gap-2 text-sm text-text-ink">
+                <input
+                  type="radio"
+                  name="savedAddress"
+                  value="new"
+                  checked={pickedAddressId === 'new'}
+                  disabled={payState.status === 'paying'}
+                  onChange={() => pickAddress('new')}
+                  className={`${FOCUS_RING} size-4 shrink-0 accent-brand-teal`}
+                />
+                <span>{t('address.pickerNew')}</span>
+              </label>
+            </div>
           )}
 
           <div className="flex flex-col gap-3">
@@ -473,7 +562,7 @@ export function CheckoutPage() {
                 required
                 aria-required="true"
                 value={address.line1}
-                onChange={(event) => setAddress((a) => ({ ...a, line1: event.target.value }))}
+                onChange={(event) => editAddressField({ line1: event.target.value })}
                 onBlur={() => setTouched((current) => ({ ...current, line1: true }))}
                 aria-invalid={touched.line1 && address.line1.trim() === ''}
                 aria-describedby={
@@ -498,7 +587,7 @@ export function CheckoutPage() {
                 required
                 aria-required="true"
                 value={address.city}
-                onChange={(event) => setAddress((a) => ({ ...a, city: event.target.value }))}
+                onChange={(event) => editAddressField({ city: event.target.value })}
                 onBlur={() => setTouched((current) => ({ ...current, city: true }))}
                 aria-invalid={touched.city && address.city.trim() === ''}
                 aria-describedby={
@@ -521,7 +610,7 @@ export function CheckoutPage() {
                 type="text"
                 autoComplete="postal-code"
                 value={address.zipCode}
-                onChange={(event) => setAddress((a) => ({ ...a, zipCode: event.target.value }))}
+                onChange={(event) => editAddressField({ zipCode: event.target.value })}
                 className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
               />
             </div>
@@ -715,8 +804,10 @@ export function CheckoutPage() {
             ))}
           </div>
 
-          {/* ISSUE-093 — opt-in, default off, and only where an address exists. */}
-          {state.quote.deliveryMethod !== 'self_pickup' && (
+          {/* ISSUE-093 — opt-in, default off; M-009: offered only for a NEW
+              address (saving an already-saved row would duplicate it, and
+              the transport dedups — but the offer itself would be noise). */}
+          {state.quote.deliveryMethod !== 'self_pickup' && pickedAddressId === 'new' && (
             <label className="mb-3 flex min-h-11 items-center gap-2 text-sm text-text-ink">
               <input
                 type="checkbox"

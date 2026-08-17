@@ -1,5 +1,10 @@
 import { getApiBaseUrl } from './apiBaseUrl.js'
 import type {
+  AddressActionResult,
+  AddressBookResult,
+  AddressWriteResult,
+  ManagedAddress,
+  ProfileWriteResult,
   ClubStatus,
   ClubStatusResult,
   ShopperAddress,
@@ -134,4 +139,164 @@ export function requestClubAction(action: 'join' | 'leave'): Promise<ClubStatusR
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ action }),
   })
+}
+
+/*
+ * MILESTONE-009 / DEC-090 — the profile edit + the address book transports.
+ * Same posture throughout: session-only identity, validated-not-cast, 401
+ * distinguished, named codes carried for the form to map.
+ */
+
+function readManagedAddress(value: unknown): ManagedAddress | null {
+  if (!isPlainObject(value)) return null
+  if (typeof value.id !== 'string' || value.id === '') return null
+  if (typeof value.line1 !== 'string' || typeof value.city !== 'string') return null
+  if (typeof value.isDefault !== 'boolean') return null
+  return {
+    id: value.id,
+    line1: value.line1,
+    city: value.city,
+    zipCode: typeof value.zipCode === 'string' ? value.zipCode : null,
+    isDefault: value.isDefault,
+  }
+}
+
+function codesOf(body: unknown): string[] {
+  if (!isPlainObject(body) || !isPlainObject(body.error)) return []
+  return Array.isArray(body.error.codes)
+    ? body.error.codes.filter((c): c is string => typeof c === 'string')
+    : []
+}
+
+function errorCodeOf(body: unknown): string | undefined {
+  if (!isPlainObject(body) || !isPlainObject(body.error)) return undefined
+  return typeof body.error.code === 'string' ? body.error.code : undefined
+}
+
+async function accountCall(
+  path: string,
+  init?: { method: string; body?: unknown },
+): Promise<{ status: number; body: unknown } | null> {
+  const base = getApiBaseUrl()
+  if (!base.ok) return null
+  try {
+    const response = await fetch(`${base.value}/api/account${path}`, {
+      method: init?.method ?? 'GET',
+      credentials: 'include',
+      ...(init?.body === undefined
+        ? {}
+        : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(init.body) }),
+    })
+    let body: unknown = null
+    try {
+      body = await response.json()
+    } catch {
+      body = null
+    }
+    return { status: response.status, body }
+  } catch {
+    return null
+  }
+}
+
+export async function patchShopperProfile(fields: {
+  firstName: string
+  lastName: string
+  phone: string
+}): Promise<ProfileWriteResult> {
+  const raw = await accountCall('/profile', { method: 'PATCH', body: fields })
+  if (raw === null) return { ok: false, failure: 'unavailable' }
+  if (raw.status === 401) return { ok: false, failure: 'unauthenticated' }
+  if (raw.status === 400) return { ok: false, failure: 'invalid', codes: codesOf(raw.body) }
+  if (raw.status !== 200) return { ok: false, failure: 'unavailable' }
+  const body = raw.body
+  if (!isPlainObject(body) || !isPlainObject(body.profile)) {
+    return { ok: false, failure: 'unavailable' }
+  }
+  const profile = body.profile
+  if (typeof profile.firstName !== 'string' || typeof profile.lastName !== 'string') {
+    return { ok: false, failure: 'unavailable' }
+  }
+  return {
+    ok: true,
+    profile: {
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      phone: typeof profile.phone === 'string' ? profile.phone : null,
+    },
+  }
+}
+
+export async function requestAddressBook(): Promise<AddressBookResult> {
+  const raw = await accountCall('/addresses')
+  if (raw === null) return { ok: false, failure: 'unavailable' }
+  if (raw.status === 401) return { ok: false, failure: 'unauthenticated' }
+  if (raw.status !== 200) return { ok: false, failure: 'unavailable' }
+  const body = raw.body
+  if (!isPlainObject(body) || !Array.isArray(body.addresses) || typeof body.cap !== 'number') {
+    return { ok: false, failure: 'unavailable' }
+  }
+  const addresses: ManagedAddress[] = []
+  for (const entry of body.addresses) {
+    const parsed = readManagedAddress(entry)
+    if (!parsed) return { ok: false, failure: 'unavailable' }
+    addresses.push(parsed)
+  }
+  return { ok: true, book: { addresses, cap: body.cap } }
+}
+
+function addressWriteResult(raw: { status: number; body: unknown } | null): AddressWriteResult {
+  if (raw === null) return { ok: false, failure: 'unavailable' }
+  if (raw.status === 401) return { ok: false, failure: 'unauthenticated' }
+  if (raw.status === 404) return { ok: false, failure: 'gone' }
+  if (raw.status === 400) {
+    if (errorCodeOf(raw.body) === 'ADDRESS_CAP_REACHED') {
+      return { ok: false, failure: 'capReached' }
+    }
+    return { ok: false, failure: 'invalid', codes: codesOf(raw.body) }
+  }
+  if (raw.status !== 200 && raw.status !== 201) return { ok: false, failure: 'unavailable' }
+  const body = raw.body
+  const address = isPlainObject(body) ? readManagedAddress(body.address) : null
+  return address ? { ok: true, address } : { ok: false, failure: 'unavailable' }
+}
+
+export async function addAddress(fields: {
+  line1: string
+  city: string
+  zipCode: string | null
+}): Promise<AddressWriteResult> {
+  return addressWriteResult(await accountCall('/addresses', { method: 'POST', body: fields }))
+}
+
+export async function patchAddress(
+  addressId: string,
+  fields: { line1: string; city: string; zipCode: string | null },
+): Promise<AddressWriteResult> {
+  return addressWriteResult(
+    await accountCall(`/addresses/${encodeURIComponent(addressId)}`, {
+      method: 'PATCH',
+      body: fields,
+    }),
+  )
+}
+
+function actionResult(raw: { status: number; body: unknown } | null): AddressActionResult {
+  if (raw === null) return { ok: false, failure: 'unavailable' }
+  if (raw.status === 401) return { ok: false, failure: 'unauthenticated' }
+  if (raw.status === 404) return { ok: false, failure: 'gone' }
+  if (raw.status !== 200) return { ok: false, failure: 'unavailable' }
+  return { ok: true }
+}
+
+export async function removeAddress(addressId: string): Promise<AddressActionResult> {
+  return actionResult(
+    await accountCall(`/addresses/${encodeURIComponent(addressId)}`, { method: 'DELETE' }),
+  )
+}
+
+export async function makeDefaultAddress(addressId: string): Promise<AddressActionResult> {
+  return actionResult(
+    await accountCall(`/addresses/${encodeURIComponent(addressId)}/default`, { method: 'PUT' }),
+  )
 }

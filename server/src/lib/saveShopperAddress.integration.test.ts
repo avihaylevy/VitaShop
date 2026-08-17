@@ -134,3 +134,43 @@ describe('what does NOT get written', () => {
     expect(result).toBe('failed')
   })
 })
+
+describe('DEC-090 O5 — the cap binds here too (M-009 review)', () => {
+  it('🔴 skipped-cap at five rows, and NOTHING is written', async () => {
+    for (let i = 0; i < 5; i++) {
+      await prisma.address.create({
+        data: { userId, line1: `רחוב ${i}`, city: 'תל אביב', isDefault: i === 0 },
+      })
+    }
+    const result = await saveShopperAddress(prisma, {
+      userId,
+      address: { line1: 'רחוב שישי', city: 'חיפה' },
+    })
+    expect(result).toBe('skipped-cap')
+    expect(await rows()).toHaveLength(5)
+  })
+
+  it('a DUPLICATE at a full book answers skipped-duplicate, not skipped-cap — the dedup check runs first', async () => {
+    // Pinned deliberately: "you already have this address" is the truer
+    // answer than "your book is full" when both hold.
+    for (let i = 0; i < 5; i++) {
+      await prisma.address.create({
+        data: { userId, line1: `רחוב ${i}`, city: 'תל אביב', isDefault: i === 0 },
+      })
+    }
+    const result = await saveShopperAddress(prisma, {
+      userId,
+      address: { line1: 'רחוב 2', city: 'תל אביב' },
+    })
+    expect(result).toBe('skipped-duplicate')
+  })
+
+  it('over-long values are skipped-invalid — the book PATCH must never refuse a row this writer created', async () => {
+    const result = await saveShopperAddress(prisma, {
+      userId,
+      address: { line1: 'א'.repeat(201), city: 'תל אביב' },
+    })
+    expect(result).toBe('skipped-invalid')
+    expect(await rows()).toHaveLength(0)
+  })
+})
