@@ -9,7 +9,11 @@ import {
   uploadAdminProductImage,
 } from '../lib/adminProductsApi'
 import { DOSAGE_FORM_KEYS } from '../lib/catalogApi'
-import type { AdminProductOptions, AdminProductRow } from '../types/adminProducts'
+import type {
+  AdminProductDuplicate,
+  AdminProductOptions,
+  AdminProductRow,
+} from '../types/adminProducts'
 
 /**
  * MILESTONE-010 Checkpoint C / DEC-088 O2 — the create form. No image
@@ -71,6 +75,9 @@ export function AdminProductNewPage() {
   /** NEW goals queued for this product — both names required (DEC-017). */
   const [newGoals, setNewGoals] = useState<{ nameHe: string; nameEn: string }[]>([])
   const [goalDraft, setGoalDraft] = useState({ nameHe: '', nameEn: '' })
+  /** DEC-093 — the twin the server refused over; renders the override. */
+  const [duplicateOf, setDuplicateOf] = useState<AdminProductDuplicate | null>(null)
+  const [allowDuplicate, setAllowDuplicate] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
   /** '' | uploading-text | uploaded-text — read by an ALWAYS-mounted status. */
@@ -95,6 +102,14 @@ export function AdminProductNewPage() {
 
   function set<K extends keyof typeof EMPTY_FORM>(key: K, value: string) {
     setForm((current) => ({ ...current, [key]: value }))
+    // 🔴 The override consents to ONE SPECIFIC twin (review finding):
+    // editing anything that changes which product this IS — names or
+    // brand — withdraws the consent, or a ticked "create anyway" would
+    // silently override a DIFFERENT twin the admin never saw.
+    if (key === 'nameHe' || key === 'nameEn' || key === 'brandId' || key === 'newBrandName') {
+      setDuplicateOf(null)
+      setAllowDuplicate(false)
+    }
   }
 
   // i18next key-fallback answers "is this code known" (review finding: a
@@ -176,12 +191,32 @@ export function AdminProductNewPage() {
       ...(form.isVegan === '' ? {} : { isVegan: form.isVegan === 'true' }),
       ...(goalIds.length > 0 ? { healthGoalIds: goalIds } : {}),
       ...(newGoals.length > 0 ? { newHealthGoals: newGoals } : {}),
+      // DEC-093 — sent only when the admin ticked the override after
+      // seeing the twin; a fresh submit never carries it.
+      ...(allowDuplicate ? { allowDuplicate: true } : {}),
       // DEC-089b — absent means the placeholder; an empty field is not a URL.
       ...(form.imageUrl.trim() === '' ? {} : { imageUrl: form.imageUrl.trim() }),
     })
     setSubmitting(false)
 
     if (!result.ok) {
+      if (result.failure.kind === 'duplicate') {
+        // DEC-093 — name the twin in the always-mounted alert and reveal
+        // the override checkbox. The admin decides; the machine only
+        // surfaced the collision.
+        const twin = result.failure.duplicate
+        setDuplicateOf(twin)
+        setFailureText(
+          [
+            t('products.duplicate.message', {
+              name: i18n.language === 'he' ? twin.nameHe : twin.nameEn,
+              slug: twin.slug,
+            }),
+            ...(twin.isActive ? [] : [t('products.duplicate.inactiveHint')]),
+          ].join(' '),
+        )
+        return
+      }
       if (result.failure.kind === 'invalid') {
         // ALL codes, not codes[0] (review finding): one response already
         // names every problem; surfacing one at a time costs the admin a
@@ -233,6 +268,8 @@ export function AdminProductNewPage() {
     setGoalIds([])
     setNewGoals([])
     setGoalDraft({ nameHe: '', nameEn: '' })
+    setDuplicateOf(null)
+    setAllowDuplicate(false)
   }
 
   const inputClass = `${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`
@@ -640,6 +677,22 @@ export function AdminProductNewPage() {
               </ul>
             )}
           </fieldset>
+
+          {/* DEC-093 — the override, revealed only after a duplicate
+              refusal (a user-driven reveal, like the new-brand fields).
+              Unticked by default on every reveal: creating a twin must be
+              an explicit choice, never a leftover. */}
+          {duplicateOf !== null && (
+            <label className="flex items-center gap-2 text-state-error">
+              <input
+                type="checkbox"
+                className={FOCUS_RING}
+                checked={allowDuplicate}
+                onChange={(e) => setAllowDuplicate(e.target.checked)}
+              />
+              {t('products.duplicate.override')}
+            </label>
+          )}
 
           <Button
             type="submit"

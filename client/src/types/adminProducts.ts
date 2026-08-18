@@ -47,10 +47,20 @@ export type AdminProductsResult =
   | { ok: true; page: AdminProductsPage }
   | { ok: false; failure: AdminProductsFailure }
 
+/** DEC-093 — the existing product a PRODUCT_DUPLICATE refusal names. */
+export type AdminProductDuplicate = {
+  id: string
+  nameHe: string
+  nameEn: string
+  slug: string
+  isActive: boolean
+}
+
 /** A write refusal: the named codes travel so the form can point at fields. */
 export type AdminProductWriteFailure =
   | AdminProductsFailure
   | { kind: 'invalid'; codes: string[]; fields: string[] }
+  | { kind: 'duplicate'; duplicate: AdminProductDuplicate }
   | { kind: 'gone' }
   | { kind: 'server' }
 
@@ -95,6 +105,8 @@ export type AdminProductCreatePayload = {
   healthGoalIds?: string[]
   /** NEW goals — HealthGoal requires BOTH names (DEC-017 pairing). */
   newHealthGoals?: { nameHe: string; nameEn: string }[]
+  /** DEC-093 — acknowledges a PRODUCT_DUPLICATE refusal; create anyway. */
+  allowDuplicate?: boolean
   /** DEC-089b — optional absolute http(s) image URL; omitted = placeholder. */
   imageUrl?: string
 }

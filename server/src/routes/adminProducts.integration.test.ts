@@ -579,7 +579,13 @@ describe('CREATE — DEC-088 O2/O4', () => {
     const cookie = await signIn(ADMIN)
     const first = await api('/', { method: 'POST', cookie, body: await createBody() })
     expect(first.status).toBe(201)
-    const second = await api('/', { method: 'POST', cookie, body: await createBody() })
+    // DEC-093 gates identical names now; the suffix machinery under test
+    // is reached through the explicit override.
+    const second = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ allowDuplicate: true }),
+    })
     expect(second.status).toBe(201)
     const a = ((await first.json()) as { product: { slug: string } }).product.slug
     const b = ((await second.json()) as { product: { slug: string } }).product.slug
@@ -760,7 +766,13 @@ describe('CREATE — a NEW company by name (user report 2026-08-17)', () => {
     const second = await api('/', {
       method: 'POST',
       cookie,
-      body: await createBody({ brandId: undefined, newBrandName: NEW_BRAND.toUpperCase() }),
+      // allowDuplicate: the PRODUCT name repeats by design; the subject
+      // under test is the BRAND row count (DEC-093 gates the product).
+      body: await createBody({
+        brandId: undefined,
+        newBrandName: NEW_BRAND.toUpperCase(),
+        allowDuplicate: true,
+      }),
     })
     expect(second.status).toBe(201)
     const a = ((await first.json()) as { product: { brand: { id: string } } }).product.brand.id
@@ -787,7 +799,7 @@ describe('CREATE — a NEW company by name (user report 2026-08-17)', () => {
     const second = await api('/', {
       method: 'POST',
       cookie,
-      body: await createBody({ brandId: undefined, newBrandName: NEW_BRAND_EN }),
+      body: await createBody({ brandId: undefined, newBrandName: NEW_BRAND_EN, allowDuplicate: true }),
     })
     expect(second.status).toBe(201)
     const a = ((await first.json()) as { product: { brand: { id: string } } }).product.brand.id
@@ -803,6 +815,7 @@ describe('CREATE — a NEW company by name (user report 2026-08-17)', () => {
         brandId: undefined,
         newBrandName: 'שם שוק אחר לגמרי',
         newBrandNameEn: NEW_BRAND_EN.toUpperCase(),
+        allowDuplicate: true,
       }),
     })
     expect(third.status).toBe(201)
@@ -1000,8 +1013,11 @@ describe('CREATE — dietary claims + health goals reach the SHOP FILTERS (user 
     const second = await api('/', {
       method: 'POST',
       cookie,
+      // allowDuplicate: same product name by design; the subject is the
+      // GOAL row count.
       body: await createBody({
         newHealthGoals: [{ nameHe: 'שם עברי אחר לגמרי', nameEn: GOAL_EN.toUpperCase() }],
+        allowDuplicate: true,
       }),
     })
     expect(second.status).toBe(201)
@@ -1046,9 +1062,12 @@ describe('CREATE — dietary claims + health goals reach the SHOP FILTERS (user 
     const r = await api('/', {
       method: 'POST',
       cookie,
+      // allowDuplicate: the squatters share the brand and name by design;
+      // the subject is the INSERT failing after goal resolution.
       body: await createBody({
         nameEn,
         newHealthGoals: [{ nameHe: GOAL_HE, nameEn: GOAL_EN }],
+        allowDuplicate: true,
       }),
     })
     expect(r.status).toBe(503)
@@ -1101,5 +1120,197 @@ describe('CREATE — dietary claims + health goals reach the SHOP FILTERS (user 
       select: { isKosher: true, isVegan: true },
     })
     expect(row).toEqual({ isKosher: null, isVegan: true })
+  })
+})
+
+describe('DEC-093 — normalized duplicate detection (surface-and-confirm)', () => {
+  type DupError = {
+    error: {
+      code: string
+      duplicate: { id: string; nameHe: string; nameEn: string; slug: string; isActive: boolean }
+    }
+  }
+
+  it('🔴 the SAME name again under the same brand is refused, and the refusal NAMES the twin', async () => {
+    const cookie = await signIn(ADMIN)
+    const first = await api('/', { method: 'POST', cookie, body: await createBody() })
+    expect(first.status).toBe(201)
+    const twin = ((await first.json()) as { product: { id: string; slug: string } }).product
+
+    const second = await api('/', { method: 'POST', cookie, body: await createBody() })
+    expect(second.status).toBe(400)
+    const body = (await second.json()) as DupError
+    expect(body.error.code).toBe('PRODUCT_DUPLICATE')
+    expect(body.error.duplicate.id).toBe(twin.id)
+    expect(body.error.duplicate.slug).toBe(twin.slug)
+    expect(body.error.duplicate.isActive).toBe(true)
+  })
+
+  it('🔴 NORMALIZED variants are caught: casing, hyphen-vs-space, gershayim', async () => {
+    const cookie = await signIn(ADMIN)
+    const first = await api('/', { method: 'POST', cookie, body: await createBody() })
+    expect(first.status).toBe(201)
+
+    // createBody: nameHe 'מוצר חדש לבדיקה' · nameEn '<prefix>created product'
+    // 🔴 Each variant changes BOTH names, keeping only ONE matchable —
+    // otherwise the untouched other name matches and the test passes with
+    // the rule under test deleted (caught live: the quote-strip mutation
+    // sailed green through the first version of this list).
+    const variants = [
+      // case + spacing — only the ENGLISH path can fire
+      { nameHe: 'שם עברי שונה לחלוטין א', nameEn: `${TEST_FIXTURE_SLUG_PREFIX}CREATED   Product` },
+      // hyphen vs space — only the HEBREW path can fire
+      { nameHe: 'מוצר-חדש לבדיקה', nameEn: `${TEST_FIXTURE_SLUG_PREFIX}created unrelated b` },
+      // gershayim stripped — only the HEBREW path can fire
+      { nameHe: 'מוצר חד"ש לבדיקה', nameEn: `${TEST_FIXTURE_SLUG_PREFIX}created unrelated c` },
+    ]
+    for (const variant of variants) {
+      const r = await api('/', { method: 'POST', cookie, body: await createBody(variant) })
+      expect(r.status).toBe(400)
+      expect(((await r.json()) as DupError).error.code).toBe('PRODUCT_DUPLICATE')
+    }
+  })
+
+  it('🔴 CONTROLS — a legit variant and a cross-brand same-name are both ALLOWED', async () => {
+    const cookie = await signIn(ADMIN)
+    const first = await api('/', { method: 'POST', cookie, body: await createBody() })
+    expect(first.status).toBe(201)
+
+    // A different count is a DIFFERENT product (digits survive
+    // normalization by design) — must create.
+    const variant = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        nameHe: 'מוצר חדש לבדיקה 60 כמוסות',
+        nameEn: `${TEST_FIXTURE_SLUG_PREFIX}created product 60 caps`,
+      }),
+    })
+    expect(variant.status).toBe(201)
+
+    // The same names under ANOTHER brand — different manufacturers may
+    // sell identically named products; the check is brand-scoped.
+    const seeded = await prisma.product.findFirstOrThrow({
+      where: { isActive: true },
+      select: { brandId: true },
+    })
+    const otherBrand = await prisma.brand.findFirstOrThrow({
+      where: { id: { not: seeded.brandId } },
+      select: { id: true },
+    })
+    const crossBrand = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ brandId: otherBrand.id }),
+    })
+    expect(crossBrand.status).toBe(201)
+  })
+
+  it('an INACTIVE twin still refuses, and the payload says it is inactive', async () => {
+    const cookie = await signIn(ADMIN)
+    const first = await api('/', { method: 'POST', cookie, body: await createBody() })
+    expect(first.status).toBe(201)
+    const twin = ((await first.json()) as { product: { id: string } }).product
+    await api(`/${twin.id}/active`, { method: 'PATCH', cookie, body: { isActive: false } })
+
+    const second = await api('/', { method: 'POST', cookie, body: await createBody() })
+    expect(second.status).toBe(400)
+    const body = (await second.json()) as DupError
+    expect(body.error.code).toBe('PRODUCT_DUPLICATE')
+    expect(body.error.duplicate.isActive).toBe(false)
+  })
+
+  it('allowDuplicate=true creates anyway, with the suffixed slug', async () => {
+    const cookie = await signIn(ADMIN)
+    const first = await api('/', { method: 'POST', cookie, body: await createBody() })
+    expect(first.status).toBe(201)
+    const a = ((await first.json()) as { product: { slug: string } }).product.slug
+
+    const second = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({ allowDuplicate: true }),
+    })
+    expect(second.status).toBe(201)
+    const b = ((await second.json()) as { product: { slug: string } }).product.slug
+    expect(b).toBe(`${a}-2`)
+  })
+
+  it('🔴 a "new" company that DEDUPES to an existing brand still hits the gate', async () => {
+    const cookie = await signIn(ADMIN)
+    // First product under a NEW company.
+    const first = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        brandId: undefined,
+        newBrandName: `${TEST_FIXTURE_SLUG_PREFIX}dup-gate brand`,
+      }),
+    })
+    expect(first.status).toBe(201)
+    // Same product name, brand typed AGAIN as "new" — resolves to the
+    // existing brand row, so the duplicate gate must fire.
+    const second = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        brandId: undefined,
+        newBrandName: `${TEST_FIXTURE_SLUG_PREFIX}DUP-GATE BRAND`,
+      }),
+    })
+    expect(second.status).toBe(400)
+    expect(((await second.json()) as DupError).error.code).toBe('PRODUCT_DUPLICATE')
+  })
+
+  it('🔴 PATCH-rename onto a sibling is refused; the override passes; re-saving the OWN name never self-flags', async () => {
+    const cookie = await signIn(ADMIN)
+    const first = await api('/', { method: 'POST', cookie, body: await createBody() })
+    expect(first.status).toBe(201)
+    const second = await api('/', {
+      method: 'POST',
+      cookie,
+      body: await createBody({
+        nameHe: 'מוצר אחר לבדיקה',
+        nameEn: `${TEST_FIXTURE_SLUG_PREFIX}created other product`,
+      }),
+    })
+    expect(second.status).toBe(201)
+    const other = ((await second.json()) as { product: { id: string } }).product
+
+    // Rename the second onto the first's Hebrew name → refused.
+    const rename = await api(`/${other.id}`, {
+      method: 'PATCH',
+      cookie,
+      body: { nameHe: 'מוצר חדש לבדיקה' },
+    })
+    expect(rename.status).toBe(400)
+    expect(((await rename.json()) as DupError).error.code).toBe('PRODUCT_DUPLICATE')
+
+    // The explicit override applies the rename.
+    const overridden = await api(`/${other.id}`, {
+      method: 'PATCH',
+      cookie,
+      body: { nameHe: 'מוצר חדש לבדיקה', allowDuplicate: true },
+    })
+    expect(overridden.status).toBe(200)
+
+    // Re-saving a product's OWN name must not self-flag (exclude-self).
+    const selfSave = await api(`/${other.id}`, {
+      method: 'PATCH',
+      cookie,
+      body: { nameEn: `${TEST_FIXTURE_SLUG_PREFIX}created other product` },
+    })
+    expect(selfSave.status).toBe(200)
+  })
+
+  it('allowDuplicate ALONE is not a change — NO_FIELDS', async () => {
+    const cookie = await signIn(ADMIN)
+    const r = await api(`/${productId}`, {
+      method: 'PATCH',
+      cookie,
+      body: { allowDuplicate: true },
+    })
+    expect(r.status).toBe(400)
+    expect(((await r.json()) as { error: { codes: string[] } }).error.codes).toContain('NO_FIELDS')
   })
 })

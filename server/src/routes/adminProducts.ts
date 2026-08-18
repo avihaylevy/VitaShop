@@ -10,6 +10,7 @@ import {
 } from '../lib/rateLimit.js'
 import {
   deriveSlug,
+  normalizeProductName,
   parseProductCreate,
   parseProductPatch,
 } from '../lib/adminProductForm.js'
@@ -147,6 +148,50 @@ function toAdminProductDto(product: ProductRow) {
     // Hebrew form stays available to any future admin surface.
     brand: product.brand,
   }
+}
+
+/** DEC-093 — the twin a PRODUCT_DUPLICATE refusal carries to the admin. */
+type DuplicateTwin = {
+  id: string
+  nameHe: string
+  nameEn: string
+  slug: string
+  isActive: boolean
+}
+
+/**
+ * DEC-093 — the duplicate check, shared by CREATE and PATCH-rename: a
+ * product under the SAME brand whose NORMALIZED nameHe or nameEn equals
+ * the incoming one. Inactive rows included (the right move against an
+ * inactive twin is usually reactivation). Brand-scoped fetch + in-memory
+ * normalized compare — normalization is an application rule, and a brand
+ * holds a few dozen rows at this catalogue's scale.
+ * ⚠️ Check-then-insert, not atomic — the same accepted single-admin race
+ * as the brand dedupe; the slug constraint stays the only hard guarantee.
+ */
+async function findDuplicateProduct(
+  prisma: PrismaClient,
+  brandId: string,
+  // Only the names the request is actually SETTING — a PATCH that touches
+  // one name checks that name alone, so a product already sharing its
+  // other name (created via a past override) does not re-flag forever on
+  // every later edit.
+  names: { nameHe?: string; nameEn?: string },
+  excludeId?: string,
+): Promise<DuplicateTwin | null> {
+  const normHe = names.nameHe === undefined ? undefined : normalizeProductName(names.nameHe)
+  const normEn = names.nameEn === undefined ? undefined : normalizeProductName(names.nameEn)
+  const siblings = await prisma.product.findMany({
+    where: { brandId, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    select: { id: true, nameHe: true, nameEn: true, slug: true, isActive: true },
+  })
+  return (
+    siblings.find(
+      (sibling) =>
+        (normHe !== undefined && normalizeProductName(sibling.nameHe) === normHe) ||
+        (normEn !== undefined && normalizeProductName(sibling.nameEn) === normEn),
+    ) ?? null
+  )
 }
 
 export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnType<typeof Router> {
@@ -350,12 +395,51 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
       return
     }
 
-    // Only the keys the request actually carried.
+    // Only the keys the request actually carried — allowDuplicate is a
+    // DEC-093 protocol field, never a column, so it never reaches Prisma.
     const data = Object.fromEntries(
-      Object.entries(parsed.value).filter(([, value]) => value !== undefined),
+      Object.entries(parsed.value).filter(
+        ([key, value]) => value !== undefined && key !== 'allowDuplicate',
+      ),
     )
 
     try {
+      /*
+       * DEC-093 — a RENAME can converge two products onto one name, so
+       * the same duplicate gate runs here whenever a name field is in
+       * the patch: effective names (patched value, else the stored one),
+       * the row's own brand, and the row itself excluded so an unrelated
+       * partial patch — or re-saving the same name — never self-flags.
+       */
+      const renames = parsed.value.nameHe !== undefined || parsed.value.nameEn !== undefined
+      if (renames && parsed.value.allowDuplicate !== true) {
+        const current = await prisma.product.findUnique({
+          where: { id: productId },
+          select: { brandId: true },
+        })
+        if (!current) {
+          res.status(404).json({ error: { code: 'PRODUCT_NOT_FOUND', message: 'No such product.' } })
+          return
+        }
+        // Only the names THIS patch sets — see findDuplicateProduct.
+        const twin = await findDuplicateProduct(
+          prisma,
+          current.brandId,
+          { nameHe: parsed.value.nameHe, nameEn: parsed.value.nameEn },
+          productId,
+        )
+        if (twin) {
+          res.status(400).json({
+            error: {
+              code: 'PRODUCT_DUPLICATE',
+              message: 'A product with this name already exists under this brand.',
+              duplicate: twin,
+            },
+          })
+          return
+        }
+      }
+
       const product = await prisma.product.update({
         where: { id: productId },
         data,
@@ -492,6 +576,10 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
        * surface, and the fix (a unique index) is a schema decision.
        */
       let brandRef: Prisma.BrandCreateNestedOneWithoutProductsInput
+      /** DEC-093 — set when the brand resolves to an EXISTING row; a
+       * genuinely-new company can have no twin, so the duplicate check
+       * only runs when this is non-null. */
+      let existingBrandId: string | null = null
       if (input.brandId !== undefined) {
         const brand = await prisma.brand.findUnique({
           where: { id: input.brandId },
@@ -502,6 +590,7 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
           return
         }
         brandRef = { connect: { id: brand.id } }
+        existingBrandId = brand.id
       } else {
         const newName = input.newBrandName
         if (newName === undefined) {
@@ -533,6 +622,31 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
         brandRef = existing
           ? { connect: { id: existing.id } }
           : { create: { name: newName, nameEn: newNameEn ?? null } }
+        existingBrandId = existing?.id ?? null
+      }
+
+      /*
+       * DEC-093 — the duplicate gate, AFTER brand resolution (a "new"
+       * company that deduped to an existing brand must still be checked).
+       * allowDuplicate is the admin's explicit acknowledgement, made with
+       * the twin's name in front of them — a false positive costs one
+       * click, which is what caps this check's blast radius.
+       */
+      if (existingBrandId !== null && input.allowDuplicate !== true) {
+        const twin = await findDuplicateProduct(prisma, existingBrandId, {
+          nameHe: input.nameHe,
+          nameEn: input.nameEn,
+        })
+        if (twin) {
+          res.status(400).json({
+            error: {
+              code: 'PRODUCT_DUPLICATE',
+              message: 'A product with this name already exists under this brand.',
+              duplicate: twin,
+            },
+          })
+          return
+        }
       }
 
       /*
@@ -613,6 +727,7 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
         newBrandNameEn,
         healthGoalIds,
         newHealthGoals,
+        allowDuplicate,
         ...productFields
       } = input
       void categoryId
@@ -621,6 +736,7 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
       void newBrandNameEn
       void healthGoalIds
       void newHealthGoals
+      void allowDuplicate
       const data = {
         ...productFields,
         category: { connect: { id: category.id } },

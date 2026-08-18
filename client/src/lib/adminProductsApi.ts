@@ -159,6 +159,34 @@ function writeResult(raw: { status: number; body: unknown } | null): AdminProduc
 
   if (raw.status === 400) {
     const { code, codes, fields } = errorOf(raw.body)
+    // DEC-093 — a duplicate refusal carries the TWIN so the form can name
+    // what it collided with. Validated, not cast; a malformed twin falls
+    // through to the generic invalid shape rather than a crash.
+    if (code === 'PRODUCT_DUPLICATE' && isPlainObject(raw.body) && isPlainObject(raw.body.error)) {
+      const duplicate = (raw.body.error as Record<string, unknown>).duplicate
+      if (
+        isPlainObject(duplicate) &&
+        typeof duplicate.id === 'string' &&
+        typeof duplicate.nameHe === 'string' &&
+        typeof duplicate.nameEn === 'string' &&
+        typeof duplicate.slug === 'string' &&
+        typeof duplicate.isActive === 'boolean'
+      ) {
+        return {
+          ok: false,
+          failure: {
+            kind: 'duplicate',
+            duplicate: {
+              id: duplicate.id,
+              nameHe: duplicate.nameHe,
+              nameEn: duplicate.nameEn,
+              slug: duplicate.slug,
+              isActive: duplicate.isActive,
+            },
+          },
+        }
+      }
+    }
     // Single-code refusals (IS_ACTIVE_INVALID, SLUG_UNDERIVABLE,
     // CATEGORY_NOT_FOUND, BRAND_NOT_FOUND) travel as one-element arrays so
     // the form has ONE vocabulary to map.

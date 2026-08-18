@@ -102,12 +102,23 @@ const FIELD_SCHEMAS = {
  * and an omitted field is never overwritten.
  */
 export const productPatchSchema = z
-  .object(FIELD_SCHEMAS)
+  .object({
+    ...FIELD_SCHEMAS,
+    // DEC-093 — a PROTOCOL field, never a column: acknowledges the
+    // PRODUCT_DUPLICATE refusal on a rename. Excluded from the
+    // at-least-one-field rule below, or {allowDuplicate:true} alone
+    // would count as "a change".
+    allowDuplicate: z.boolean({ message: 'ALLOW_DUPLICATE_INVALID' }),
+  })
   .partial()
   .strict()
-  .refine((data) => Object.values(data).some((value) => value !== undefined), {
-    message: 'NO_FIELDS',
-  })
+  .refine(
+    (data) =>
+      Object.entries(data).some(
+        ([key, value]) => key !== 'allowDuplicate' && value !== undefined,
+      ),
+    { message: 'NO_FIELDS' },
+  )
 
 export type ProductPatchInput = z.infer<typeof productPatchSchema>
 
@@ -183,6 +194,9 @@ export const productCreateSchema = z.strictObject({
     )
     .max(20, 'NEW_HEALTH_GOAL_INVALID')
     .optional(),
+  /** DEC-093 — acknowledges the PRODUCT_DUPLICATE refusal; a protocol
+   * field the route strips before the insert, never a column. */
+  allowDuplicate: z.boolean({ message: 'ALLOW_DUPLICATE_INVALID' }).optional(),
   /**
    * DEC-089b/c — an OPTIONAL image: an absolute http(s) URL (external
    * link) or a server-hosted upload path ('/uploads/products/<name>', the
@@ -262,6 +276,32 @@ export function parseProductCreate(
 ): { ok: true; value: ProductCreateInput } | AdminFormFailure {
   const result = productCreateSchema.safeParse(raw)
   return result.success ? { ok: true, value: result.data } : failureOf(result.error)
+}
+
+/**
+ * DEC-093 — the duplicate-detection normal form. ONE pure function, used
+ * by the create AND rename checks, so "the same name" has exactly one
+ * definition and one place to prove it.
+ *
+ * Lowercase (Latin; Hebrew has no case) · geresh/gershayim/apostrophes/
+ * quotes stripped (ד״ר ≡ דר) · every other punctuation run and hyphen
+ * becomes a space (אומגה-3 ≡ אומגה 3) · whitespace collapsed · trimmed.
+ *
+ * 🔴 DIGITS AND UNITS ARE NEVER STRIPPED. "מגנזיום 60 כמוסות" and
+ * "מגנזיום 100 כמוסות" are a LEGIT VARIANT PAIR — the count is what
+ * keeps them distinct, and a normal form that erased it would flag the
+ * catalogue's own product families as duplicates of each other.
+ */
+export function normalizeProductName(name: string): string {
+  return name
+    .toLowerCase()
+    // The quote family disappears entirely — it joins letters (ד"ר),
+    // so mapping it to a space would split words instead of unifying.
+    .replace(/['"׳״‘’“”`]/g, '')
+    // Everything else that is not a letter or digit becomes a space —
+    // hyphens, dots, slashes, commas, plus signs and friends.
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
 }
 
 /**

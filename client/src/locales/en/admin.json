@@ -122,6 +122,11 @@
       "submit": "Create product",
       "submitting": "Creating…"
     },
+    "duplicate": {
+      "message": "A similarly named product already exists under this brand: \"{{name}}\" ({{slug}}).",
+      "inactiveHint": "The existing product is hidden from the shop — reactivating it may be better than creating a new one.",
+      "override": "This is a different product — create it anyway"
+    },
     "dosage": {
       "CAPSULE": "Capsules",
       "TABLET": "Tablets",
