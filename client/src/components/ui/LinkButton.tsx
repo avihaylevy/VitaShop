@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import { Link, type LinkProps } from 'react-router'
 import { FOCUS_RING } from './focusRing'
 import { VARIANT_CLASS } from './Button'
@@ -11,6 +11,14 @@ type LinkButtonProps = {
   /** 'hero' is the home/about CTA scale; 'base' matches Button. */
   size?: 'base' | 'hero'
   className?: string
+  /**
+   * Side work riding the navigation. Never preventDefault — the Link still
+   * navigates; this only lets the host clean up. The event is forwarded so
+   * the host can decline on MODIFIED clicks (ctrl/cmd/shift/middle open a
+   * new tab without navigating THIS one — review finding: an unconditional
+   * close ran anyway and yanked the surface the user meant to keep).
+   */
+  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void
 }
 
 /**
@@ -27,10 +35,12 @@ export function LinkButton({
   variant = 'primary',
   size = 'base',
   className = '',
+  onClick,
 }: LinkButtonProps) {
   return (
     <Link
       to={to}
+      onClick={onClick}
       className={`${FOCUS_RING} inline-flex items-center justify-center rounded-card font-medium transition-colors duration-150 ease-standard ${
         size === 'hero' ? 'h-12 px-6 text-base' : 'h-11 px-4 text-sm'
       } ${VARIANT_CLASS[variant]} ${className}`}

@@ -35,7 +35,11 @@
 // healthGoal*, minPrice, maxPrice, inStock, sort, page. Matches the exact
 // order server/src/lib/catalogQuery.ts's FIELD_ORDER already uses for its
 // own deterministic diagnostics — the two ends of the same contract agree.
-const CANONICAL_PARAM_ORDER = [
+// Exported since M-011 Checkpoint C (review): the agent's handoff serializer
+// keys off THIS list — the real /catalog param set in its frozen order —
+// instead of a lookalike (EMPTY_CATALOG_URL_STATE's keys include the
+// client-internal `pageRaw`, which is not a URL parameter at all).
+export const CANONICAL_PARAM_ORDER = [
   'q',
   'category',
   'brand',

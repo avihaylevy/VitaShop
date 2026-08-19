@@ -8,7 +8,7 @@
 
 import { StrictMode, useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { AgentPanel } from './AgentPanel'
@@ -69,6 +69,7 @@ function mockResponse(status: number, body: unknown): Response {
 }
 
 const announceSpy = vi.fn<(text: string) => void>()
+const closeSpy = vi.fn<() => void>()
 
 /** Controlled-state harness — the widget's role, minus the cart machinery. */
 function Harness({
@@ -83,7 +84,8 @@ function Harness({
     <MemoryRouter>
       <AgentPanel
         open
-        onClose={() => {}}
+        onClose={closeSpy}
+        onNavigate={closeSpy}
         entries={entries}
         setEntries={setEntries}
         announce={announceSpy}
@@ -91,8 +93,15 @@ function Harness({
         returnFocusRef={{ current: null }}
         onAddToCart={onAddToCart}
       />
+      <LocationProbe />
     </MemoryRouter>
   )
+}
+
+/** Where did the router actually go? A click that only closes is not a navigation. */
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location">{location.pathname + location.search}</div>
 }
 
 function renderPanel(props: Parameters<typeof Harness>[0] = {}) {
@@ -123,6 +132,7 @@ beforeEach(async () => {
   vi.stubEnv('VITE_API_BASE_URL', BASE_URL)
   await i18n.changeLanguage('he')
   announceSpy.mockClear()
+  closeSpy.mockClear()
 })
 
 afterEach(() => {
@@ -321,6 +331,9 @@ describe('AgentPanel', () => {
     fireEvent.click(within(card as HTMLElement).getByRole('button', { name: i18n.t('agent:addToCart') }))
     expect(onAddToCart).toHaveBeenCalledTimes(1)
     expect(onAddToCart).toHaveBeenCalledWith('magnesium-citrate-200', 1)
+    // Control (review): the ADD button must NOT close the panel — only a
+    // NAVIGATION does. The conversation continues after an add.
+    expect(closeSpy).not.toHaveBeenCalled()
   })
 
   it('the agent card carries exactly ONE link and ONE button (the catalogue link contract, panel scale)', async () => {
@@ -332,6 +345,67 @@ describe('AgentPanel', () => {
     const card = (await screen.findByRole('link', { name: 'מגנזיום ציטראט 200' })).closest('article')!
     expect(within(card as HTMLElement).getAllByRole('link')).toHaveLength(1)
     expect(within(card as HTMLElement).getAllByRole('button')).toHaveLength(1)
+  })
+
+  it('🔴 REQ-F-077: an empty result renders the handoff link, clicking it NAVIGATES to /catalog with the criteria and closes the panel', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockResponse(
+        200,
+        agentResponse({ emptyResult: true, handoff: { maxPrice: '1', kosher: 'true' } }),
+      ),
+    )
+    renderPanel()
+    await sendMessage('משהו כשר עד שקל')
+    const handoffLink = await screen.findByRole('link', { name: i18n.t('agent:reply.handoff') })
+
+    fireEvent.click(handoffLink)
+    // 🔴 The ROUTER moved (review: asserting only the close let a future
+    // preventDefault kill the navigation while the test stayed green).
+    expect(screen.getByTestId('location').textContent).toBe('/catalog?maxPrice=1&kosher=true')
+    expect(closeSpy).toHaveBeenCalled()
+    // And the empty-result announcement voiced the handoff's existence —
+    // the transcript log is deliberately non-live.
+    expect(announceSpy.mock.calls[0]![0]).toContain(i18n.t('agent:reply.handoff'))
+  })
+
+  it('🔴 a MODIFIED click (ctrl — new tab) neither navigates this tab nor closes the panel', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockResponse(200, agentResponse({ emptyResult: true, handoff: { maxPrice: '1' } })),
+    )
+    renderPanel()
+    await sendMessage('משהו')
+    const handoffLink = await screen.findByRole('link', { name: i18n.t('agent:reply.handoff') })
+
+    fireEvent.click(handoffLink, { ctrlKey: true })
+    expect(screen.getByTestId('location').textContent).toBe('/')
+    expect(closeSpy).not.toHaveBeenCalled()
+  })
+
+  it('control: an EMPTY handoff object renders no link at all (no unfiltered-catalogue promise)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockResponse(200, agentResponse({ emptyResult: true, handoff: {} })),
+    )
+    renderPanel()
+    await sendMessage('משהו')
+    await within(transcript()).findByText(i18n.t('agent:reply.empty'))
+    expect(screen.queryByRole('link', { name: i18n.t('agent:reply.handoff') })).toBeNull()
+  })
+
+  it('control: a NON-empty result renders no handoff link; a product-name click navigates AND closes', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockResponse(
+        200,
+        agentResponse({ products: [productDto()], explanations: [''], handoff: { ingredient: ['x'] } }),
+      ),
+    )
+    renderPanel()
+    await sendMessage('מגנזיום')
+    const nameLink = await screen.findByRole('link', { name: 'מגנזיום ציטראט 200' })
+    expect(screen.queryByRole('link', { name: i18n.t('agent:reply.handoff') })).toBeNull()
+
+    fireEvent.click(nameLink)
+    expect(screen.getByTestId('location').textContent).toBe('/product/magnesium-citrate-200')
+    expect(closeSpy).toHaveBeenCalled()
   })
 
   it('history sent to the server carries the whole ANSWERED conversation, agent content = provider prose', async () => {

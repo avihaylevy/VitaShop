@@ -15,6 +15,7 @@
   "reply": {
     "noCriteria": "I could not match that to an ingredient, goal, or filter. Try rephrasing — for example an active ingredient, a health goal, or a price range.",
     "empty": "No products matched your request. Try broadening the criteria or rephrasing.",
+    "handoff": "Open these filters in the catalog search",
     "medicalStop": "For a question like this, please consult a physician or pharmacist. I would be glad to help you find products from the catalog.",
     "products": "Products found:",
     "turnLimit": "This conversation has reached its length limit.",
@@ -27,7 +28,8 @@
   },
   "a11y": {
     "conversation": "Conversation with the shopping assistant",
-    "responseArrived": "A new reply from the assistant arrived"
+    "responseArrived": "A new reply from the assistant arrived",
+    "navigated": "The requested page opened and the assistant closed. Your conversation is kept."
   },
   "addToCart": "Add to cart"
 }

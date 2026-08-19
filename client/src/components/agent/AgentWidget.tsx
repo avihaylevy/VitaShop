@@ -92,6 +92,17 @@ export function AgentWidget() {
       <AgentPanel
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
+        // A link in the transcript left for the page. Focus returns to the
+        // floating button — DELIBERATE: useReturnFocus captures its target
+        // at open, the button survives the route change, and it is the
+        // one-keypress way back to the conversation this widget kept. The
+        // navigation itself is ANNOUNCED from the session-long region (the
+        // async-control rule's other half), because nothing else in an SPA
+        // route change says anything out loud.
+        onNavigate={() => {
+          setPanelOpen(false)
+          announce(t('a11y.navigated'))
+        }}
         entries={entries}
         setEntries={setEntries}
         announce={announce}

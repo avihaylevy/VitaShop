@@ -1,8 +1,16 @@
 import { useTranslation } from 'react-i18next'
 import type { RefObject } from 'react'
 import { AgentProductCard } from './AgentProductCard'
+import { LinkButton } from '../ui/LinkButton'
 import { mapCatalogProduct } from '../../lib/mapCatalogProduct'
-import { describeTurn, errorMessageKey, type AgentEntry } from '../../lib/agentConversation'
+import { handoffToCatalogPath } from '../../lib/agentHandoff'
+import {
+  describeTurn,
+  errorMessageKey,
+  isPlainNavigationClick,
+  type AgentEntry,
+} from '../../lib/agentConversation'
+import type { MouseEvent } from 'react'
 import type { SupportedLanguage } from '../../i18n'
 
 /**
@@ -23,19 +31,35 @@ export function AgentTranscript({
   entries,
   language,
   onAddToCart,
+  onNavigate,
   scrollRef,
 }: {
   entries: AgentEntry[]
   language: SupportedLanguage
   onAddToCart: (slug: string, quantity: number) => void | Promise<boolean>
+  /** Called when a link inside the transcript leaves for the page — the panel closes itself. */
+  onNavigate: () => void
   scrollRef: RefObject<HTMLDivElement | null>
 }) {
   const { t } = useTranslation('agent')
+
+  // Close-on-navigate rides ONLY the plain click that navigates this tab —
+  // a cmd/ctrl/middle click opens a background tab and the conversation the
+  // user deliberately kept must stay open (review finding).
+  function handleNavigateClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (isPlainNavigationClick(event)) onNavigate()
+  }
 
   return (
     <div
       ref={scrollRef}
       role="log"
+      // 🔴 Explicitly NOT live: role="log" implies polite announcements of
+      // every appended subtree, which double-read whole turns (cards
+      // included) against the widget's single announcement region — that
+      // region is the one voice (review finding). The role stays for the
+      // semantics and the accessible name.
+      aria-live="off"
       aria-label={t('a11y.conversation')}
       tabIndex={0}
       className="flex-1 overflow-y-auto p-4 focus:outline-none"
@@ -81,6 +105,25 @@ export function AgentTranscript({
                     {line.text}
                   </p>
                 ))}
+                {/* REQ-F-077 (Checkpoint C): an empty result offers the
+                    handoff — the SAME criteria, carried into /catalog's
+                    filter fields via the shared URL contract. A link, not a
+                    button: it navigates. It closes the panel on the way.
+                    🔴 Rendered only when the path actually CARRIES criteria
+                    (review finding: an empty handoff object produced a link
+                    promising "these filters" that opened the whole
+                    unfiltered catalogue). */}
+                {entry.response.emptyResult &&
+                  entry.response.handoff !== null &&
+                  handoffToCatalogPath(entry.response.handoff) !== '/catalog' && (
+                    <LinkButton
+                      to={handoffToCatalogPath(entry.response.handoff)}
+                      variant="secondary"
+                      onClick={handleNavigateClick}
+                    >
+                      {t('reply.handoff')}
+                    </LinkButton>
+                  )}
                 {entry.response.products.length > 0 && (
                   <>
                     <p className="text-sm font-semibold text-text-ink">{t('reply.products')}</p>
@@ -92,6 +135,7 @@ export function AgentTranscript({
                             explanation={entry.response.explanations[productIndex] ?? ''}
                             explanationLang={entry.lang}
                             onAddToCart={onAddToCart}
+                            onNavigateClick={handleNavigateClick}
                           />
                         </li>
                       ))}

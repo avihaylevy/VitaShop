@@ -110,6 +110,32 @@ export function describeTurn(
 }
 
 /**
+ * True only for the plain left-click that navigates THIS tab. Modified
+ * clicks (ctrl/cmd/shift/alt, middle button) open a new tab/window without
+ * navigating here — react-router's Link declines them, and so must any
+ * side work riding the click (review finding: the panel closed on a
+ * cmd-click that never left the page). Structural event shape so the pure
+ * module needs no React import.
+ */
+export function isPlainNavigationClick(event: {
+  defaultPrevented: boolean
+  metaKey: boolean
+  ctrlKey: boolean
+  shiftKey: boolean
+  altKey: boolean
+  button: number
+}): boolean {
+  return (
+    !event.defaultPrevented &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey &&
+    event.button === 0
+  )
+}
+
+/**
  * Error-code → i18n key. AI_TURN_LIMIT maps to null: the lock block owns
  * that message (review finding: it used to render twice at once).
  */

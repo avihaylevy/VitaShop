@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { ProductCardModel } from '../../types/product'
@@ -28,12 +29,18 @@ export function AgentProductCard({
   explanation,
   explanationLang,
   onAddToCart,
+  onNavigateClick,
 }: {
   product: ProductCardModel
   explanation: string
   /** The language the explanation was authored in — frozen provider prose. */
   explanationLang: 'he' | 'en'
   onAddToCart: (slug: string, quantity: number) => void | Promise<boolean>
+  /**
+   * The panel closes itself when the name link leaves for the detail page.
+   * Receives the click event — the caller declines modified clicks.
+   */
+  onNavigateClick: (event: MouseEvent<HTMLAnchorElement>) => void
 }) {
   const { t } = useTranslation('agent')
   const isOut = getStockState(product.stockQuantity, product.lowStockThreshold) === 'out'
@@ -48,7 +55,15 @@ export function AgentProductCard({
       >
         <div className="flex flex-col gap-0.5">
           <h4 className="text-sm font-semibold leading-5 text-text-ink">
-            <Link to={`/product/${product.slug}`} className={`${FOCUS_RING} rounded-compact`}>
+            {/* Navigating from inside the panel closes it — the page the
+                link lands on must not sit under a modal (review, Checkpoint
+                B's altitude finding). onClick never prevents the Link's own
+                navigation. */}
+            <Link
+              to={`/product/${product.slug}`}
+              onClick={onNavigateClick}
+              className={`${FOCUS_RING} rounded-compact`}
+            >
               {product.name}
             </Link>
           </h4>

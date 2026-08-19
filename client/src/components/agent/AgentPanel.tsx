@@ -4,6 +4,7 @@ import { Drawer } from '../ui/Drawer'
 import { AgentTranscript } from './AgentTranscript'
 import { AgentComposer } from './AgentComposer'
 import { sendAgentMessage } from '../../lib/agentApi'
+import { handoffToCatalogPath } from '../../lib/agentHandoff'
 import { CatalogApiError } from '../../lib/catalogApi'
 import {
   describeTurn,
@@ -33,6 +34,7 @@ import type { SupportedLanguage } from '../../i18n'
 export function AgentPanel({
   open,
   onClose,
+  onNavigate,
   entries,
   setEntries,
   announce,
@@ -42,6 +44,12 @@ export function AgentPanel({
 }: {
   open: boolean
   onClose: () => void
+  /**
+   * Close-because-a-link-left-for-the-page — distinct from onClose so the
+   * widget can announce the navigation from its session-long region
+   * (review: an SPA route change says nothing out loud on its own).
+   */
+  onNavigate: () => void
   entries: AgentEntry[]
   setEntries: Dispatch<SetStateAction<AgentEntry[]>>
   /** The widget's session-long live region. */
@@ -80,6 +88,17 @@ export function AgentPanel({
       // The announcement is describeTurn's join — the same lines the
       // transcript renders, notice first (C2a), never a divergent summary.
       const lines = describeTurn(response, t).map((line) => line.text)
+      // The handoff is a CONTROL, so it is not a describeTurn line (the
+      // transcript renders it as a link, not prose) — but its existence
+      // must still be voiced, and the transcript's log region is
+      // deliberately non-live. Appended to the announcement only.
+      if (
+        response.emptyResult &&
+        response.handoff !== null &&
+        handoffToCatalogPath(response.handoff) !== '/catalog'
+      ) {
+        lines.push(t('reply.handoff'))
+      }
       announce(lines.length > 0 ? lines.join(' ') : t('a11y.responseArrived'))
     } catch (error) {
       if (abort.signal.aborted) {
@@ -124,6 +143,7 @@ export function AgentPanel({
           entries={entries}
           language={language}
           onAddToCart={onAddToCart}
+          onNavigate={onNavigate}
           scrollRef={transcriptRef}
         />
         {/* The visible add-to-cart confirmation — quiet adds (the drawer
