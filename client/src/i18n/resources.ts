@@ -20,6 +20,8 @@ import clubHe from '../locales/he/club.json'
 import clubEn from '../locales/en/club.json'
 import accountHe from '../locales/he/account.json'
 import accountEn from '../locales/en/account.json'
+import agentHe from '../locales/he/agent.json'
+import agentEn from '../locales/en/agent.json'
 
 /**
  * The i18next resource map — pure data, no side effects. Extracted from
@@ -46,6 +48,7 @@ export const resources = {
     info: infoHe,
     club: clubHe,
     account: accountHe,
+    agent: agentHe,
   },
   en: {
     common: commonEn,
@@ -59,6 +62,7 @@ export const resources = {
     info: infoEn,
     club: clubEn,
     account: accountEn,
+    agent: agentEn,
   },
 } as const
 

@@ -169,7 +169,17 @@ function isCatalogFacetsDto(value: unknown): value is CatalogFacetsDto {
   )
 }
 
-async function requestCatalogJson(path: string, signal?: AbortSignal): Promise<unknown> {
+/**
+ * Exported since M-011 Checkpoint B (review): agentApi's POST had re-created
+ * this transport block line for line — including a private copy of the
+ * error-body predicate that silently dropped `fields`. One transport, one
+ * error mapping; `init` carries method/headers/body for non-GET callers.
+ */
+export async function requestCatalogJson(
+  path: string,
+  signal?: AbortSignal,
+  init?: Pick<RequestInit, 'method' | 'headers' | 'body'>,
+): Promise<unknown> {
   const base = getApiBaseUrl()
   if (!base.ok) {
     throw new CatalogApiError('MISSING_CONFIG', 'The catalogue API is not configured.')
@@ -177,7 +187,7 @@ async function requestCatalogJson(path: string, signal?: AbortSignal): Promise<u
 
   let response: Response
   try {
-    response = await fetch(`${base.value}${path}`, { signal })
+    response = await fetch(`${base.value}${path}`, { ...init, signal })
   } catch (error) {
     // An aborted fetch rejects because `signal` was aborted — propagate
     // it unchanged so callers can tell "cancelled" from "failed".
@@ -194,14 +204,29 @@ async function requestCatalogJson(path: string, signal?: AbortSignal): Promise<u
   try {
     body = await response.json()
   } catch {
-    throw new CatalogApiError('INVALID_RESPONSE_SHAPE', 'The catalogue API returned a response that was not valid JSON.', {
-      status: response.status,
-    })
+    // A non-JSON body on a FAILED response is classified by status below
+    // (a bodiless proxy 429 must still read as a rate limit); only a
+    // non-JSON body on a 2xx is a shape failure in its own right.
+    if (response.ok) {
+      throw new CatalogApiError('INVALID_RESPONSE_SHAPE', 'The catalogue API returned a response that was not valid JSON.', {
+        status: response.status,
+      })
+    }
+    body = undefined
   }
 
   if (!response.ok) {
     if (isCatalogApiErrorBody(body)) {
       throw new CatalogApiError(body.error.code, body.error.message, { status: response.status, fields: body.error.fields })
+    }
+    // 🔴 A 429 whose body did not parse as our envelope (a proxy/CDN limiter,
+    // a bodiless response) is still a rate limit — mapping it to HTTP_ERROR
+    // invited the caller to retry straight back into the limiter (review,
+    // M-011 Checkpoint B; same loop checkoutApi guards against).
+    if (response.status === 429) {
+      throw new CatalogApiError('TOO_MANY_REQUESTS', 'Too many attempts. Please try again later.', {
+        status: response.status,
+      })
     }
     throw new CatalogApiError('HTTP_ERROR', `The catalogue API request failed with status ${response.status}.`, {
       status: response.status,

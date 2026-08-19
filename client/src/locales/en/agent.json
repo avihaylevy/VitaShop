@@ -1,0 +1,33 @@
+{
+  "button": {
+    "open": "Shopping assistant"
+  },
+  "panel": {
+    "title": "Shopping assistant",
+    "intro": "Describe what you are looking for in your own words — an ingredient, a health goal, or a price range — and the assistant will find products from the catalog.",
+    "placeholder": "What would you like to find?",
+    "send": "Send",
+    "sending": "Sending…",
+    "close": "Close the shopping assistant",
+    "you": "Me",
+    "assistant": "Assistant"
+  },
+  "reply": {
+    "noCriteria": "I could not match that to an ingredient, goal, or filter. Try rephrasing — for example an active ingredient, a health goal, or a price range.",
+    "empty": "No products matched your request. Try broadening the criteria or rephrasing.",
+    "medicalStop": "For a question like this, please consult a physician or pharmacist. I would be glad to help you find products from the catalog.",
+    "products": "Products found:",
+    "turnLimit": "This conversation has reached its length limit.",
+    "newConversation": "New conversation"
+  },
+  "errors": {
+    "rateLimited": "Too many messages in a short time. Please try again in a few minutes.",
+    "unavailable": "The assistant is unavailable right now. You can use the regular search.",
+    "network": "Sending failed. You can try again."
+  },
+  "a11y": {
+    "conversation": "Conversation with the shopping assistant",
+    "responseArrived": "A new reply from the assistant arrived"
+  },
+  "addToCart": "Add to cart"
+}
