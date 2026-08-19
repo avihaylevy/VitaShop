@@ -424,6 +424,34 @@ export function createAdminProductRateLimiters(): AdminProductRateLimiters {
   }
 }
 
+/**
+ * MILESTONE-011 / DEC-091 O3 — the AI chat route, strict from day one.
+ *
+ * 🔴 THE FIRST PER-REQUEST COST OBJECT ON THIS SERVER. MockProvider is free,
+ * but this limiter is the CONTRACT a real provider inherits (AI_AGENT_SPEC:
+ * the route is public and costs money per call; an absent limiter is a
+ * Critical finding). Sized for a human conversation — 20 messages per
+ * 15 minutes is generous chat and useless flood.
+ *
+ * IP-keyed: the route serves GUESTS (REQ-F-070, no requireAuth), so an
+ * identity does not reliably exist — same reasoning as the auth routes.
+ * The per-conversation TURN CAP is enforced in the route body (history
+ * length), not here: it is a conversation-shape rule, not a transport rule.
+ */
+export const AI_RATE_LIMITS = {
+  chat: { windowMs: 15 * MINUTE, limit: 20 },
+} as const
+
+export interface AiRateLimiters {
+  chat: RequestHandler
+}
+
+export function createAiRateLimiters(): AiRateLimiters {
+  return {
+    chat: rateLimit({ ...SHARED, ...AI_RATE_LIMITS.chat, keyGenerator: ipKey }),
+  }
+}
+
 export interface AdminRateLimiters {
   status: RequestHandler
   list: RequestHandler

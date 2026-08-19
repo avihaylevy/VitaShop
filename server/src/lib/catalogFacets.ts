@@ -66,7 +66,10 @@ export interface CatalogFacetsPayload {
 // already uses for categories. Matches client/src/locales/{he,en}/catalog.json
 // `dosageForm` keys exactly — kept in sync by inspection, not by import,
 // since server and client do not share a locale file.
-const DOSAGE_FORM_LABELS: Record<DosageFormValue, { labelHe: string; labelEn: string }> = {
+// Exported since M-011: the AI agent's criteria mapping derives its
+// word→enum table from these labels, so the chat understands the exact
+// strings the catalogue's own filter chips display (e.g. "כמוסות").
+export const DOSAGE_FORM_LABELS: Record<DosageFormValue, { labelHe: string; labelEn: string }> = {
   CAPSULE: { labelHe: 'כמוסות', labelEn: 'Capsules' },
   TABLET: { labelHe: 'טבליות', labelEn: 'Tablets' },
   DROPS: { labelHe: 'טיפות', labelEn: 'Drops' },

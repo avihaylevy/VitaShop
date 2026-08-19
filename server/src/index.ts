@@ -15,6 +15,8 @@ import { createAdminOrderRouter } from './routes/adminOrders.js'
 import { createAdminProductRouter } from './routes/adminProducts.js'
 import { PRODUCTS_UPLOAD_DIR } from './lib/uploadPaths.js'
 import { createAccountRouter } from './routes/account.js'
+import { createAiChatRouter } from './routes/aiChat.js'
+import { resolveAIProvider } from './lib/ai/provider.js'
 
 export const app = express()
 
@@ -103,6 +105,13 @@ app.use(
     setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
   }),
 )
+
+// MILESTONE-011 Checkpoint A / DEC-091 — POST /api/ai/chat. Guests AND
+// signed-in (REQ-F-070, no auth guard); rate-limited (O3); MockProvider
+// unless AI_PROVIDER selects otherwise — and today nothing else exists to
+// select (DEC-014: no key, no vendor SDK, no real call).
+// 🔴 The route performs ZERO database writes (AI_AGENT_SPEC prohibition #8).
+app.use('/api/ai', createAiChatRouter({ prisma, provider: await resolveAIProvider() }))
 
 // MILESTONE-008 Checkpoint F2b — REQ-F-041's pre-filled checkout details.
 // 🔴 The first route serving PERSONAL data. The session is the only identity

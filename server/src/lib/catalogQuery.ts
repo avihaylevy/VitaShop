@@ -110,7 +110,10 @@ export type RawCatalogQuery = Record<string, unknown>
 
 // ── zod schemas — one per frozen §4 value contract ──────────────────────────
 
-const decimalPriceSchema = z
+// Exported since M-011: the AI agent's criteria mapping validates provider-
+// emitted prices against THIS schema (regex + cents ceiling), so a handoff
+// URL can never carry a price the very endpoint it targets would reject.
+export const decimalPriceSchema = z
   .string()
   .regex(DECIMAL_PATTERN)
   .refine((value) => decimalToCents(value) <= MAX_PRICE_CENTS)
@@ -143,7 +146,8 @@ const qSchema = z
 
 const categorySlugSchema = z.string().refine((value) => CANONICAL_CATEGORY_SLUGS.has(value))
 
-function decimalToCents(decimal: string): number {
+// Exported since M-011 alongside decimalPriceSchema (range comparison).
+export function decimalToCents(decimal: string): number {
   const [whole = '0', frac = ''] = decimal.split('.')
   const paddedFrac = `${frac}00`.slice(0, 2)
   return Number.parseInt(whole, 10) * 100 + Number.parseInt(paddedFrac, 10)
