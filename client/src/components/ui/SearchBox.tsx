@@ -99,11 +99,17 @@ export function SearchBox({ className = '' }: SearchBoxProps) {
           // ISSUE-169: the tint returned to the STANDARD control hover
           // (surface-sunken, every other button's color) — the round shape
           // and fitted size stay, only the foreign teal wash left.
-          className={`${FOCUS_RING} inline-flex size-11 shrink-0 items-center justify-center rounded-round text-text-muted transition-[background-color,color,transform] duration-150 ease-standard hover:bg-surface-sunken hover:text-text-ink active:scale-[0.92] motion-reduce:transition-none`}
+          // The user's twelfth list (2026-08-21): the size-11 tint circle was
+          // CLIPPED by the pill (h-11 minus its 1px borders leaves 42px). The
+          // visible background moved to an inner size-9 span so it fits the
+          // pill with room to spare; the button keeps the full 44px hit area.
+          className={`${FOCUS_RING} group inline-flex size-11 shrink-0 items-center justify-center rounded-round text-text-muted`}
         >
-          <Icon size={18}>
-            <SearchIcon />
-          </Icon>
+          <span className="inline-flex size-9 items-center justify-center rounded-round transition-[background-color,color,transform] duration-150 ease-standard group-hover:bg-surface-sunken group-hover:text-text-ink group-active:scale-[0.92] motion-reduce:transition-none">
+            <Icon size={18}>
+              <SearchIcon />
+            </Icon>
+          </span>
         </button>
       </label>
     </form>

@@ -906,9 +906,9 @@ describe('🔴 TEST-043 / TEST-045 — the SIMULATED payment, both outcomes', ()
     // 🔴 A SUMMARY, NOT JUST A TOTAL. The first version listed the order number
     // and the total alone, which gives the shopper a number and nothing to
     // check it against. The line is INV-02's FROZEN name and unit price.
-    expect(mail.body).toContain('בדיקת מסלול — 2 × 100.00 ₪')
-    expect(mail.body).toContain('דמי משלוח: 30.00 ₪')
-    expect(mail.body).toContain('סכום לתשלום: 230.00 ₪')
+    expect(mail.body).toContain('בדיקת מסלול — 2 × ₪ 100.00')
+    expect(mail.body).toContain('דמי משלוח: ₪ 30.00')
+    expect(mail.body).toContain('סכום לתשלום: ₪ 230.00')
   })
 
   it('🔴 the email survives the PAID TRANSITION throwing — still 201, order intact', async () => {

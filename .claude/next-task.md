@@ -1,10 +1,10 @@
-# SESSION HANDOFF — M-011 SHIPPED · GROQ LIVE · DEPLOY IS WHAT REMAINS
+# SESSION HANDOFF — LISTS 8-11 SHIPPED · FOUR DECISIONS LANDED · DEPLOY IS THE LAST MILESTONE
 
-> Rewritten 2026-08-19, closing the session that BUILT ALL OF M-011
-> (checkpoints A-D, DEC-091) and then CONNECTED THE REAL PROVIDER
-> (DEC-094, Groq) — passes 90-94. Every checkpoint was reviewed by
-> finder angles before its commit; every review's findings were fixed
-> before committing.
+> Rewritten 2026-08-21, closing the session that built the user's EIGHTH
+> THROUGH ELEVENTH defect lists (ISSUE-144..178), ran an 8-angle review
+> (9 findings fixed, committed `275fc3b`), and then landed the user's
+> four decisions (DEC-096/097/098 built; two items deferred by them).
+> SESSION_LOG passes 95-101.
 >
 > ⚠️ **The memory system is authoritative** — everything here is also in
 > `operations/` and `technical/`. This file is orientation, not state.
@@ -14,18 +14,16 @@
 ## 🔴 THE USER DECIDES. NOT THE AGENT. NO EXCEPTIONS.
 
 ```
-🔴 THE SERVER/HOSTING · ANY API KEY · ANY PAID SERVICE · ANY NEW
-   DEPENDENCY · ANY SCHEMA OR ARCHITECTURE CHANGE · anything absent
-   from the spec and from DECISIONS.md
+🔴 THE SERVER/HOSTING · ANY API KEY (incl. OAuth client secrets) · ANY
+   PAID SERVICE · ANY NEW DEPENDENCY · ANY SCHEMA OR ARCHITECTURE CHANGE
 ❌ silence is not acceptance · a general "go ahead" is not acceptance
    of a SPECIFIC host/key/dependency · never obtain or configure a key
 ✅ present options WITH a recommendation, wait, record the answer as a DEC
+🔴 Commit-gating: build and verify, then WAIT for the user's commit word.
+🔴 Never read server/.env. Tests pin AI_PROVIDER=mock (vitest.setup) —
+   the user's dev server may run the REAL Groq provider; do not send it
+   chat messages from browser verification (it happened twice; own it).
 ```
-
-The AI provider question is now SETTLED (DEC-094: Groq, the user's own
-pick, key placed by the user personally). 🔴 The key rules still bind:
-never read server/.env, never echo anything key-shaped, and any switch
-to a DIFFERENT provider/model tier is a new stop-and-ask.
 
 ---
 
@@ -35,21 +33,26 @@ to a DIFFERENT provider/model tier is a new stop-and-ask.
 Repository:     C:\Users\aviha\תכנות\VitaShop
 Memory system:  C:\Users\aviha\תכנות\זיכרון AI\פרוייקט ECOMMERCE\
                 פרוייקט Ecommerce\VitaShop-Project
-HEAD:           see git log — this session's commits, newest last:
-                211ca4f  M-011 A — POST /api/ai/chat vs MockProvider
-                5fe18c3  M-011 B — the chat surface
-                b7d7846  M-011 C — the REQ-F-077 handoff
-                5974004  M-011 D — the acceptance sweep
-                (+ the DEC-094 Groq commit closing this session)
-Suites:         server 1067 · client 1030 · tsc 0 both · builds 0
-Decisions new:  DEC-094 ACCEPTED+BUILT (Groq via plain fetch, NO SDK,
-                openai/gpt-oss-120b via GROQ_MODEL || default —
-                llama-3.3-70b was deprecated by Groq 6/2026 · key is
-                the user's, in server/.env · loud mock fallback ·
-                keyword redaction at the provider boundary)
-Dependencies:   NONE added the whole session (Groq is plain fetch).
-Running:        dev servers DOWN. localhost daily default; LAN-IP
-                recipe for a device pass is in SESSION_LOG pass 82.
+HEAD:           275fc3b — lists 8-11 + the hundredth-pass review fixes
+                (56 files), on top of 513f763 (DEC-094 Groq).
+🔴 UNCOMMITTED: TWO stacked verified sets awaiting one commit word:
+                (a) the hundred-first pass's DEC-096/097/098 build —
+                drawer trim · club consent/leave dialogs + member badge
+                · card-form removal (cardValidation DELETED);
+                (b) the hundred-second pass's TWELFTH LIST (ISSUE-180..
+                183) — 10-day shopper-cancel window (server rule
+                CANCEL_WINDOW_PASSED + client stops offering) ·
+                cancelled orders LEAVE the history + success Modal ·
+                search-button tint unclipped (inner size-9 span) ·
+                ₪ BEFORE the number (reverses ISSUE-167). Verified
+                (client 1004 · targeted server 65 green · tsc/build 0 ·
+                playwright he+en × 8 widths clean).
+Suites:         client 1002 green (count DROPPED from 1044 by design —
+                the deleted card suites) · server: ai/account/admin/
+                checkout suites green; the FULL server run carries 6
+                reds = ISSUE-154's live-data artifacts (see below).
+Running:        the user usually keeps dev servers up (:3000/:5173,
+                localhost default). Check ports before starting any.
 ```
 
 Read in order: `CLAUDE.md` → `00_INDEX.md` → `operations/LOCK.md` →
@@ -60,58 +63,81 @@ Read in order: `CLAUDE.md` → `00_INDEX.md` → `operations/LOCK.md` →
 
 ## What works NOW (tested, not just written)
 
-The AI agent end to end, twice over:
-- **MockProvider** (default everywhere, incl. every test): floating
-  button on every page → panel → three stages → products from
-  PostgreSQL only → fixed byte-pinned disclaimer → REQ-F-077 handoff
-  landing on /catalog with the filters CHECKED. Zero DB writes,
-  row-count-proven. 20/15min IP limiter.
-- **GroqProvider** (AI_PROVIDER=groq in the user's .env): same
-  pipeline, real 120B model, live filter schema in the prompt (60s
-  cache) — "training" is a per-request cheat-sheet, never a training
-  run. Known-sensitive keywords (medications · pregnancy · named
-  diagnoses) are REDACTED before any text leaves the process —
-  honest scope: a keyword screen, not NER (documented in triggers.ts).
-  ONE real smoke call verified extraction + redaction live (1.2s).
-
-🔴 Tests can never touch the real API: `src/vitest.setup.ts` pins
-AI_PROVIDER=mock globally (it DID hit the real API once before the pin
-— the scar is documented there).
+- **The agent, third generation**: plum accent family (DEC-095 tokens,
+  still *Proposed*), round FAB "צריך עזרה?", floating ChatCard (Modal
+  a11y intact), greeting by first name, suggestion chips through the
+  one send path, typing indicator, product thumbnails on cards,
+  **product-NAME search** (productQuery → the catalogue's own q engine;
+  zero-match q is stripped from handoffs, gibberish still clarifies),
+  recommendation posture in the Groq prompts (fixed notice + server
+  medical gate untouched). Proven live once: "בריאמיל" → the product,
+  with image and a real recommendation sentence.
+- **Admin**: outcome messages beside the submit button (event-driven
+  scroll), whole-shekel price input, per-row FULL editor (names,
+  descriptions, usage, warnings, package, dietary, dosage form),
+  chrome-styled filters. The user CREATED a real product with it
+  (vitamin-c-liposomal, external image URL) — which is what turned
+  ISSUE-154's six tests red.
+- **Shop**: single-frame search focus everywhere, ₪ BEFORE the number since
+  the twelfth list (both languages, NBSP-joined, full-string pins), balanced hero,
+  ticket-style receipt, softened delivery estimates, cart CLEARS
+  client-side after checkout (ISSUE-178).
+- **Account**: reorder from order history; profile email editing
+  (DEC-090 O2 amended; EMAIL_TAKEN named refusal) — ⚠️ ISSUE-179: no
+  re-auth/verification on email rotation, recorded for a decision.
+- **Uncommitted but verified**: drawer = quick glance (no removal);
+  club joins via consent dialog / leaves via confirm, member badge in
+  the menu; checkout has NO card fields (payload pinned card-free).
 
 ---
 
 ## 🔴 THE NEXT SESSION'S ORDERED QUEUE
 
-### 1 — DEPLOY (the last milestone; plan first → the user → build)
+### 0 — The user's commit word for DEC-096/097/098 + the twelfth list (tree is dirty)
+
+### 1 — Small open items needing the user
+```
+· DEC-095 (agent tokens · r-full beyond §3 · 16px bubbles) — accept or
+  amend; then DESIGN_SYSTEM.md §1/§3 get amended to match.
+· ISSUE-154 — the imageFile basename test vs DEC-089b external URLs:
+  amend the test (recommended) or forbid external image URLs. Also
+  covers the 4 seedConvergence reds (admin-created row not in CSV —
+  ISSUE-142's documented signal) + the search-shape red.
+· ISSUE-179 — email change without re-auth: add a password-confirm /
+  verification loop, or accept for the course project.
+```
+
+### 2 — DEPLOY (the last milestone; plan first → the user → build)
 ```
 technical/DEPLOYMENT.md. The recorded traps:
 · CLIENT_ORIGIN (CORS — exact origin, never *)
-· the in-memory rate-limiter store (multi-instance needs a shared
-  store or the ceilings silently multiply)
-· §8b UPLOADS_DIR (cwd-anchored; PaaS filesystems are EPHEMERAL)
-· NEW: GROQ_API_KEY + AI_PROVIDER + GROQ_MODEL must reach the host's
-  env — the user sets them there PERSONALLY; missing key = loud mock
-  fallback by design, and the shape guard refuses non-ASCII keys
+· the in-memory rate-limiter store (multi-instance multiplies ceilings)
+· §8b UPLOADS_DIR (cwd-anchored; PaaS filesystems are EPHEMERAL — and
+  the user's real product now depends on an uploaded/external image)
+· GROQ_API_KEY + AI_PROVIDER + GROQ_MODEL reach the host env — the
+  user sets them PERSONALLY; missing key = loud mock fallback
 · trust proxy (index.ts's comment) becomes LOAD-BEARING behind a proxy
+```
+
+### Deferred BY THE USER to after deployment (do not build before)
+```
+· ISSUE-160 — hard delete (options A/B/C in SESSION_LOG pass 98)
+· ISSUE-163 — Google OAuth sign-up (their credentials; redirect URIs
+  want the deployed origin; likely schema change)
+· the save-card option (DEC-098 explicitly defers it; schema+privacy)
 ```
 
 ### Smaller owed items (fold into natural moments, don't block)
 ```
-· groq redaction: NER-grade masking is a recorded hardening item
-  (keyword screen today; scope comment in triggers.ts)
-· the description-injection probe against the REAL prompt if Stage 3
-  ever gains product descriptions (structurally closed today — the
-  list DTO carries none; noted in aiChat.integration.test.ts)
-· withTimeout unification with checkout's inline copy (recorded-skipped
-  at the B review)
-· CartDrawer's always-mounted body cost ×4 mounts (recorded-skipped)
-· LinkButton adoption by CartDrawer's two hand-styled links (the new
-  onClick prop unblocked them — C review note)
-· health-goal editing on PATCH (DEC-092 create-only) · category
-  <option> labels nameHe in English UI · Field multiline ·
-  DESIGN_SYSTEM DEC-035 tables · ISSUE-051 data half (21/49 seeded
-  goalless) · admin failure-message mapping ×3 · GET /profile
-  defaultAddress LEGACY
+· Recorded-skipped cleanups (ISSUES.md pass-100 section): ChatCard/
+  Drawer presence dedup · plum-recipe const · chrome-const share ·
+  mock tokenizer unification · AgentGreeting subscription split ·
+  productQuery 80-char silent drop
+· ISSUE-161's full concept: a RANKED "top pick" from the provider
+  (validated against retrieved rows only) — plan as its own checkpoint
+· NER-grade redaction · withTimeout unification · ISSUE-051 data half ·
+  ISSUE-024's Open-table/closed-index contradiction (re-derive from its
+  status block) · Phase-1 spec questions (002/003/005/009/010)
 ```
 
 ---
@@ -119,49 +145,15 @@ technical/DEPLOYMENT.md. The recorded traps:
 ## The user's own queue (no agent can do these)
 
 ```
-🔴 THE SIGNED-IN BROWSER PASS — now ALSO covers, on top of the
-   standing list: THE AGENT PANEL against the REAL Groq provider
-   (Hebrew + English conversations · the notice on a trigger · an
-   empty result's handoff into /catalog · add-to-cart from a card ·
-   the turn limit) — with AI_PROVIDER=groq in server/.env.
+🔴 THE SIGNED-IN BROWSER PASS — now also covers: the club consent/leave
+   dialogs + menu badge · the admin full editor + dosage fix · reorder ·
+   profile email change · the card-less payment + ticket receipt · the
+   agent against the REAL Groq provider (they run AI_PROVIDER=groq).
    Seeded accounts: npm run seed:accounts → admin@/shopper@vitashop.local.
-🔴 DEPLOY DECISIONS — host/platform choice is the user's; the agent
-   presents options with a recommendation first.
-🔴 ISSUE-018's remainder: SVG logo + the Hebrew-wordmark decision.
-🔴 ISSUE-020 — the real-device pass (LAN-IP recipe, pass 82).
-```
-
----
-
-## What this session did (detail: SESSION_LOG passes 90-94)
-
-```
-(90th)  Jotform evaluated and REJECTED for M-011 (closed SaaS widget
-        breaks the three-stage architecture + §3.3). Groq recommended
-        over local Ollama (70B Hebrew ≫ 8B). The user's GO → A BUILT.
-211ca4f (91st) A reviewed (8 angles, 10 findings fixed — curly-
-        apostrophe medical-stop bypass · sibling-name guard blanking ·
-        orphan-taxonomy English path · handoff-400 round trip) →
-        committed. B BUILT (chat surface).
-5fe18c3 (92nd) B reviewed (10 findings — unmount-takes-focus ×3 ·
-        nested modals → one-at-a-time + FAB focus return · silent
-        quiet adds · failed sends eating turns · widget-owned live
-        region) → committed. C BUILT (handoff).
-b7d7846 (93rd) C reviewed (10 findings — modified-click close ·
-        pageRaw allowlist · empty-handoff link · role=log double-read
-        · missing agent i18n suite · router-not-asserted tests) →
-        committed. D DONE: TEST-070..077 sweep + full matrix +
-        traceability REQ-F-070..077 → Implemented.
-5974004 D's tests reviewed (6 findings — the vacuous injection test
-        chief among them) → committed. M-011 CODE-COMPLETE.
-(94th)  DEC-094: user picked Groq, confirmed the package, placed the
-        key. Built groqProvider.ts (plain fetch, no SDK) + redaction +
-        loud fallback + 27 provider/redaction tests. Review (3
-        angles): 10 findings fixed — the Headers-TypeError KEY LEAK
-        path (shape guard) · the GROQ_MODEL='' trap · unguarded
-        JSON.parse leaking model text · redaction over-claim/over-mask
-        (vocabulary split from detection, ASCII mask, longest-first) ·
-        global test pin · stale privacy headers. Smoke call verified.
+🔴 DEPLOY DECISIONS — host/platform is theirs; present options with a
+   recommendation first.
+🔴 ISSUE-018's remainder (SVG logo + Hebrew wordmark) · ISSUE-020's
+   real-device pass (LAN-IP recipe: SESSION_LOG pass 82).
 ```
 
 ---
@@ -169,39 +161,28 @@ b7d7846 (93rd) C reviewed (10 findings — modified-click close ·
 ## 🔴 Rules that BIT this session — read before writing code
 
 ```
-🔴 THE VACUOUS-CHECK FAMILY STRUCK AGAIN (instances 10-12):
-   · the D injection test matched no keyword, took the clarify branch,
-     and its explanation loop ran ZERO times — a security test that
-     never reached the stage under test, with a comment claiming
-     otherwise. Counter-move unchanged: trace the fixture through the
-     REAL pipeline and make the test's branch the one you claim.
-   · the redaction tests were all not.toContain — a mask of '' passed
-     every one. Pin the FULL OUTPUT STRING, not the absence.
-   · the byte-pin that imports the constant it pins is vacuous; type
-     the literal (A review) — and a round-trip test whose two halves
-     share a file lets a symmetric mutation cancel out (C review).
-🔴 A DEV .env IS AN INPUT TO THE TEST SUITE: importing ../index.js
-   resolves the provider AT IMPORT TIME. The suite hit the real Groq
-   API and spent quota the day the key landed. Pin overriding env in a
-   SHARED setupFiles, not in one file's beforeAll.
-🔴 ERROR MESSAGES ARE AN EXFILTRATION PATH: Node's Headers TypeError
-   embeds the header VALUE (the key!); V8's SyntaxError embeds the
-   parsed snippet (model output). Guard at the boundary with FIXED
-   error messages; never console.error an error whose message you do
-   not control.
-🔴 `?? DEFAULT` DOES NOT SAVE YOU FROM '' — .env.example ships empty
-   values and dotenv reads them as empty STRINGS. Normalize with
-   `?.trim() || DEFAULT` at the consumer.
-🔴 REDACTION VOCABULARY ≠ DETECTION VOCABULARY: masking every trigger
-   keyword turned "thyroid support" into a dead-end clarify loop for
-   exactly the users who tripped a trigger. Detection may be broad;
-   masking must be specific.
-🔴 THE UNMOUNT-TAKES-FOCUS FAMILY: three MORE instances in one diff
-   (B review). Before shipping ANY control: after this succeeds, does
-   the thing I just pressed still exist?
-🔴 CLIENT SUITE UNDER PARALLEL LOAD (ISSUE-096): 3 timeout reds on
-   unrelated pages, green isolated, green on the full re-run. Re-run
-   before believing a red.
+🔴 THE PIPE TRAP STRUCK AGAIN (browser-verification.md's own rule):
+   `tsc -b 2>&1 | head; echo $?` printed 0 over a FAILING tsc — $? was
+   head's. Run compilers bare or capture to a file and read $? first.
+🔴 THE EFFECT-ON-VALUE SCROLL/FETCH FAMILY: two instances — an outcome
+   scrollIntoView keyed on [failureText, created] scrolled to a STALE
+   success; a load effect keyed on sessionEmail refetched and CLOBBERED
+   the form. Side effects fire from the EVENT, not from watching state.
+🔴 ONE IN-FLIGHT FLAG PER SEND PATH: the composer's local inFlight
+   couldn't see the chips' turn — two concurrent sends forked the chat
+   history. The panel's single `awaiting` gates BOTH now.
+🔴 A PARAM-COUNT PROXY IS NOT A DECISION: `handoffParams.length === 1`
+   for "only q" broke the moment q rode with one more criterion; decide
+   on the resolved struct itself.
+🔴 jsdom lacks matchMedia AND scrollIntoView — usePresence's CLOSE path
+   calls matchMedia, so the first test to close a presence dialog needs
+   the stub (pattern: useAddToCart.test.tsx).
+🔴 Tolerant hooks (useOptionalSession / useCartRefresh /
+   useOptionalCartClubMember) exist so provider-less test harnesses
+   don't throw — ONE optional hook per context; no per-field wrappers.
+🔴 i18next locale JSONs are rewritten via python json (2-indent,
+   ensure_ascii=False) — keep diffs 2-line minimal; key SYMMETRY he/en
+   is pinned by the integrity suites.
 ```
 
 ---
@@ -209,8 +190,8 @@ b7d7846 (93rd) C reviewed (10 findings — modified-click close ·
 ## Measured at handoff
 
 ```
-server 1067 · client 1030 · tsc 0 both · builds 0 · tree clean after
-the DEC-094 commit · lock free · dev servers DOWN · M-011 SHIPPED with
-Groq live · deploy is the last milestone · the signed-in pass (now
-incl. the real-provider agent conversation) is the user's
+HEAD 275fc3b · working tree DIRTY with exactly the DEC-096/097/098 set
+(the user's commit word pending) · client 1002 · targeted server suites
+green · full-server 6 reds = ISSUE-154 (recorded, user's call) · tsc 0
+both · builds 0 both · lock FREE · deploy is the last milestone.
 ```

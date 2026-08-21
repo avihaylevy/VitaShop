@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { StrictMode } from 'react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../i18n'
 import i18n from '../i18n'
@@ -9,11 +10,12 @@ import * as accountApi from '../lib/accountApi'
 import type { ClubStatusResult } from '../types/account'
 
 /**
- * MILESTONE-012 Checkpoint B — the club surface's contract: the toggle
- * button NEVER unmounts on success (the unmount-takes-focus family), repeat
- * outcomes re-announce (identity-keyed, not string-keyed), in-flight presses
- * are ignored, and failures land in an always-mounted alert region.
- * StrictMode, like the app (the impure-updater lesson).
+ * MILESTONE-012 Checkpoint B, amended by DEC-097 (ISSUE-170/171): joining
+ * is a FORMAL dialog — benefits, terms link, an explicit consent checkbox
+ * gating the confirm — and leaving is its own confirm dialog. The opener
+ * button never unmounts on success (relabelled in place); the dialog closes
+ * after the action settles; failures land in the page's always-mounted
+ * alert region while the dialog stays open. StrictMode, like the app.
  */
 
 vi.mock('../lib/accountApi', () => ({
@@ -32,19 +34,37 @@ const ok = (isClubMember: boolean): ClubStatusResult => ({
 function renderPage() {
   return render(
     <StrictMode>
-      <ClubPage />
+      <MemoryRouter>
+        <ClubPage />
+      </MemoryRouter>
     </StrictMode>,
   )
 }
 
 beforeEach(() => {
   vi.resetAllMocks()
+  /* jsdom has no matchMedia; usePresence (CenterDialog's exit motion)
+     calls it on close. Reduced motion reported OFF, as in production. */
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }))
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 afterEach(cleanup)
 
 describe('ClubPage — join/leave without losing the shopper', () => {
-  it('a non-member sees the join button; joining announces and the SAME button becomes leave', async () => {
+  it('🔴 DEC-097: joining is dialog + CONSENT — the confirm is inert until the checkbox is ticked', async () => {
     mockStatus.mockResolvedValue(ok(false))
     mockAction.mockResolvedValue(ok(true))
     renderPage()
@@ -52,20 +72,47 @@ describe('ClubPage — join/leave without losing the shopper', () => {
     const joinButton = await screen.findByRole('button', { name: i18n.t('club:page.join') })
     fireEvent.click(joinButton)
 
-    await screen.findByText(i18n.t('club:page.joined'))
-    // 🔴 The SAME element — relabelled, never remounted, so focus has
-    // nowhere to fall.
-    expect(screen.getByRole('button', { name: i18n.t('club:page.leave') })).toBe(joinButton)
+    // The dialog opened; the confirm refuses without consent.
+    const confirm = await screen.findByRole('button', { name: i18n.t('club:joinDialog.confirm') })
+    expect(confirm.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(confirm)
+    expect(mockAction).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: i18n.t('club:joinDialog.consent') }))
+    expect(confirm.getAttribute('aria-disabled')).toBeNull()
+    fireEvent.click(confirm)
+
     expect(mockAction).toHaveBeenCalledWith('join')
+    // The dialog closes after the settle (its exit transition ends via the
+    // presence fallback in jsdom), background inertness lifts, and the SAME
+    // opener is relabelled.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: i18n.t('club:joinDialog.confirm') })).toBeNull(),
+    )
+    await screen.findByText(i18n.t('club:page.joined'))
+    expect(screen.getByRole('button', { name: i18n.t('club:page.leave') })).toBe(joinButton)
     expect(screen.getByText(i18n.t('club:page.statusMember'))).toBeTruthy()
   })
 
-  it('leaving after joining announces the leave outcome', async () => {
+  it('DEC-097: leaving asks for confirmation; cancel changes nothing', async () => {
     mockStatus.mockResolvedValue(ok(true))
     mockAction.mockResolvedValue(ok(false))
     renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: i18n.t('club:page.leave') }))
+    // Cancel first — the membership must survive it.
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('club:leaveDialog.cancel') }))
+    expect(mockAction).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: i18n.t('club:leaveDialog.cancel') })).toBeNull(),
+    )
+    expect(screen.getByText(i18n.t('club:page.statusMember'))).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('club:page.leave') }))
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('club:leaveDialog.confirm') }))
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: i18n.t('club:leaveDialog.confirm') })).toBeNull(),
+    )
     await screen.findByText(i18n.t('club:page.left'))
     expect(mockAction).toHaveBeenCalledWith('leave')
     expect(screen.getByText(i18n.t('club:page.statusNotMember'))).toBeTruthy()
@@ -79,10 +126,12 @@ describe('ClubPage — join/leave without losing the shopper', () => {
     )
     renderPage()
 
-    const button = await screen.findByRole('button', { name: i18n.t('club:page.join') })
-    fireEvent.click(button)
-    fireEvent.click(button)
-    fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('club:page.join') }))
+    fireEvent.click(screen.getByRole('checkbox', { name: i18n.t('club:joinDialog.consent') }))
+    const confirm = screen.getByRole('button', { name: i18n.t('club:joinDialog.confirm') })
+    fireEvent.click(confirm)
+    fireEvent.click(confirm)
+    fireEvent.click(confirm)
     expect(mockAction).toHaveBeenCalledTimes(1)
 
     release(ok(true))
@@ -95,10 +144,17 @@ describe('ClubPage — join/leave without losing the shopper', () => {
     renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: i18n.t('club:page.join') }))
+    fireEvent.click(screen.getByRole('checkbox', { name: i18n.t('club:joinDialog.consent') }))
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('club:joinDialog.confirm') }))
     await screen.findByText(i18n.t('club:page.error'))
-    expect(screen.getByRole('alert').textContent).toBe(i18n.t('club:page.error'))
-    // The control survives its own failure — retrying is one press away.
-    expect(screen.getByRole('button', { name: i18n.t('club:page.join') })).toBeTruthy()
+    // 🔴 The audible copy lives INSIDE the dialog — the page's alert region
+    // sits in #root, which Modal makes inert while the dialog is open
+    // (hundred-second pass review).
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('alert').textContent).toBe(i18n.t('club:page.error'))
+    // The dialog STAYS open on failure — the confirm remains under the
+    // shopper's hand for a retry.
+    expect(screen.getByRole('button', { name: i18n.t('club:joinDialog.confirm') })).toBeTruthy()
   })
 
   it('a failed LOAD offers a retry that reloads', async () => {

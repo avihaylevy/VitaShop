@@ -20,6 +20,8 @@ const DETAIL = {
   orderNumber: 'VS-20260814-ABC123',
   createdAt: '2026-08-14T10:00:00.000Z',
   status: 'shipped',
+  // Server-computed cancel offer — required by the shared row validator.
+  cancellable: false,
   totalAmount: '220.00',
   shippingCost: '30.00',
   deliveryMethod: 'courier',

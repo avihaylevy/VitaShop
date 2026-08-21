@@ -256,6 +256,95 @@ describe('the shopper cancelling their own order', () => {
     expect(await stockOf()).toBe(198)
   })
 
+  it("🔴 the user's twelfth list — a PAID order past the 10-day window is refused 409", async () => {
+    const mine = await placeOrderFor(userId, 'cancel-window', 2)
+    // Paid, and placed eleven days ago — one past the window.
+    await prisma.order.update({
+      where: { id: mine },
+      data: { status: 'paid', createdAt: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000) },
+    })
+    const cookie = await signIn(EMAIL)
+
+    const response = await cancel(mine, cookie)
+
+    expect(response.status).toBe(409)
+    expect(((await response.json()) as { error: { code: string } }).error.code)
+      .toBe('CANCEL_WINDOW_PASSED')
+    // 🔴 AND NOTHING MOVED — no restore for a refused cancellation.
+    const untouched = await prisma.order.findUniqueOrThrow({
+      where: { id: mine }, select: { status: true },
+    })
+    expect(untouched.status).toBe('paid')
+    expect(await stockOf()).toBe(198)
+  })
+
+  it('⚠️ THE CONTROL — a paid order nine days old still cancels', async () => {
+    // Without this, the window test is satisfied by a route that refuses
+    // every cancellation. Inside the window, the cancel still works.
+    const mine = await placeOrderFor(userId, 'cancel-window-open', 2)
+    await prisma.order.update({
+      where: { id: mine },
+      data: { status: 'paid', createdAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000) },
+    })
+    const cookie = await signIn(EMAIL)
+
+    expect((await cancel(mine, cookie)).status).toBe(200)
+    expect(await stockOf()).toBe(200)
+  })
+
+  it('🔴 a PENDING_PAYMENT order is cancellable at ANY age — nothing ever shipped', async () => {
+    // The window claims "goods presumed received"; an abandoned checkout has
+    // no goods. Refusing it would lock its reserved stock forever (review).
+    const mine = await placeOrderFor(userId, 'cancel-window-pending', 2)
+    await prisma.order.update({
+      where: { id: mine },
+      data: { createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+    })
+    const cookie = await signIn(EMAIL)
+
+    expect((await cancel(mine, cookie)).status).toBe(200)
+    expect(await stockOf()).toBe(200)
+  })
+
+  it("the list's server-computed `cancellable` flag matches the rule", async () => {
+    const fresh = await placeOrderFor(userId, 'flag-fresh', 1)
+    const stale = await placeOrderFor(userId, 'flag-stale', 1)
+    await prisma.order.update({
+      where: { id: stale },
+      data: { status: 'paid', createdAt: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000) },
+    })
+    const cookie = await signIn(EMAIL)
+
+    const response = await fetch(`${baseUrl}/api/orders`, { headers: { cookie } })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { orders: { id: string; cancellable: boolean }[] }
+    const byId = new Map(body.orders.map((o) => [o.id, o.cancellable]))
+    // Fresh pending_payment: offered. Paid past the window: not offered.
+    expect(byId.get(fresh)).toBe(true)
+    expect(byId.get(stale)).toBe(false)
+  })
+
+  it("🔴 the user's twelfth list — a cancelled order LEAVES the history list", async () => {
+    const keep = await placeOrderFor(userId, 'history-keep', 1)
+    const gone = await placeOrderFor(userId, 'history-gone', 1)
+    const cookie = await signIn(EMAIL)
+    expect((await cancel(gone, cookie)).status).toBe(200)
+
+    const response = await fetch(`${baseUrl}/api/orders`, { headers: { cookie } })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { orders: { id: string }[] }
+    const ids = body.orders.map((o) => o.id)
+    // The live order is listed; the cancelled one is NOT — its cancellation
+    // was confirmed by the dialog at the moment it happened.
+    expect(ids).toContain(keep)
+    expect(ids).not.toContain(gone)
+    // ⚠️ The row still EXISTS (INV-03) — it is only unlisted.
+    const row = await prisma.order.findUniqueOrThrow({
+      where: { id: gone }, select: { status: true },
+    })
+    expect(row.status).toBe('cancelled')
+  })
+
   it('a TERMINAL order answers 409, not 403', async () => {
     // ⚠️ THE CONTROL on the test above: 403 must mean "wrong actor", not "any
     // refusal". A delivered order is nobody's to cancel.

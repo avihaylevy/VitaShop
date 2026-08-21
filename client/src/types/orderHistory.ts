@@ -23,6 +23,12 @@ export type OrderHistoryRow = {
   orderNumber: string
   createdAt: string
   status: OrderStatusName
+  /**
+   * 🔴 SERVER-COMPUTED (status ∈ §8.9's shopper rows, and `paid` inside the
+   * 10-day window, on the SERVER's clock). The client renders this and holds
+   * no copy of the statuses or the window; the cancel route still re-checks.
+   */
+  cancellable: boolean
   totalAmount: string
   shippingCost: string
   deliveryMethod: string
@@ -73,6 +79,8 @@ export type CancelOrderResult =
         | { kind: 'rateLimited' }
         | { kind: 'notFound' }
         | { kind: 'forbidden' }
+        /** The 10-day cancellation window has passed — goods presumed received. */
+        | { kind: 'windowPassed' }
         | { kind: 'terminal' }
         | { kind: 'concurrent' }
         | { kind: 'server' }

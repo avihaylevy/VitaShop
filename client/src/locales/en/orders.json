@@ -28,16 +28,21 @@
       "unavailable": "Your orders could not be loaded right now."
     },
     "outcome": {
-      "cancelled": "The order was cancelled.",
-      "alreadyCancelled": "That order was already cancelled.",
       "offline": "No connection to the server. The order was not cancelled.",
       "unauthenticated": "Please sign in again.",
       "rateLimited": "Too many requests. Wait a moment and try again.",
       "notFound": "That order could not be found.",
       "forbidden": "This order is already being prepared and can no longer be cancelled here. Please contact us.",
+      "windowPassed": "The delivery window has passed, so this order can no longer be cancelled.",
       "terminal": "This order is already complete.",
       "concurrent": "The order changed while you were looking. Refresh and try again.",
       "server": "The cancellation failed. Please try again."
+    },
+    "cancelledDialog": {
+      "title": "Order cancelled",
+      "body": "The order was cancelled successfully.",
+      "bodyAlready": "That order was already cancelled.",
+      "ok": "OK"
     },
     "signIn": "Sign in"
   },

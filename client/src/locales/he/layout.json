@@ -32,7 +32,8 @@
     "club": "מועדון החברות",
     "profile": "הפרופיל שלי",
     "adminOrders": "ניהול הזמנות",
-    "adminProducts": "ניהול מוצרים"
+    "adminProducts": "ניהול מוצרים",
+    "clubMemberBadge": "חבר מועדון"
   },
   "welcome": {
     "message": "ברוך הבא, {{name}}"

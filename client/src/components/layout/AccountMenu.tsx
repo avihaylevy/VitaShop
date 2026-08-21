@@ -5,6 +5,7 @@ import { UserIcon, ChevronDownIcon } from '../icons'
 import { Icon } from '../ui/Icon'
 import { FOCUS_RING } from '../ui/focusRing'
 import { useSession } from '../../state/SessionContext'
+import { useOptionalCartClubMember } from '../../state/CartContext'
 
 /**
  * Account control + its dropdown. A WAI-ARIA menu-button disclosure, not a
@@ -24,6 +25,7 @@ import { useSession } from '../../state/SessionContext'
 export function AccountMenu() {
   const { t } = useTranslation('layout')
   const { isSignedIn, isAdmin, firstName, email, signOut } = useSession()
+  const clubMember = useOptionalCartClubMember()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -257,14 +259,22 @@ export function AccountMenu() {
                   >
                     {t('account.myOrders')}
                   </Link>
-                  {/* MILESTONE-012 Checkpoint B — linked the day it shipped. */}
+                  {/* MILESTONE-012 Checkpoint B — linked the day it shipped.
+                      DEC-097 (ISSUE-171): a MEMBER's entry reads as status,
+                      not a bare action — the badge rides the cart DTO's
+                      clubMember flag the server computes per request. */}
                   <Link
                     role="menuitem"
                     to="/account/club"
                     onClick={() => setOpen(false)}
-                    className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+                    className={`${FOCUS_RING} flex items-center justify-between gap-2 rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
                   >
-                    {t('account.club')}
+                    <span>{t('account.club')}</span>
+                    {clubMember && (
+                      <span className="rounded-round bg-brand-teal/10 px-2 py-0.5 text-xs font-medium text-brand-teal-strong">
+                        {t('account.clubMemberBadge')}
+                      </span>
+                    )}
                   </Link>
                 </>
               )}

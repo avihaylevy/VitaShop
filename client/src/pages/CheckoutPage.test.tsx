@@ -651,140 +651,35 @@ describe('F2c — confirming and paying', () => {
     expect(await screen.findByText(/order status/i)).toBeTruthy()
   })
 
-  it('🔴 THE CARD NEVER LEAVES THE BROWSER — the whole point of the demo form', async () => {
-    // If someone later "helpfully" adds the card to the payload, this fails.
-    // /checkout/pay has no field for one, and a student project has none of
-    // the controls that make holding card data survivable.
+  it('🔴 DEC-098: NO card field exists, and the pay payload carries nothing card-shaped', async () => {
+    // The user's decision on the eleventh list, item 14: no card details at
+    // payment at all (save-card is a later decision). The old demo form and
+    // its validation are deleted; this pin keeps them from creeping back.
     const calls = payRoute(201, ORDER)
     renderPage()
-    const cardField = (await screen.findByLabelText(/card number/i)) as HTMLInputElement
-    fireEvent.change(cardField, { target: { value: '5555 5555 5555 4444' } })
+    await screen.findByRole('button', { name: /pay/i })
+    expect(screen.queryByLabelText(/card number/i)).toBeNull()
+    expect(screen.queryByLabelText(/security code|cvv/i)).toBeNull()
+    expect(screen.queryByLabelText(/expiry/i)).toBeNull()
+
     await fillAndPay()
     await waitFor(() => expect(calls).toHaveLength(1))
-
     /*
-     * 🔴 ASSERTED ON THE PARSED BODY, NOT ON A SUBSTRING OF THE RAW JSON.
-     * `not.toContain('123')` also searched the idempotency key — a v4 UUID
-     * contains "123" about 0.5% of the time (measured: 477 in 100,000), so
-     * roughly one run in 208 failed while reporting a card leak that had not
-     * happened. A flaky test that cries "leak" is worse than no test: it
-     * teaches everyone to re-run and move on.
+     * 🔴 THE EXACT KEY SET, not just "no card-shaped names" — the review
+     * caught the regex-only pin allowing ANY non-card field (email, profile
+     * data) to ride the pay body unnoticed. This is the whole payload; a new
+     * key is a deliberate decision, not a drive-by.
      */
-    const body = JSON.parse(String(calls[0]!.body)) as Record<string, unknown>
-    expect(Object.keys(body).sort()).toEqual(
-      ['address', 'deliveryMethod', 'fingerprint', 'idempotencyKey', 'saveAddress', 'simulatedOutcome'].sort(),
-    )
-    for (const value of Object.values(body)) {
-      expect(JSON.stringify(value)).not.toContain('5555')
-    }
-    expect(body.simulatedOutcome).toBe('success')
-  })
-
-  it('🔴 explains an invalid card WITHOUT waiting for a blur', async () => {
-    /*
-     * The dead end: clearing the number disables the pay button, and clicking
-     * a disabled button moves no focus — so no blur fires, no message appears,
-     * and the shopper is stuck with the explanation one keystroke away.
-     */
-    payRoute(201, ORDER)
-    renderPage()
-    const cardField = await screen.findByLabelText(/card number/i)
-    fireEvent.change(cardField, { target: { value: '' } })
-
-    // No blur — the message must already be there.
-    expect(await screen.findByText(/fill in this field/i)).toBeTruthy()
-    expect(cardField.getAttribute('aria-invalid')).toBe('true')
-  })
-
-  it('🔴 THE CONTROL — the untouched demo card says nothing', async () => {
-    // Without this, "explains immediately" would pass against a form that
-    // shouted at a shopper who had not typed anything.
-    payRoute(201, ORDER)
-    renderPage()
-    await screen.findByLabelText(/card number/i)
-    expect(screen.queryByText(/fill in this field/i)).toBeNull()
-    expect(screen.queryByText(/not valid/i)).toBeNull()
-  })
-
-  it('🔴 the pre-filled expiry is always in the FUTURE, not a hardcoded date', async () => {
-    // `12/30` would expire on 2031-01-01 and leave the demo unusable — and
-    // silently, since nothing had been blurred.
-    payRoute(201, ORDER)
-    renderPage()
-    const expiry = (await screen.findByLabelText(/expiry/i)) as HTMLInputElement
-    const [, year] = expiry.value.split('/')
-    expect(2000 + Number(year)).toBeGreaterThan(new Date().getFullYear())
-  })
-
-  it('comes PRE-FILLED, so pressing pay needs no setup', async () => {
-    payRoute(201, ORDER)
-    renderPage()
-    const cardField = (await screen.findByLabelText(/card number/i)) as HTMLInputElement
-    expect(cardField.value).toBe('4111 1111 1111 1111')
-  })
-
-  it('🔴 blocks payment on a bad card number, and says why', async () => {
-    payRoute(201, ORDER)
-    renderPage()
-
-    /*
-     * 🔴 THE ADDRESS IS FILLED FIRST, AND THAT IS THE POINT. The first version
-     * asserted the button was disabled with the address still EMPTY — so it
-     * was disabled by the address rule and passed with the card check deleted.
-     * Mutation caught it. The only way to prove the CARD disables the button
-     * is to remove every other reason it could be disabled.
-     */
-    const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
-    fireEvent.change(line1, { target: { value: 'רחוב 1' } })
-    fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
-    await waitFor(() =>
-      expect((screen.getByRole('button', { name: /confirm and pay/i }) as HTMLButtonElement).disabled).toBe(false),
-    )
-
-    const cardField = await screen.findByLabelText(/card number/i)
-    fireEvent.change(cardField, { target: { value: '4111 1111 1111 1112' } })
-    fireEvent.blur(cardField)
-
-    expect(await screen.findByText(/not valid/i)).toBeTruthy()
-    await waitFor(() =>
-      expect((screen.getByRole('button', { name: /confirm and pay/i }) as HTMLButtonElement).disabled).toBe(true),
-    )
-  })
-
-  it('blocks payment on an expired date', async () => {
-    payRoute(201, ORDER)
-    renderPage()
-    const expiry = await screen.findByLabelText(/expiry/i)
-    fireEvent.change(expiry, { target: { value: '01/20' } })
-    fireEvent.blur(expiry)
-    expect(await screen.findByText(/already passed/i)).toBeTruthy()
-  })
-
-  it('blocks payment on a two-digit security code', async () => {
-    payRoute(201, ORDER)
-    renderPage()
-    const cvv = await screen.findByLabelText(/security code/i)
-    fireEvent.change(cvv, { target: { value: '12' } })
-    fireEvent.blur(cvv)
-    expect(await screen.findByText(/3 digits/i)).toBeTruthy()
-  })
-
-  it('🔴 THE CONTROL — a VALID card raises nothing and leaves the button usable', async () => {
-    // Without this, every "blocks payment" test above would pass against a
-    // form that refused everything.
-    payRoute(201, ORDER)
-    renderPage()
-    const cardField = await screen.findByLabelText(/card number/i)
-    fireEvent.change(cardField, { target: { value: '5555 5555 5555 4444' } })
-    fireEvent.blur(cardField)
-
-    expect(screen.queryByText(/not valid/i)).toBeNull()
-    const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
-    fireEvent.change(line1, { target: { value: 'רחוב 1' } })
-    fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
-    await waitFor(() =>
-      expect((screen.getByRole('button', { name: /confirm and pay/i }) as HTMLButtonElement).disabled).toBe(false),
-    )
+    const keys = Object.keys(JSON.parse(String(calls[0]!.body))).sort()
+    expect(keys).toEqual([
+      'address',
+      'deliveryMethod',
+      'fingerprint',
+      'idempotencyKey',
+      'saveAddress',
+      'simulatedOutcome',
+    ])
+    expect(keys.join(' ')).not.toMatch(/card|cvv|expiry|pan/i)
   })
 
   it('🔴 THE CONTROL — the button is DISABLED while the address is incomplete', async () => {

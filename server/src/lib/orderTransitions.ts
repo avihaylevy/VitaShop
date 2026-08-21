@@ -115,6 +115,34 @@ export function adminTransitionsFrom(from: OrderStatusName): readonly OrderStatu
   ).map((row) => row.to)
 }
 
+/**
+ * The user's twelfth list (2026-08-21) — a shopper may not cancel an order
+ * whose delivery window has long passed. Their example: a 3–5 business-day
+ * order cannot be cancelled after 10 days, because the goods are presumed
+ * received. Ten days (measured as elapsed time, 240h) from placement, for
+ * every method — the one number the user named, kept as a single constant.
+ *
+ * ⚠️ AMENDING THE WINDOW IS A ONE-LINE CHANGE *HERE AND ONLY HERE*. The
+ * client renders the server-computed `cancellable` flag on the order
+ * summary (routes/orders.ts) and holds NO copy of this number — the drift
+ * the hundred-second pass review caught before it shipped.
+ *
+ * 🔴 PAID ORDERS ONLY. "Goods presumed received" is a claim about an order
+ * that was going to ship; a `pending_payment` order never shipped and never
+ * will, and refusing its cancellation would strand the shopper's only exit
+ * from an abandoned checkout — with its reserved stock locked forever
+ * (found in the same review). The service applies this predicate only to
+ * `paid -> cancelled` by the shopper; admin rows are untouched.
+ *
+ * 🔴 PURE, like the table above: the caller supplies both instants.
+ */
+export const SHOPPER_CANCEL_WINDOW_DAYS = 10
+
+export function shopperCancelWindowClosed(createdAt: Date, now: Date): boolean {
+  const windowMs = SHOPPER_CANCEL_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  return now.getTime() - createdAt.getTime() > windowMs
+}
+
 export type TransitionRejection =
   /** The order is finished. Nothing leaves `delivered` or `cancelled`. */
   | 'TERMINAL'

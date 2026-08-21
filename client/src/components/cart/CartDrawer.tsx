@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useCart } from '../../state/CartContext'
@@ -25,9 +25,12 @@ type CartDrawerProps = {
 }
 
 /**
- * DEC-073 — the drawer is now a compact EDITING PANEL, superseding DEC-047's
- * confirmation-only contract (D3/D4 narrowed by the user's decision,
- * ISSUE-087 + ISSUE-088 answered together).
+ * DEC-073 — the compact panel; DEC-096 (2026-08-21, the user going with the
+ * recommended split for ISSUE-166) narrows it to a QUICK GLANCE: the whole
+ * cart with quantity steppers, subtotal, and the two exits (checkout · the
+ * full cart page). REMOVAL moved to the page alone — that is where UndoRow
+ * and its recovery choreography live, and the split is the drawer/page
+ * differentiation the user asked to decide.
  *
  * 🔴 WHAT CHANGED AND WHAT DID NOT:
  *   · it shows THE WHOLE CART, not the one line just added, with the same
@@ -60,7 +63,7 @@ type CartDrawerProps = {
 export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
   const { t, i18n } = useTranslation('cart')
   const language = i18n.language as SupportedLanguage
-  const { cart, outcome, failure, pending, setLineQuantity, removeLine } = useCart()
+  const { cart, outcome, failure, pending, setLineQuantity } = useCart()
 
   // Read live from the SERVER's cart on every render — no copied lines, so a
   // clamp, a removal or a concurrent change is reflected immediately.
@@ -93,32 +96,6 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
     },
     [setLineQuantity],
   )
-  /*
-   * 🔴 REMOVAL SAYS SO AND FOCUS LANDS SOMEWHERE DELIBERATE (review
-   * finding — the unmount-on-success family, again). `messageFor` returns ''
-   * for removals by design (the PAGE's UndoRow owns that announcement), and
-   * D5 forbids a live region here — so the drawer keeps its own removal
-   * notice as ordinary text and moves focus onto it (tabIndex -1). Without
-   * this, pressing Remove destroyed the focused button and focus fell to
-   * <body>, OUTSIDE the dialog's focus trap, with nothing said.
-   * ⚠️ No undo here, deliberately: UndoRow and its focus choreography are the
-   * page's; the notice names the product and the cart page remains the place
-   * to recover it.
-   */
-  const [removedName, setRemovedName] = useState<string | null>(null)
-  const removalNoticeRef = useRef<HTMLParagraphElement>(null)
-  const handleRemove = useCallback(
-    (line: CartLineDisplay) => {
-      void removeLine(line.id, line.name).then((result) => {
-        if (!result) return
-        setRemovedName(line.name)
-      })
-    },
-    [removeLine],
-  )
-  useEffect(() => {
-    if (removedName !== null) removalNoticeRef.current?.focus()
-  }, [removedName])
 
   return (
     // The user's call (2026-08-16): a centered compact dialog, not the
@@ -137,7 +114,7 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
                 busy={pending}
                 onIncrement={handleIncrement}
                 onDecrement={handleDecrement}
-                onRemove={handleRemove}
+                // DEC-096: no removal in the quick glance — the page owns it.
               />
             ))}
           </div>
@@ -150,18 +127,6 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
           forbids.
         */}
         {outcomeMessage && <p className="text-sm text-text-muted">{outcomeMessage}</p>}
-
-        {/* The removal notice — ordinary text (D5), and the deliberate focus
-            target after the pressed Remove button unmounted itself. */}
-        {removedName !== null && (
-          <p
-            ref={removalNoticeRef}
-            tabIndex={-1}
-            className={`${FOCUS_RING} rounded-compact text-sm text-text-ink`}
-          >
-            {t('drawer.removed', { product: removedName })}
-          </p>
-        )}
 
         {/*
           🔴 A FAILED mutation is SAID, not left as a control that visibly
@@ -182,19 +147,8 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
               re-derived. Shipping/threshold rows stay on the page (DEC-047
               D3 for everything except editing).
             */}
-            {/* M-012 C — the same copy-only hint the cart page carries. */}
-            <p className="border-t border-border-hairline pt-4 text-xs text-text-muted">
-              {cart.clubMember ? (
-                t('hint.cartMember', { ns: 'club' })
-              ) : (
-                <>
-                  {t('hint.cartJoin', { ns: 'club' })}{' '}
-                  <Link to="/account/club" className="text-brand-teal underline">
-                    {t('hint.cartJoinLink', { ns: 'club' })}
-                  </Link>
-                </>
-              )}
-            </p>
+            {/* DEC-096: the club HINT copy stays on the page; the glance
+                keeps only the figures (ClubSavingsRow below). */}
             {/* The seventh list, item 2 — the shared row; ClubSavingsRow
                 owns the gate and the member/join reading. */}
             <ClubSavingsRow cart={cart} />

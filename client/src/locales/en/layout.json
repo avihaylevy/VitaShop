@@ -32,7 +32,8 @@
     "club": "Membership club",
     "profile": "My profile",
     "adminOrders": "Manage orders",
-    "adminProducts": "Manage products"
+    "adminProducts": "Manage products",
+    "clubMemberBadge": "Member"
   },
   "welcome": {
     "message": "Welcome, {{name}}"

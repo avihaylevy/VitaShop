@@ -22,7 +22,8 @@ type CartItemRowProps = {
   busy: boolean
   onIncrement: (line: CartLineDisplay) => void
   onDecrement: (line: CartLineDisplay) => void
-  onRemove: (line: CartLineDisplay) => void
+  /** DEC-096: absent = no removal control (the drawer's quick-glance mode; the page is the editor). */
+  onRemove?: (line: CartLineDisplay) => void
 }
 
 /**
@@ -181,15 +182,17 @@ export function CartItemRow({ line, busy, onIncrement, onDecrement, onRemove }: 
           🔴 Enabled even for an inactive line: removal is the only way to
           unblock checkout.
         */}
-        <Button
-          variant="danger"
-          icon={<TrashIcon />}
-          aria-label={t('remove.ariaLabel', { product: line.name })}
-          disabled={busy}
-          onClick={() => onRemove(line)}
-        >
-          {t('remove.label')}
-        </Button>
+        {onRemove !== undefined && (
+          <Button
+            variant="danger"
+            icon={<TrashIcon />}
+            aria-label={t('remove.ariaLabel', { product: line.name })}
+            disabled={busy}
+            onClick={() => onRemove(line)}
+          >
+            {t('remove.label')}
+          </Button>
+        )}
       </div>
     </div>
   )

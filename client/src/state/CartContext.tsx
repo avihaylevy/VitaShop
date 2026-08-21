@@ -205,6 +205,13 @@ export function useCart(): CartContextValue {
  * (the ISSUE-095 family). The useSessionFirstName pattern.
  */
 const NO_OP_REFRESH = async () => {}
+/** DEC-097 (ISSUE-171) — the member badge's one bit, tolerant of a missing
+ * provider (false then): the server computes clubMember per cart response;
+ * the menu only displays it. */
+export function useOptionalCartClubMember(): boolean {
+  return useContext(CartContext)?.cart.clubMember ?? false
+}
+
 export function useCartRefresh(): () => Promise<void> {
   return useContext(CartContext)?.refresh ?? NO_OP_REFRESH
 }

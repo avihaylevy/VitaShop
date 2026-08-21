@@ -28,8 +28,13 @@ function order(overrides: Record<string, unknown> = {}) {
   return {
     id: 'o1',
     orderNumber: 'VS-20260814-ABC123',
-    createdAt: '2026-08-14T10:00:00.000Z',
+    // Yesterday, RELATIVE to the test run — a fixed date would silently age
+    // past the 10-day cancel window and start hiding the cancel button.
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     status: 'paid',
+    // 🔴 SERVER-COMPUTED in production (status + the 10-day window). The
+    // page renders this flag and owns no policy; tests set it per case.
+    cancellable: true,
     totalAmount: '220.00',
     shippingCost: '30.00',
     deliveryMethod: 'courier',
@@ -70,6 +75,22 @@ function renderHistory() {
 
 beforeEach(async () => {
   vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:3000')
+  /*
+   * ⚠️ jsdom HAS NO `matchMedia`, and `usePresence` (CenterDialog's motion
+   * handling) calls it on the success dialog's close path — the
+   * useAddToCart.test.tsx pattern, required since the cancelled-order
+   * dialog moved onto CenterDialog.
+   */
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }))
   await i18n.changeLanguage('en')
 })
 
@@ -251,6 +272,8 @@ describe('cancelling an order', () => {
       [403, 'FORBIDDEN_FOR_ACTOR', /already being prepared/i],
       [409, 'TERMINAL', /already complete/i],
       [409, 'CONCURRENT_TRANSITION', /changed while you were looking/i],
+      // The user's twelfth list — the 10-day window refusal is its own answer.
+      [409, 'CANCEL_WINDOW_PASSED', /delivery window has passed/i],
     ] as const) {
       routed({ orders: [order()] }, async () => ({ status, json: async () => ({ error: { code } }) }) as unknown as Response)
       renderHistory()
@@ -316,15 +339,16 @@ describe('cancelling an order', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^cancel order$/i }))
     fireEvent.click(screen.getByRole('button', { name: /yes, cancel it/i }))
 
-    const spoken = await screen.findAllByText(/was already cancelled/i)
-    expect(spoken.length).toBe(2)
-    expect(spoken.some((node) => node.className.includes('sr-only'))).toBe(true)
+    // A success (even the already-done kind) speaks through the DIALOG —
+    // the page's live region would be inert under it (review).
+    const dialog = await screen.findByRole('dialog', { name: /order cancelled/i })
+    expect(dialog.textContent).toMatch(/was already cancelled/i)
   })
 
   it('🔴 offers no cancel control once fulfilment has begun', async () => {
-    // §8.9 stops a shopper at `paid`. The route refuses anything later; the
-    // screen simply does not offer it.
-    routed({ orders: [order({ status: 'shipped' })] })
+    // §8.9 stops a shopper at `paid`; the SERVER computes that into the
+    // row's `cancellable` flag and the screen renders it.
+    routed({ orders: [order({ status: 'shipped', cancellable: false })] })
     renderHistory()
 
     await screen.findByText('VS-20260814-ABC123')
@@ -337,5 +361,72 @@ describe('cancelling an order', () => {
 
     await screen.findByText('VS-20260814-ABC123')
     expect(screen.queryByRole('button', { name: /^cancel order$/i })).toBeTruthy()
+  })
+
+  it("🔴 the user's twelfth list — no cancel control past the 10-day window", async () => {
+    // Eleven days old, still `paid` — the SERVER computes cancellable:false
+    // for it (the window on its own clock) and the screen honours the flag.
+    const eleven = new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString()
+    routed({ orders: [order({ createdAt: eleven, cancellable: false })] })
+    renderHistory()
+
+    await screen.findByText('VS-20260814-ABC123')
+    expect(screen.queryByRole('button', { name: /^cancel order$/i })).toBeNull()
+  })
+
+  it("🔴 the user's twelfth list — success opens a DIALOG and the order leaves the list", async () => {
+    /*
+     * The server no longer lists cancelled orders, so the row unmounts on the
+     * post-cancel reload — the confirmation must therefore live in a dialog,
+     * not in a line beside a row that has just disappeared.
+     */
+    let cancelled = false
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          cancelled = true
+          return {
+            status: 200,
+            json: async () => ({ orderId: 'o1', status: 'cancelled', alreadyCancelled: false, restoredStock: true }),
+          } as unknown as Response
+        }
+        return {
+          status: 200,
+          json: async () => ({ orders: cancelled ? [] : [order()] }),
+        } as unknown as Response
+      }),
+    )
+    // Rendered into a real #root: useReturnFocus only accepts a return
+    // target that lives inside it, exactly like the app.
+    const root = document.createElement('div')
+    root.id = 'root'
+    document.body.appendChild(root)
+    render(
+      <MemoryRouter>
+        <OrderHistoryPage />
+      </MemoryRouter>,
+      { container: root },
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /^cancel order$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /yes, cancel it/i }))
+
+    const dialog = await screen.findByRole('dialog', { name: /order cancelled/i })
+    expect(dialog.textContent).toMatch(/was cancelled successfully/i)
+    // The cancelled order is GONE from the list, not re-rendered as a
+    // cancelled row.
+    await waitFor(() => expect(screen.queryByText('VS-20260814-ABC123')).toBeNull())
+
+    // Closing lands focus somewhere deliberate — the heading — because the
+    // confirm button that opened the dialog unmounted with its row. The
+    // restore is microtask-deferred (inert must lift first), so awaited.
+    fireEvent.click(screen.getByRole('button', { name: /^ok$/i }))
+    // CenterDialog stays mounted through its exit animation (usePresence);
+    // jsdom fires no transitionend, so the fallback timer unmounts it.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const heading = screen.getByRole('heading', { name: /my orders/i })
+    await waitFor(() => expect(document.activeElement).toBe(heading))
+    root.remove()
   })
 })

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 import {
   restoresStock,
+  shopperCancelWindowClosed,
   transitionProblem,
   type OrderActor,
   type OrderStatusName,
@@ -58,6 +59,13 @@ export type ApplyTransitionInput = {
    * M-010 work, not a side effect of replaying a transition.
    */
   trackingNumber?: string
+  /**
+   * The instant the cancel-window rule measures against. A TEST SEAM only —
+   * production callers omit it and get the real clock. Injected rather than
+   * mocked globally, so a test can place an order ten days in the past
+   * without faking every timestamp in the transaction.
+   */
+  now?: Date
 }
 
 export type ApplyTransitionResult =
@@ -78,6 +86,12 @@ export type ApplyTransitionResult =
   | { ok: false; reason: 'ORDER_NOT_FOUND' }
   /** The table's own refusal, carrying the status it refused FROM. */
   | { ok: false; reason: TransitionRejection; from: OrderStatusName }
+  /**
+   * The user's twelfth list — the shopper's cancellation window (10 calendar
+   * days from placement) has passed; the goods are presumed received. An
+   * ADMIN is never refused for this reason.
+   */
+  | { ok: false; reason: 'CANCEL_WINDOW_PASSED'; from: OrderStatusName }
   /** `shopper`/`admin` with no user id, or `system` with one. */
   | { ok: false; reason: 'ACTOR_REQUIRED' | 'ACTOR_NOT_ALLOWED' }
   /**
@@ -158,7 +172,7 @@ export async function applyTransition(
   return prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      select: { status: true },
+      select: { status: true, createdAt: true },
     })
     if (!order) return { ok: false as const, reason: 'ORDER_NOT_FOUND' as const }
 
@@ -171,6 +185,18 @@ export async function applyTransition(
 
     const problem = transitionProblem(from, to, actor)
     if (problem) return { ok: false as const, reason: problem, from }
+
+    // The user's twelfth list — a shopper cancelling long after the delivery
+    // window is refused: the goods are presumed received. Checked AFTER the
+    // table, so an illegal move still gets the table's own answer.
+    // 🔴 PAID ONLY: a pending_payment order never shipped, and refusing its
+    // cancellation would strand an abandoned checkout with its stock locked
+    // forever (hundred-second pass review). Admin rows untouched.
+    if (actor === 'shopper' && to === 'cancelled' && from === 'paid') {
+      if (shopperCancelWindowClosed(order.createdAt, input.now ?? new Date())) {
+        return { ok: false as const, reason: 'CANCEL_WINDOW_PASSED' as const, from }
+      }
+    }
 
     // The seam. Empty in production; see ApplyTransitionHooks for why it exists.
     if (hooks.afterRead) await hooks.afterRead()

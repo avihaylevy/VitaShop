@@ -7,16 +7,6 @@ import { PriceBlock } from '../components/catalog/PriceBlock'
 import { payForCheckout, requestCheckoutQuote } from '../lib/checkoutApi'
 import { newIdempotencyKey } from '../lib/idempotencyKey'
 import { useCartRefresh } from '../state/CartContext'
-import {
-  DEMO_CARD_NUMBER,
-  cardIsComplete,
-  demoExpiry,
-  cardNumberProblem,
-  cvvLengthFor,
-  cvvProblem,
-  expiryProblem,
-  type CardFieldProblem,
-} from '../lib/cardValidation'
 import { orderStatusLabelKey } from '../lib/orderStatus'
 import { requestAddressBook, requestShopperProfile } from '../lib/accountApi'
 import type { ManagedAddress, ShopperProfile } from '../types/account'
@@ -138,38 +128,13 @@ export function CheckoutPage() {
     city: false,
   })
 
-  /**
-   * The DEMO card form. 🔴 PRE-FILLED so a marker can press pay without
-   * knowing a magic number, and so nobody reaches for a real card — which was
-   * the actual risk, not the digits themselves.
-   *
-   * 🔴 THESE VALUES NEVER LEAVE THE BROWSER. They are not in the pay payload,
-   * not stored, not logged; `/checkout/pay` has no field for a card and the
-   * test suite asserts the request body carries none. REQ-F-043 makes the
-   * payment a simulation, and the specification asks for no card fields at
-   * all — this form exists to show input validation working.
+  /*
+   * DEC-098 (2026-08-21, the user's decision on the eleventh list's item
+   * 14): NO card details render at payment at all — the demo card form is
+   * gone, restoring REQ-F-043's original posture ("no card fields, nothing
+   * that resembles a card number"). A save-card option is a LATER decision
+   * of the user's; nothing here stores or asks for card data.
    */
-  const [card, setCard] = useState({ number: DEMO_CARD_NUMBER, expiry: demoExpiry(), cvv: '123' })
-  const [cardTouched, setCardTouched] = useState({ number: false, expiry: false, cvv: false })
-
-  /**
-   * 🔴 A FIELD THE SHOPPER HAS CHANGED IS "SHOWN", EVEN WITHOUT A BLUR.
-   *
-   * The messages were gated on `onBlur` alone. Clear the card number and reach
-   * straight for "Confirm and pay" and the button is already disabled —
-   * clicking a disabled button moves no focus, so no blur ever fires, no
-   * message appears, and `aria-invalid` stays false. A dead end with the
-   * explanation one keystroke away and unreachable.
-   *
-   * Comparing against the pre-filled default catches exactly the case that was
-   * broken: an untouched demo card says nothing, an edited one explains itself
-   * immediately.
-   */
-  const cardShown = {
-    number: cardTouched.number || card.number !== DEMO_CARD_NUMBER,
-    expiry: cardTouched.expiry || card.expiry !== demoExpiry(),
-    cvv: cardTouched.cvv || card.cvv !== '123',
-  }
 
   const [saveAddress, setSaveAddress] = useState(false)
   const [payState, setPayState] = useState<
@@ -735,82 +700,6 @@ export function CheckoutPage() {
           <legend className="mb-2 text-sm font-semibold text-text-ink">{t('pay.legend')}</legend>
 
           {/*
-            🔴 THE DEMO CARD FORM. Nothing here is sent anywhere — see
-            `cardValidation.ts`. It demonstrates input validation; the payment
-            itself is REQ-F-043's simulation, decided by the radios below.
-          */}
-          <div className="mb-4 flex flex-col gap-3 rounded-card border border-border-card p-3">
-            <p className="text-xs font-semibold text-text-ink">{t('card.legend')}</p>
-            <p className="text-xs text-text-muted">{t('card.notice')}</p>
-
-            <div className="flex flex-col gap-1 text-sm">
-              <label htmlFor={`${legendId}-card`} className="text-text-ink">
-                {t('card.number')}
-              </label>
-              <input
-                id={`${legendId}-card`}
-                inputMode="numeric"
-                autoComplete="off"
-                value={card.number}
-                onChange={(event) => setCard((c) => ({ ...c, number: event.target.value }))}
-                onBlur={() => setCardTouched((c) => ({ ...c, number: true }))}
-                aria-invalid={cardShown.number && cardNumberProblem(card.number) !== null}
-                aria-describedby={`${legendId}-card-error`}
-                className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
-                dir="ltr"
-              />
-              <span id={`${legendId}-card-error`} role="alert" className="text-xs text-state-error">
-                {cardShown.number ? cardErrorText(cardNumberProblem(card.number), 'number', t, card.number) : ''}
-              </span>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <div className="flex min-w-[8rem] flex-1 flex-col gap-1 text-sm">
-                <label htmlFor={`${legendId}-expiry`} className="text-text-ink">
-                  {t('card.expiry')}
-                </label>
-                <input
-                  id={`${legendId}-expiry`}
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder={t('card.expiryPlaceholder')}
-                  value={card.expiry}
-                  onChange={(event) => setCard((c) => ({ ...c, expiry: event.target.value }))}
-                  onBlur={() => setCardTouched((c) => ({ ...c, expiry: true }))}
-                  aria-invalid={cardShown.expiry && expiryProblem(card.expiry) !== null}
-                  aria-describedby={`${legendId}-expiry-error`}
-                  className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
-                  dir="ltr"
-                />
-                <span id={`${legendId}-expiry-error`} role="alert" className="text-xs text-state-error">
-                  {cardShown.expiry ? cardErrorText(expiryProblem(card.expiry), 'expiry', t, card.number) : ''}
-                </span>
-              </div>
-
-              <div className="flex min-w-[8rem] flex-1 flex-col gap-1 text-sm">
-                <label htmlFor={`${legendId}-cvv`} className="text-text-ink">
-                  {t('card.cvv')}
-                </label>
-                <input
-                  id={`${legendId}-cvv`}
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={card.cvv}
-                  onChange={(event) => setCard((c) => ({ ...c, cvv: event.target.value }))}
-                  onBlur={() => setCardTouched((c) => ({ ...c, cvv: true }))}
-                  aria-invalid={cardShown.cvv && cvvProblem(card.cvv, card.number) !== null}
-                  aria-describedby={`${legendId}-cvv-error`}
-                  className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
-                  dir="ltr"
-                />
-                <span id={`${legendId}-cvv-error`} role="alert" className="text-xs text-state-error">
-                  {cardShown.cvv ? cardErrorText(cvvProblem(card.cvv, card.number), 'cvv', t, card.number) : ''}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/*
             🔴 REQ-F-043 — SAID PLAINLY, NOT IMPLIED. No provider, no card
             fields, nothing that resembles a card number. An honest named
             control is the requirement; a fake card form would look like the
@@ -839,9 +728,6 @@ export function CheckoutPage() {
             onClick={() => void confirmAndPay(state.quote)}
             disabled={
               payState.status === 'paying' ||
-              // The demo card must be well formed before the button works —
-              // otherwise the validation is decoration.
-              !cardIsComplete(card) ||
               (state.quote.deliveryMethod !== 'self_pickup' &&
                 (address.line1.trim() === '' || address.city.trim() === ''))
             }
@@ -1036,22 +922,3 @@ function PayFailureNotice({ failure }: { failure: PaymentFailure }) {
   )
 }
 
-/**
- * One problem code to one sentence. 🔴 `WRONG_LENGTH` means different things
- * on different fields — 13-19 digits for a number, 3 or 4 for a code — so it
- * cannot share a message.
- */
-function cardErrorText(
-  problem: CardFieldProblem | null,
-  field: 'number' | 'expiry' | 'cvv',
-  t: (key: string, options?: Record<string, unknown>) => string,
-  cardNumber: string,
-): string {
-  if (problem === null) return ''
-  if (problem === 'WRONG_LENGTH') {
-    return field === 'cvv'
-      ? t('card.WRONG_LENGTH_cvv', { count: cvvLengthFor(cardNumber) })
-      : t('card.WRONG_LENGTH_number')
-  }
-  return t(`card.${problem}`)
-}

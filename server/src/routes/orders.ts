@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import type { PrismaClient } from '@prisma/client'
 import { applyTransition } from '../lib/orderTransitionService.js'
+import { shopperCancelWindowClosed } from '../lib/orderTransitions.js'
 import { createOrderRateLimiters, type OrderRateLimiters } from '../lib/rateLimit.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireActiveShopper, createRequireShopperAccount } from './requireActiveShopper.js'
@@ -103,6 +104,23 @@ type OrderSummaryRow = {
 }
 
 /**
+ * 🔴 THE SERVER DECIDES CANCELLABILITY, AND THE CLIENT RENDERS IT — the same
+ * division `purchasability.ts` exists for. §8.9 gives the shopper
+ * `pending_payment` and `paid`; the twelfth list adds the 10-day window to
+ * `paid` only (a pending order never shipped — see orderTransitions.ts).
+ * Computing this here, on the server's own clock, is what lets the client
+ * hold NO copy of the statuses or the window: a hand-mirrored constant plus
+ * the shopper's device clock was the drift+skew pair the hundred-second
+ * pass review caught. The cancel ROUTE still re-checks — this flag is a UI
+ * offer, never the enforcement.
+ */
+function shopperCancellable(status: string, createdAt: Date): boolean {
+  if (status === 'pending_payment') return true
+  if (status !== 'paid') return false
+  return !shopperCancelWindowClosed(createdAt, new Date())
+}
+
+/**
  * ⚠️ EVERY MONEY FIELD LEAVES AS A FIXED STRING. Prisma hands back a Decimal;
  * serialising it directly produces whatever its toJSON does, and turning it
  * into a Number reintroduces the float this schema uses Decimal to avoid.
@@ -113,6 +131,7 @@ function toOrderSummary(order: OrderSummaryRow) {
     orderNumber: order.orderNumber,
     createdAt: order.createdAt.toISOString(),
     status: order.status,
+    cancellable: shopperCancellable(order.status, order.createdAt),
     totalAmount: order.totalAmount.toFixed(2),
     shippingCost: order.shippingCost.toFixed(2),
     deliveryMethod: order.deliveryMethod,
@@ -200,7 +219,12 @@ export function createOrderRouter(deps: OrderRouterDeps): ReturnType<typeof Rout
 
     try {
       const orders = await prisma.order.findMany({
-        where: { userId },
+        // The user's twelfth list (2026-08-21): cancelled orders do NOT
+        // appear in the shopper's history — the cancellation is confirmed by
+        // a dialog at the moment it happens, and the list shows only orders
+        // that are still real. The row itself is never deleted (INV-03);
+        // it simply stops being listed here.
+        where: { userId, status: { not: 'cancelled' } },
         // Newest first, with `id` as the tiebreaker: Prisma's now() is
         // TRANSACTION-START time, so orders written in one transaction share a
         // byte-identical createdAt and would otherwise order arbitrarily.
@@ -409,6 +433,8 @@ function messageFor(reason: string): string {
       return 'This order is already complete.'
     case 'CONCURRENT_TRANSITION':
       return 'The order changed while this was being processed. Try again.'
+    case 'CANCEL_WINDOW_PASSED':
+      return 'The delivery window for this order has passed, so it can no longer be cancelled.'
     default:
       return 'This order cannot be cancelled.'
   }

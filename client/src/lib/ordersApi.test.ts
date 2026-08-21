@@ -26,6 +26,8 @@ const ROW = {
   orderNumber: 'VS-20260814-ABC123',
   createdAt: '2026-08-14T10:00:00.000Z',
   status: 'paid',
+  // Server-computed cancel offer — required by the row validator.
+  cancellable: true,
   totalAmount: '220.00',
   shippingCost: '30.00',
   deliveryMethod: 'courier',
@@ -194,6 +196,10 @@ describe('cancelOrder', () => {
 
     vi.stubGlobal('fetch', respond(409, { error: { code: 'CONCURRENT_TRANSITION' } }))
     expect(await cancelOrder('o1')).toEqual({ ok: false, failure: { kind: 'concurrent' } })
+
+    // The user's twelfth list — the 10-day window refusal is a fourth answer.
+    vi.stubGlobal('fetch', respond(409, { error: { code: 'CANCEL_WINDOW_PASSED' } }))
+    expect(await cancelOrder('o1')).toEqual({ ok: false, failure: { kind: 'windowPassed' } })
   })
 
   it('separates 401, 404, 429 and an unrecognised fault', async () => {

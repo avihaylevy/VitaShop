@@ -71,8 +71,7 @@
     "title": "Your cart",
     "goToCart": "Go to cart",
     "continue": "Continue shopping",
-    "empty": "Your cart is empty.",
-    "removed": "{{product}} was removed from the cart."
+    "empty": "Your cart is empty."
   },
   "empty": {
     "heading": "Your cart is empty",

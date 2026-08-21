@@ -23,8 +23,9 @@ const FORMATTERS: Record<'he' | 'en', Intl.NumberFormat> = {
 
 export function formatPrice(price: string, language: 'he' | 'en'): string {
   const value = Number(price)
-  // ISSUE-167 (the eleventh list): the ₪ sign FOLLOWS the number in BOTH
-  // languages — en-IL's locale default put it first. Built from
+  // The user's twelfth list (2026-08-21) reverses ISSUE-167: the ₪ sign now
+  // PRECEDES the number in BOTH languages — with PriceBlock's dir="ltr"
+  // isolation the symbol sits to the number's LEFT on screen. Built from
   // formatToParts so the number itself still comes from Intl, never from
   // hand-formatting; only the symbol's position is ours.
   const parts = FORMATTERS[language].formatToParts(value)
@@ -33,8 +34,8 @@ export function formatPrice(price: string, language: 'he' | 'en'): string {
     .map((part) => part.value)
     .join('')
   const symbol = parts.find((part) => part.type === 'currency')?.value ?? '₪'
-  // A non-breaking space joins number and symbol (never wraps apart);
+  // A non-breaking space joins symbol and number (never wraps apart);
   // he-IL embeds RLM marks in its parts — PriceBlock's dir="ltr"
   // isolation owns directionality, so the marks are stripped.
-  return `${number} ${symbol}`.replace(/[‎‏]/g, '')
+  return `${symbol} ${number}`.replace(/[‎‏]/g, '')
 }

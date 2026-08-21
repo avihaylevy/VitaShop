@@ -58,6 +58,10 @@ function isRow(value: unknown): value is OrderHistoryRow {
     // An unknown status has no label key, so it would render as a raw wire
     // string in front of a shopper.
     isOrderStatusName(value.status) &&
+    // The server-decided cancel offer — without it the page would need its
+    // own copy of the statuses and the 10-day window (the drift the
+    // hundred-second review removed).
+    typeof value.cancellable === 'boolean' &&
     isMoney(value.totalAmount) &&
     isMoney(value.shippingCost) &&
     typeof value.deliveryMethod === 'string' &&
@@ -180,6 +184,7 @@ export async function cancelOrder(orderId: string): Promise<CancelOrderResult> {
   if (raw.status === 429) return { ok: false, failure: { kind: 'rateLimited' } }
 
   const code = errorCodeOf(raw.body)
+  if (code === 'CANCEL_WINDOW_PASSED') return { ok: false, failure: { kind: 'windowPassed' } }
   if (code === 'TERMINAL') return { ok: false, failure: { kind: 'terminal' } }
   if (code === 'CONCURRENT_TRANSITION') return { ok: false, failure: { kind: 'concurrent' } }
   if (code === 'ORDER_NOT_FOUND') return { ok: false, failure: { kind: 'notFound' } }

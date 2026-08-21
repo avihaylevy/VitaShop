@@ -23,5 +23,21 @@
     "member": "Your club saving on this cart:",
     "join": "Joining the club would save on this cart:",
     "checkout": "Club discount (included in the prices)"
+  },
+  "joinDialog": {
+    "title": "Join the members club",
+    "benefit1": "A flat 10% off every product, in the cart and at checkout.",
+    "benefit2": "The discount is applied automatically — no coupons, no codes.",
+    "benefit3": "You can cancel your membership at any time, from this page.",
+    "consent": "I have read and agree to the club terms",
+    "termsLink": "Read the terms of use",
+    "confirm": "Confirm and join",
+    "cancel": "Cancel"
+  },
+  "leaveDialog": {
+    "title": "Cancel club membership",
+    "body": "Cancelling stops the club discount immediately. You can rejoin at any time.",
+    "confirm": "Confirm cancellation",
+    "cancel": "Keep my membership"
   }
 }

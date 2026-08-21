@@ -7,6 +7,8 @@ import {
   restoresStock,
   type OrderActor,
   type OrderStatusName,
+  SHOPPER_CANCEL_WINDOW_DAYS,
+  shopperCancelWindowClosed,
 } from './orderTransitions.js'
 
 /**
@@ -201,5 +203,30 @@ describe('adminTransitionsFrom', () => {
         expect(['processing', 'shipped', 'delivered', 'cancelled']).toContain(target)
       }
     }
+  })
+})
+
+describe("🔴 the user's twelfth list — the shopper's 10-day cancel window", () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const placed = new Date('2026-08-01T12:00:00.000Z')
+
+  it('is 10 calendar days, the one number the user named', () => {
+    expect(SHOPPER_CANCEL_WINDOW_DAYS).toBe(10)
+  })
+
+  it('⚠️ THE CONTROL — inside the window the cancel is still open', () => {
+    expect(shopperCancelWindowClosed(placed, new Date(placed.getTime() + 9 * DAY))).toBe(false)
+  })
+
+  it('exactly 10 days is still OPEN — the refusal begins past it', () => {
+    expect(shopperCancelWindowClosed(placed, new Date(placed.getTime() + 10 * DAY))).toBe(false)
+  })
+
+  it('🔴 one millisecond past 10 days is CLOSED', () => {
+    expect(shopperCancelWindowClosed(placed, new Date(placed.getTime() + 10 * DAY + 1))).toBe(true)
+  })
+
+  it("eleven days — the user's own example — is closed", () => {
+    expect(shopperCancelWindowClosed(placed, new Date(placed.getTime() + 11 * DAY))).toBe(true)
   })
 })

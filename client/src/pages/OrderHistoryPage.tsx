@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
+import { CenterDialog } from '../components/ui/CenterDialog'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import { cancelOrder, requestOrderHistory } from '../lib/ordersApi'
@@ -47,17 +48,15 @@ type LoadState =
   | { status: 'ready'; orders: OrderHistoryRow[] }
   | { status: 'failed'; failure: OrderHistoryFailure }
 
-/**
- * 🔴 §8.9 lets a SHOPPER cancel from these two and no further — fulfilment
- * begins at `processing`. Kept as a named constant so the one place this
- * client makes a claim about the table is greppable, and so the route stays
- * the authority: the button appearing is a UI offer, the refusal is the rule.
+/*
+ * 🔴 NO LOCAL COPY OF CANCELLABILITY. The row's server-computed
+ * `cancellable` flag decides whether the button is OFFERED (§8.9's shopper
+ * statuses + the twelfth list's 10-day window on `paid`, on the SERVER's
+ * clock); the cancel route re-checks on press. The first draft mirrored the
+ * statuses AND the window here — two constants the server could amend
+ * without any test going red, plus a device-clock skew that silently hid a
+ * server-permitted cancel. Both removed in the hundred-second pass review.
  */
-const SHOPPER_CANCELLABLE = ['pending_payment', 'paid'] as const
-
-function isCancellable(status: string): boolean {
-  return (SHOPPER_CANCELLABLE as readonly string[]).includes(status)
-}
 
 /**
  * Wave 4, the "my-orders look" item — the status is a tinted OUTLINE PILL,
@@ -80,16 +79,17 @@ function statusBadgeClass(status: string): string {
 }
 
 /**
- * One sentence per outcome, used BOTH visibly in the row and by the page's live
- * region — written once so the two can never disagree about what happened.
+ * ⚠️ FAILURES ONLY. A refusal keeps its row, so the sentence renders beside
+ * it AND feeds the page's live region — written once so the two can never
+ * disagree. A SUCCESS never comes here: its row is about to leave the list,
+ * the confirmation lives in the dialog, and the page's live region would be
+ * INERT under that dialog anyway (Modal inerts #root — an announcement
+ * written there in the same commit is never spoken; hundred-second review).
  */
-function outcomeText(result: CancelOrderResult, t: (key: string) => string): string {
-  if (result.ok) {
-    return result.alreadyCancelled
-      ? t('history.outcome.alreadyCancelled')
-      : t('history.outcome.cancelled')
-  }
-  return t(`history.outcome.${result.failure.kind}`)
+type CancelFailure = Extract<CancelOrderResult, { ok: false }>
+
+function outcomeText(failure: CancelFailure, t: (key: string) => string): string {
+  return t(`history.outcome.${failure.failure.kind}`)
 }
 
 export function OrderHistoryPage() {
@@ -103,7 +103,15 @@ export function OrderHistoryPage() {
    * one shared outcome and the first response overwrote the other row's
    * message — found in review there, avoided here.
    */
-  const [outcomes, setOutcomes] = useState<Record<string, CancelOrderResult>>({})
+  const [outcomes, setOutcomes] = useState<Record<string, CancelFailure>>({})
+  /**
+   * The user's twelfth list — a SUCCESSFUL cancellation is confirmed by a
+   * DIALOG, not by a line in the list: the cancelled order stops being listed
+   * at all (the server filters it), so there is no row left to carry the
+   * sentence. `null` = closed; otherwise whether it was already cancelled,
+   * which picks the dialog's body text.
+   */
+  const [cancelledDialog, setCancelledDialog] = useState<{ alreadyCancelled: boolean } | null>(null)
   /** What the page-level live region says, and the toggle that forces a repeat. */
   const [announcement, setAnnouncement] = useState<string | null>(null)
   const [announceToggle, setAnnounceToggle] = useState(false)
@@ -120,6 +128,7 @@ export function OrderHistoryPage() {
    * Found in review.
    */
   const requestId = useRef(0)
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   const load = useCallback(async () => {
     const id = ++requestId.current
@@ -139,19 +148,37 @@ export function OrderHistoryPage() {
     const result = await cancelOrder(orderId)
     setBusyId(null)
     setConfirming(null)
-    setOutcomes((previous) => ({ ...previous, [orderId]: result }))
+    if (result.ok) {
+      // The user's twelfth list — success is confirmed by the DIALOG alone:
+      // the row leaves the list (the server no longer returns it), and the
+      // page's live region would be inert under the dialog, so nothing is
+      // stored or announced here.
+      setCancelledDialog({ alreadyCancelled: result.alreadyCancelled })
+      await load()
+      return
+    }
+    // 🔴 A REFUSAL leaves the list exactly as it is so the message stays
+    // beside the row it belongs to; a reload would replace the row and drop
+    // the explanation the shopper needs. Announced from the page's live
+    // region — no dialog is open on this path, so it is NOT inert.
     setAnnouncement(outcomeText(result, t))
     // Flipped every time, so two identical outcomes are still two changes.
     setAnnounceToggle((previous) => !previous)
-    // 🔴 RELOADED ONLY ON SUCCESS. A refusal leaves the list exactly as it is
-    // so the message stays beside the row it belongs to; a reload would replace
-    // the row and drop the explanation the shopper needs.
-    if (result.ok) await load()
+    setOutcomes((previous) => ({ ...previous, [orderId]: result }))
   }
 
   return (
     <div className="px-7 py-8">
-      <h1 className="heading-page">{t('history.title')}</h1>
+      {/*
+        tabIndex={-1} + the ref: the cancelled-order dialog's RETURN-FOCUS
+        target. The confirm button that opened it unmounts with its row (the
+        cancelled order leaves the list), so focus must land somewhere
+        deliberate — the unmount-takes-focus family, answered the documented
+        way rather than left to fall to <body>.
+      */}
+      <h1 ref={headingRef} tabIndex={-1} className="heading-page focus:outline-none">
+        {t('history.title')}
+      </h1>
 
       {/*
         One live region, always mounted — the shape ISSUE-098 settled on the
@@ -287,7 +314,7 @@ export function OrderHistoryPage() {
                     <PriceBlock price={order.totalAmount} />
                   </p>
 
-                  {isCancellable(order.status) &&
+                  {order.cancellable &&
                     (confirming === order.id ? (
                       /*
                        * 🔴 CANCELLING ASKS FIRST — the same treatment the admin
@@ -333,7 +360,8 @@ export function OrderHistoryPage() {
                   /*
                    * 🔴 VISIBLE ONLY — the announcing is done by the ONE live
                    * region at the top of this page, and this paragraph
-                   * deliberately carries no role.
+                   * deliberately carries no role. Failures only: a success
+                   * removes the row and speaks through the dialog.
                    *
                    * ⚠️ THE FIRST VERSION PUT `role="status"` HERE and it could
                    * announce NEVER OR ONCE: a live region inserted into the DOM
@@ -341,15 +369,38 @@ export function OrderHistoryPage() {
                    * that was meant to force a repeat sat on an ATTRIBUTE, which
                    * is not a text change at all. Both found in review.
                    */
-                  <p className={`mt-2 text-sm ${outcome.ok ? 'text-text-muted' : 'text-state-error'}`}>
-                    {outcomeText(outcome, t)}
-                  </p>
+                  <p className="mt-2 text-sm text-state-error">{outcomeText(outcome, t)}</p>
                 )}
               </li>
             )
           })}
         </ul>
       )}
+
+      {/*
+        The user's twelfth list — a successful cancellation pops a dialog.
+        CenterDialog, like every other page-level confirmation (ClubPage,
+        CartDrawer) — Modal underneath owns the a11y contract (trap, Escape,
+        inert background); return focus goes to the page heading, because
+        the button that opened this unmounted with its row.
+      */}
+      <CenterDialog
+        open={cancelledDialog !== null}
+        onClose={() => setCancelledDialog(null)}
+        title={t('history.cancelledDialog.title')}
+        returnFocusRef={headingRef}
+      >
+        <div className="flex flex-col items-start gap-4 p-5">
+          <p className="text-sm text-text-ink">
+            {cancelledDialog?.alreadyCancelled
+              ? t('history.cancelledDialog.bodyAlready')
+              : t('history.cancelledDialog.body')}
+          </p>
+          <Button onClick={() => setCancelledDialog(null)}>
+            {t('history.cancelledDialog.ok')}
+          </Button>
+        </div>
+      </CenterDialog>
     </div>
   )
 }
