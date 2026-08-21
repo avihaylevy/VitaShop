@@ -6,7 +6,13 @@
 // error without both control directions present.
 
 import { describe, expect, it } from 'vitest'
-import { detectTriggers, isMedicalOnly, TRIGGER_FAMILIES, type TriggerFamily } from './triggers.js'
+import {
+  detectTriggers,
+  isMedicalOnly,
+  redactSensitiveTerms,
+  TRIGGER_FAMILIES,
+  type TriggerFamily,
+} from './triggers.js'
 
 describe('detectTriggers — every family fires, both languages', () => {
   const MUST_FIRE: { phrase: string; family: TriggerFamily }[] = [
@@ -104,9 +110,43 @@ describe('isMedicalOnly — the stop-politely branch', () => {
     'מה יש לי בעגלה כרגע',
     'I have an undiagnosed sensitivity, what vitamin c do you have?',
   ]
+
   for (const phrase of MUST_CONTINUE) {
     it(`continues on: ${phrase}`, () => {
       expect(isMedicalOnly(phrase)).toBe(false)
     })
   }
+})
+
+describe('redactSensitiveTerms — §3.3 minimisation before any text leaves the process (DEC-094)', () => {
+  it('🔴 masks a medication name WITH THE MASK TOKEN — full-string pinned (review: not.toContain alone passed a mask of "")', () => {
+    expect(redactSensitiveTerms('אני לוקח קומדין ומחפש מגנזיום לשינה')).toBe(
+      'אני לוקח [redacted] ומחפש מגנזיום לשינה',
+    )
+  })
+
+  it('masks English medication terms with boundaries kept intact — full-string pinned', () => {
+    expect(redactSensitiveTerms('I take warfarin and want magnesium')).toBe(
+      'I take [redacted] and want magnesium',
+    )
+  })
+
+  it('masks named diagnoses and pregnancy specifics', () => {
+    expect(redactSensitiveTerms('יש לי סוכרת')).toBe('יש לי [redacted]')
+    expect(redactSensitiveTerms("I'm pregnant and tired")).not.toMatch(/pregnant/i)
+    expect(redactSensitiveTerms("I'm pregnant and tired")).toContain('[redacted]')
+  })
+
+  it('control: a plain product request passes through UNCHANGED', () => {
+    const plain = 'מגנזיום בקפסולות עד 100 שקל'
+    expect(redactSensitiveTerms(plain)).toBe(plain)
+    expect(redactSensitiveTerms('vitamin d in drops under 80')).toBe('vitamin d in drops under 80')
+  })
+
+  it('🔴 control: generic organ/support words are NOT masked — "thyroid support" stays a searchable request (review: masking them made a dead-end clarify loop)', () => {
+    expect(redactSensitiveTerms('supplements for thyroid support')).toBe(
+      'supplements for thyroid support',
+    )
+    expect(redactSensitiveTerms('משהו ללחץ דם')).toBe('משהו ללחץ דם')
+  })
 })

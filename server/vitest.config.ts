@@ -96,6 +96,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           exclude: [...exclude, '**/*.integration.test.ts'],
+          setupFiles: ['./src/vitest.setup.ts'],
         },
       },
       {
@@ -103,6 +104,7 @@ export default defineConfig({
           name: 'integration',
           include: ['**/*.integration.test.ts'],
           exclude,
+          setupFiles: ['./src/vitest.setup.ts'],
           // 🔴 THE FIX. One shared database, so one file at a time.
           fileParallelism: false,
         },

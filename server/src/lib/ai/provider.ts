@@ -1,10 +1,10 @@
 // MILESTONE-011 Checkpoint A — the AIProvider interface (ARCH-001, DEC-006).
 //
-// 🔴 PROVIDER-NEUTRAL BY DECISION: DEC-091 O5 deferred the real-provider
-// choice, so this module defines the seam and nothing vendor-shaped exists
-// anywhere. No code outside a provider's own implementation file may import a
-// vendor SDK (DEC-006); today the only implementation is MockProvider
-// (DEC-014 — an agent never obtains, generates, or configures an API key).
+// 🔴 THE VENDOR BOUNDARY (DEC-006): this module defines the seam; every
+// vendor specific lives inside that provider's own file. Implementations:
+// MockProvider (the default, always) and GroqProvider (DEC-094 — selected
+// by AI_PROVIDER=groq WITH a user-placed key; an agent never obtains,
+// generates, or configures a key, per DEC-014).
 //
 // 🔴 PRIVACY BY SHAPE (§3.3): the extraction call receives the message text,
 // the client-held conversation history, and the language — no session id, no
@@ -89,16 +89,40 @@ export async function resolveAIProvider(): Promise<AIProvider> {
   try {
     const configured = process.env.AI_PROVIDER
     switch (configured) {
-      // Today every case falls through to the mock: DEC-091 O5 deferred the
-      // vendor, so no other implementation exists to select. A future
-      // provider is one new case + one implementation file — the DEC-006
-      // config exercise this switch exists to make honest.
-      case 'mock':
-      default: {
-        const { MockProvider } = await import('./mockProvider.js')
-        return new MockProvider()
+      // DEC-094 — the config exercise DEC-006 promised: one case, one file.
+      case 'groq': {
+        const apiKey = (process.env.GROQ_API_KEY ?? '').trim()
+        if (apiKey === '') {
+          // 🔴 LOUD fallback, never a boot failure (DEC-094 item 5): the
+          // selection asked for Groq but the user's key is absent — say so
+          // once, serve the mock, never log anything key-shaped.
+          console.error(
+            '[ai] AI_PROVIDER=groq but GROQ_API_KEY is not set — falling back to MockProvider',
+          )
+          break
+        }
+        // 🔴 SHAPE GUARD (review — a real leak path): a key carrying a
+        // stray control/non-ASCII character (a CRLF paste artefact, a
+        // smart quote) makes Node's Headers constructor THROW with the
+        // header VALUE inside the TypeError message — which the route
+        // would then console.error, putting the key in the logs. Validate
+        // to printable ASCII here and fall back loudly WITHOUT ever
+        // printing the value.
+        if (!/^[\x21-\x7e]+$/.test(apiKey)) {
+          console.error(
+            '[ai] AI_PROVIDER=groq but GROQ_API_KEY contains characters that cannot travel in an HTTP header (re-paste it without quotes or line breaks) — falling back to MockProvider',
+          )
+          break
+        }
+        const { GroqProvider } = await import('./groqProvider.js')
+        return new GroqProvider({ apiKey, model: process.env.GROQ_MODEL })
       }
+      case 'mock':
+      default:
+        break
     }
+    const { MockProvider } = await import('./mockProvider.js')
+    return new MockProvider()
   } catch (error) {
     console.error('[ai] provider construction failed — falling back to MockProvider', error)
     const { MockProvider } = await import('./mockProvider.js')

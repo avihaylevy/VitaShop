@@ -1,9 +1,10 @@
-# SESSION HANDOFF — M-011 build awaits the user's GO
+# SESSION HANDOFF — M-011 SHIPPED · GROQ LIVE · DEPLOY IS WHAT REMAINS
 
-> Rewritten 2026-08-17, closing the session that PLANNED M-011 (DEC-091),
-> fixed three admin-create user reports (new company · dietary claims +
-> health goals · duplicate detection — DEC-092, DEC-093), and shipped two
-> commits (`7f42e93`, `d55fd53`), passes 84–89.
+> Rewritten 2026-08-19, closing the session that BUILT ALL OF M-011
+> (checkpoints A-D, DEC-091) and then CONNECTED THE REAL PROVIDER
+> (DEC-094, Groq) — passes 90-94. Every checkpoint was reviewed by
+> finder angles before its commit; every review's findings were fixed
+> before committing.
 >
 > ⚠️ **The memory system is authoritative** — everything here is also in
 > `operations/` and `technical/`. This file is orientation, not state.
@@ -13,18 +14,18 @@
 ## 🔴 THE USER DECIDES. NOT THE AGENT. NO EXCEPTIONS.
 
 ```
-🔴 THE AI PROVIDER · THE SERVER/HOSTING · ANY API KEY · ANY PAID SERVICE ·
-   ANY NEW DEPENDENCY · ANY SCHEMA OR ARCHITECTURE CHANGE ·
-   anything absent from the spec and from DECISIONS.md
-❌ silence is not acceptance · a general "go ahead" is not acceptance of a
-   SPECIFIC provider/host/key · never obtain or configure an API key
+🔴 THE SERVER/HOSTING · ANY API KEY · ANY PAID SERVICE · ANY NEW
+   DEPENDENCY · ANY SCHEMA OR ARCHITECTURE CHANGE · anything absent
+   from the spec and from DECISIONS.md
+❌ silence is not acceptance · a general "go ahead" is not acceptance
+   of a SPECIFIC host/key/dependency · never obtain or configure a key
 ✅ present options WITH a recommendation, wait, record the answer as a DEC
 ```
 
-⚠️ The standing pattern held again: plan as a MILESTONE_PLANS section
-(Proposed) → AskUserQuestion in ONE batch → every answer a DEC → build →
-review (finder angles, inline) → fix everything → the user's commit word.
-DEC-091/092/093 all went exactly this way.
+The AI provider question is now SETTLED (DEC-094: Groq, the user's own
+pick, key placed by the user personally). 🔴 The key rules still bind:
+never read server/.env, never echo anything key-shaped, and any switch
+to a DIFFERENT provider/model tier is a new stop-and-ask.
 
 ---
 
@@ -34,25 +35,21 @@ DEC-091/092/093 all went exactly this way.
 Repository:     C:\Users\aviha\תכנות\VitaShop
 Memory system:  C:\Users\aviha\תכנות\זיכרון AI\פרוייקט ECOMMERCE\
                 פרוייקט Ecommerce\VitaShop-Project
-HEAD:           d55fd53 — DEC-093 duplicate detection. Before it:
-                7f42e93 (new-company create + DEC-092 dietary/goals) ·
-                62a88fc (M-009).
-Tree:           CLEAN · lock 🔓 FREE (eighty-ninth pass released)
-Suites:         server 950 · client 1001 · tsc 0 both · builds 0
-Decisions new:  DEC-091 (M-011 answers: NO conversation storage —
-                ISSUE-012 closed · floating button+panel · strict rate
-                limits · all eight triggers · provider DEFERRED,
-                skeleton neutral; §11.7 records a Haiku 4.5
-                recommendation, NOT decided) · DEC-092 (admin writes
-                tri-state dietary claims + health goals incl. inline
-                new bilingual goals — amends DEC-083) · DEC-093
-                (normalized duplicate detection + allowDuplicate
-                override; trigram/barcodes REJECTED as overengineering)
-Dependencies:   none added this session.
-Running:        dev servers DOWN (killed by exact PID). localhost is
-                the daily default in both env files; for a device pass:
-                ipconfig → Wi-Fi IPv4 → client/.env VITE_API_BASE_URL +
-                server/.env CLIENT_ORIGIN → restart both.
+HEAD:           see git log — this session's commits, newest last:
+                211ca4f  M-011 A — POST /api/ai/chat vs MockProvider
+                5fe18c3  M-011 B — the chat surface
+                b7d7846  M-011 C — the REQ-F-077 handoff
+                5974004  M-011 D — the acceptance sweep
+                (+ the DEC-094 Groq commit closing this session)
+Suites:         server 1067 · client 1030 · tsc 0 both · builds 0
+Decisions new:  DEC-094 ACCEPTED+BUILT (Groq via plain fetch, NO SDK,
+                openai/gpt-oss-120b via GROQ_MODEL || default —
+                llama-3.3-70b was deprecated by Groq 6/2026 · key is
+                the user's, in server/.env · loud mock fallback ·
+                keyword redaction at the provider boundary)
+Dependencies:   NONE added the whole session (Groq is plain fetch).
+Running:        dev servers DOWN. localhost daily default; LAN-IP
+                recipe for a device pass is in SESSION_LOG pass 82.
 ```
 
 Read in order: `CLAUDE.md` → `00_INDEX.md` → `operations/LOCK.md` →
@@ -61,42 +58,60 @@ Read in order: `CLAUDE.md` → `00_INDEX.md` → `operations/LOCK.md` →
 
 ---
 
+## What works NOW (tested, not just written)
+
+The AI agent end to end, twice over:
+- **MockProvider** (default everywhere, incl. every test): floating
+  button on every page → panel → three stages → products from
+  PostgreSQL only → fixed byte-pinned disclaimer → REQ-F-077 handoff
+  landing on /catalog with the filters CHECKED. Zero DB writes,
+  row-count-proven. 20/15min IP limiter.
+- **GroqProvider** (AI_PROVIDER=groq in the user's .env): same
+  pipeline, real 120B model, live filter schema in the prompt (60s
+  cache) — "training" is a per-request cheat-sheet, never a training
+  run. Known-sensitive keywords (medications · pregnancy · named
+  diagnoses) are REDACTED before any text leaves the process —
+  honest scope: a keyword screen, not NER (documented in triggers.ts).
+  ONE real smoke call verified extraction + redaction live (1.2s).
+
+🔴 Tests can never touch the real API: `src/vitest.setup.ts` pins
+AI_PROVIDER=mock globally (it DID hit the real API once before the pin
+— the scar is documented there).
+
+---
+
 ## 🔴 THE NEXT SESSION'S ORDERED QUEUE
 
-### 1 — M-011 THE AI AGENT (planned; 🔴 BUILD NOT AUTHORIZED)
+### 1 — DEPLOY (the last milestone; plan first → the user → build)
 ```
-The plan is DONE and Accepted: technical/MILESTONE_PLANS.md §11
-(DEC-091). Checkpoints §11.8: A lib/ai + POST /api/ai/chat + server
-tests → B chat surface → C REQ-F-077 handoff → D safety sweep + matrix.
-🔴 The user explicitly instructed PLAN-ONLY; Checkpoint A starts on
-their explicit go and nothing else. MockProvider ONLY (DEC-014): never
-obtain/generate/configure a key; provider-neutral skeleton (DEC-091 O5
-deferred the vendor). §11.5 lists the six-step real-provider gate.
-```
-
-### 2 — DEPLOY LAST
-```
-technical/DEPLOYMENT.md. The recorded traps: CLIENT_ORIGIN (CORS) ·
-the in-memory rate-limiter store · §8b UPLOADS_DIR (cwd-anchored;
-PaaS filesystems are EPHEMERAL — uploads vanishing on redeploy is a
-decision to take).
+technical/DEPLOYMENT.md. The recorded traps:
+· CLIENT_ORIGIN (CORS — exact origin, never *)
+· the in-memory rate-limiter store (multi-instance needs a shared
+  store or the ceilings silently multiply)
+· §8b UPLOADS_DIR (cwd-anchored; PaaS filesystems are EPHEMERAL)
+· NEW: GROQ_API_KEY + AI_PROVIDER + GROQ_MODEL must reach the host's
+  env — the user sets them there PERSONALLY; missing key = loud mock
+  fallback by design, and the shape guard refuses non-ASCII keys
+· trust proxy (index.ts's comment) becomes LOAD-BEARING behind a proxy
 ```
 
-### Smaller owed items (fold into natural moments, don't block the queue)
+### Smaller owed items (fold into natural moments, don't block)
 ```
-· server-side twin-id binding for allowDuplicate (recorded-skipped
-  review finding: the override is a global boolean; bind it to the
-  twin's id if a second admin surface ever appears)
-· health-goal editing on PATCH (DEC-092 item 3 — create-only today)
-· category <option> labels render nameHe even in the English UI
-  (pre-existing, noted pass 88)
-· Field grows `multiline` and absorbs ContactPage's MessageField
-· DESIGN_SYSTEM.md mid-document contrast tables still cite DEC-035
-· four older link-button cousins could adopt ui/LinkButton
-· ISSUE-051's data half: 21/49 SEEDED products still goalless (the
-  admin path now feeds goals for NEW products only)
-· admin failure-message mapping ×3 · GET /profile defaultAddress is
-  LEGACY (retiring it is its own decision)
+· groq redaction: NER-grade masking is a recorded hardening item
+  (keyword screen today; scope comment in triggers.ts)
+· the description-injection probe against the REAL prompt if Stage 3
+  ever gains product descriptions (structurally closed today — the
+  list DTO carries none; noted in aiChat.integration.test.ts)
+· withTimeout unification with checkout's inline copy (recorded-skipped
+  at the B review)
+· CartDrawer's always-mounted body cost ×4 mounts (recorded-skipped)
+· LinkButton adoption by CartDrawer's two hand-styled links (the new
+  onClick prop unblocked them — C review note)
+· health-goal editing on PATCH (DEC-092 create-only) · category
+  <option> labels nameHe in English UI · Field multiline ·
+  DESIGN_SYSTEM DEC-035 tables · ISSUE-051 data half (21/49 seeded
+  goalless) · admin failure-message mapping ×3 · GET /profile
+  defaultAddress LEGACY
 ```
 
 ---
@@ -104,77 +119,89 @@ decision to take).
 ## The user's own queue (no agent can do these)
 
 ```
-🔴 THE SIGNED-IN BROWSER PASS — now ALSO covers, on top of the standing
-   list: the admin create form's NEW COMPANY flow (+ Latin form) ·
-   dietary tri-state selects · health-goal checkboxes + inline new-goal
-   rows · the duplicate refusal + "create anyway" override ·
-   /account/profile + address book · checkout picker · /admin/products
-   incl. image URL/upload · the header cart card · club/dietary/brands/
-   favourites/checkout/orders.
+🔴 THE SIGNED-IN BROWSER PASS — now ALSO covers, on top of the
+   standing list: THE AGENT PANEL against the REAL Groq provider
+   (Hebrew + English conversations · the notice on a trigger · an
+   empty result's handoff into /catalog · add-to-cart from a card ·
+   the turn limit) — with AI_PROVIDER=groq in server/.env.
    Seeded accounts: npm run seed:accounts → admin@/shopper@vitashop.local.
-🔴 M-011 BUILD AUTHORIZATION — say "go" (or not) for Checkpoint A.
+🔴 DEPLOY DECISIONS — host/platform choice is the user's; the agent
+   presents options with a recommendation first.
 🔴 ISSUE-018's remainder: SVG logo + the Hebrew-wordmark decision.
-🔴 ISSUE-020 — the real-device pass (LAN-IP recipe above).
+🔴 ISSUE-020 — the real-device pass (LAN-IP recipe, pass 82).
 ```
 
 ---
 
-## What this session did (detail: SESSION_LOG passes 84–89)
+## What this session did (detail: SESSION_LOG passes 90-94)
 
 ```
-(84th)   M-011 PLANNED: §11 written (AI_AGENT_SPEC's three stages ·
-         MockProvider-only · spec limits 5/10/15s adopted) →
-         AskUserQuestion → DEC-091. ISSUE-012 closed by decision.
-         Provider DEFERRED (Haiku 4.5 recommendation recorded in §11.7
-         for the day the user decides). NO CODE — plan-only by
-         instruction.
-7f42e93  (85th-87th) THREE USER-REPORT FIXES in one commit: create
-         with a NEW company (brandId XOR newBrandName, insensitive
-         dedupe over BOTH stored forms incl. the typed Latin form,
-         NESTED create = no orphan) · DEC-092 dietary tri-state on
-         create+PATCH + goal picker with inline new bilingual goals
-         (shop filters live-proven, vegan negative control) · 5-finding
-         review all fixed (Enter-in-draft submitted the form · Latin
-         dedupe · batched goal dedupe · stale comment · connect test).
-d55fd53  (88th-89th) DEC-093 duplicate detection: normalizeProductName
-         (ONE pure function; digits NEVER stripped — counts keep
-         variants distinct) · brand-scoped create+rename gates ·
-         PRODUCT_DUPLICATE names the twin · allowDuplicate override,
-         consent WITHDRAWN on name/brand edits (review finding) ·
-         PATCH checks only the names it SETS. Controls: cross-brand
-         same-name and different-count variants create freely.
+(90th)  Jotform evaluated and REJECTED for M-011 (closed SaaS widget
+        breaks the three-stage architecture + §3.3). Groq recommended
+        over local Ollama (70B Hebrew ≫ 8B). The user's GO → A BUILT.
+211ca4f (91st) A reviewed (8 angles, 10 findings fixed — curly-
+        apostrophe medical-stop bypass · sibling-name guard blanking ·
+        orphan-taxonomy English path · handoff-400 round trip) →
+        committed. B BUILT (chat surface).
+5fe18c3 (92nd) B reviewed (10 findings — unmount-takes-focus ×3 ·
+        nested modals → one-at-a-time + FAB focus return · silent
+        quiet adds · failed sends eating turns · widget-owned live
+        region) → committed. C BUILT (handoff).
+b7d7846 (93rd) C reviewed (10 findings — modified-click close ·
+        pageRaw allowlist · empty-handoff link · role=log double-read
+        · missing agent i18n suite · router-not-asserted tests) →
+        committed. D DONE: TEST-070..077 sweep + full matrix +
+        traceability REQ-F-070..077 → Implemented.
+5974004 D's tests reviewed (6 findings — the vacuous injection test
+        chief among them) → committed. M-011 CODE-COMPLETE.
+(94th)  DEC-094: user picked Groq, confirmed the package, placed the
+        key. Built groqProvider.ts (plain fetch, no SDK) + redaction +
+        loud fallback + 27 provider/redaction tests. Review (3
+        angles): 10 findings fixed — the Headers-TypeError KEY LEAK
+        path (shape guard) · the GROQ_MODEL='' trap · unguarded
+        JSON.parse leaking model text · redaction over-claim/over-mask
+        (vocabulary split from detection, ASCII mask, longest-first) ·
+        global test pin · stale privacy headers. Smoke call verified.
 ```
 
 ---
 
 ## 🔴 Rules that BIT this session — read before writing code
 
-The standing set all held. New scar tissue:
-
 ```
-🔴 THE VACUOUS-CHECK FAMILY STRUCK TWICE MORE (instances 8 and 9):
-   · the no-orphan tests refused via a bad categoryId — which returns
-     BEFORE the brand/goal code, so an eager-create mutation sailed
-     GREEN. Rewritten to fail AT the insert (slug-suffix exhaustion by
-     50 pre-seeded squatters).
-   · the normalized-variants test changed ONE name per variant — the
-     untouched OTHER name still matched, and the quote-strip mutation
-     sailed GREEN. Each variant now isolates a single name path.
-   The counter-move is unchanged and non-negotiable: BREAK IT ON
-   PURPOSE AND CONFIRM RED, and make sure the red comes from the RULE
-   under test, not a sibling guard.
-🔴 NEVER git checkout TO REVERT A MUTATION ON UNCOMMITTED WORK — it
-   wiped the file's uncommitted feature edits mid-verification once
-   (85th pass). Revert mutations BY EDIT.
-🔴 A FIXTURE SWEEP MUST MATCH EVERY CASING ITS TESTS CREATE — a
-   case-sensitive startsWith cleanup left a mutation run's UPPERCASE
-   brand row alive, and it poisoned three later dedupe tests.
-🔴 AN OVERRIDE CONSENTS TO ONE SPECIFIC THING — a ticked
-   "create anyway" surviving a name edit would have silently overridden
-   a DIFFERENT twin. Consent resets when what-it-consents-to changes.
-🔴 CLIENT SUITE UNDER PARALLEL LOAD: 14 timeout failures across
-   unrelated pages while the server suite ran beside it — the
-   ISSUE-096 flake family. Re-run isolated before believing a red.
+🔴 THE VACUOUS-CHECK FAMILY STRUCK AGAIN (instances 10-12):
+   · the D injection test matched no keyword, took the clarify branch,
+     and its explanation loop ran ZERO times — a security test that
+     never reached the stage under test, with a comment claiming
+     otherwise. Counter-move unchanged: trace the fixture through the
+     REAL pipeline and make the test's branch the one you claim.
+   · the redaction tests were all not.toContain — a mask of '' passed
+     every one. Pin the FULL OUTPUT STRING, not the absence.
+   · the byte-pin that imports the constant it pins is vacuous; type
+     the literal (A review) — and a round-trip test whose two halves
+     share a file lets a symmetric mutation cancel out (C review).
+🔴 A DEV .env IS AN INPUT TO THE TEST SUITE: importing ../index.js
+   resolves the provider AT IMPORT TIME. The suite hit the real Groq
+   API and spent quota the day the key landed. Pin overriding env in a
+   SHARED setupFiles, not in one file's beforeAll.
+🔴 ERROR MESSAGES ARE AN EXFILTRATION PATH: Node's Headers TypeError
+   embeds the header VALUE (the key!); V8's SyntaxError embeds the
+   parsed snippet (model output). Guard at the boundary with FIXED
+   error messages; never console.error an error whose message you do
+   not control.
+🔴 `?? DEFAULT` DOES NOT SAVE YOU FROM '' — .env.example ships empty
+   values and dotenv reads them as empty STRINGS. Normalize with
+   `?.trim() || DEFAULT` at the consumer.
+🔴 REDACTION VOCABULARY ≠ DETECTION VOCABULARY: masking every trigger
+   keyword turned "thyroid support" into a dead-end clarify loop for
+   exactly the users who tripped a trigger. Detection may be broad;
+   masking must be specific.
+🔴 THE UNMOUNT-TAKES-FOCUS FAMILY: three MORE instances in one diff
+   (B review). Before shipping ANY control: after this succeeds, does
+   the thing I just pressed still exist?
+🔴 CLIENT SUITE UNDER PARALLEL LOAD (ISSUE-096): 3 timeout reds on
+   unrelated pages, green isolated, green on the full re-run. Re-run
+   before believing a red.
 ```
 
 ---
@@ -182,8 +209,8 @@ The standing set all held. New scar tissue:
 ## Measured at handoff
 
 ```
-server 950 · client 1001 · tsc 0 both · builds 0 · HEAD d55fd53 · tree
-clean · lock free · dev servers DOWN · every feature milestone
-code-complete · M-011 planned (DEC-091), build gated on the user's go ·
-the signed-in passes are the user's
+server 1067 · client 1030 · tsc 0 both · builds 0 · tree clean after
+the DEC-094 commit · lock free · dev servers DOWN · M-011 SHIPPED with
+Groq live · deploy is the last milestone · the signed-in pass (now
+incl. the real-provider agent conversation) is the user's
 ```

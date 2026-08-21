@@ -139,3 +139,65 @@ export function isMedicalOnly(message: string): boolean {
   const normalized = normalizeMessage(message)
   return MEDICAL_ONLY_PATTERNS.some((pattern) => pattern.test(normalized))
 }
+
+/**
+ * §3.3 minimisation (DEC-094 item 6 / plan §11.5 step 6) — masking of
+ * KNOWN SENSITIVE SPECIFICS before any text leaves the process toward a
+ * real provider.
+ *
+ * ⚠️ HONEST SCOPE (review): this is a KEYWORD screen, not NER. It masks
+ * the vocabulary below — medication names, pregnancy phrasing, named
+ * diagnoses — and nothing else; a medication absent from the list leaves
+ * the machine verbatim. Deliberately EXCLUDED are the generic
+ * organ/support words the condition triggers also match (לחץ דם, כליות,
+ * thyroid, kidney…): masking them turned "supplements for thyroid
+ * support" into "[redacted] support" — a dead-end clarify loop for
+ * exactly the shoppers who tripped a trigger. NER-grade redaction is a
+ * recorded real-provider-hardening item (§11.5 step 6's tail).
+ *
+ * The mask is ASCII on purpose: it lands inside prompts of either
+ * language, and an RTL token spliced mid-English produced bidi artefacts
+ * the model echoed back (review).
+ */
+const REDACTION_MASK = '[redacted]'
+
+const REDACTION_TERMS: { he: string[]; en: string[] } = {
+  he: [
+    // Medication names + unambiguous medication phrasing:
+    'קומדין', 'ריטלין', 'אינסולין', 'אנטיביוטיקה', 'נוגדי קרישה', 'אליקוויס',
+    'כדורים שאני לוקח', 'מרשם',
+    // Pregnancy phrasing:
+    'להיכנס להריון', 'בהריון', 'היריון', 'הריון', 'מניקה', 'הנקה', 'טרימסטר',
+    // Named diagnoses (specific diseases, not organ/support words):
+    'סוכרת', 'אפילפסיה', 'סרטן',
+  ],
+  en: [
+    'warfarin', 'insulin', 'ritalin', 'eliquis', 'antibiotic', 'blood thinner',
+    'prescription', 'drugs i take',
+    'pregnant', 'pregnancy', 'breastfeeding', 'trimester', 'conceive',
+    'diabetes', 'epilepsy', 'cancer',
+  ],
+}
+
+// 🔴 Longest-first, so "מחלת לב" can never be half-eaten by a shorter
+// sibling pattern leaving a dangling fragment (review).
+const REDACTION_PATTERNS: RegExp[] = [
+  ...[...REDACTION_TERMS.he]
+    .sort((a, b) => b.length - a.length)
+    .map((keyword) => new RegExp(escapeRegex(keyword), 'g')),
+  ...[...REDACTION_TERMS.en]
+    .sort((a, b) => b.length - a.length)
+    .map((keyword) => new RegExp(`(^|[^a-zA-Z])(${escapeRegex(keyword)})s?(?![a-zA-Z])`, 'gi')),
+]
+
+export function redactSensitiveTerms(message: string): string {
+  let redacted = message.replace(/[‘’ʼ]/g, "'")
+  for (const pattern of REDACTION_PATTERNS) {
+    redacted = redacted.replace(pattern, (match, ...args) => {
+      // English patterns carry a leading-boundary capture group — keep it.
+      const leading = typeof args[0] === 'string' && match.startsWith(args[0]) ? args[0] : ''
+      return `${leading}${REDACTION_MASK}`
+    })
+  }
+  return redacted
+}

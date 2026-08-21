@@ -96,6 +96,12 @@ let countsBefore: Record<string, number>
 
 beforeAll(async () => {
   process.env.SESSION_SECRET ??= 'integration-test-only-not-a-real-secret'
+  // 🔴 THE SUITE NEVER TOUCHES A REAL PROVIDER. The developer's .env may
+  // legitimately say AI_PROVIDER=groq (DEC-094), and ../index.js resolves
+  // the provider at import time — without this pin the whole main-app
+  // suite would hit api.groq.com and spend the user's real quota (it did,
+  // once, the day the key landed). Set BEFORE the dynamic import.
+  process.env.AI_PROVIDER = 'mock'
   const { app } = await import('../index.js')
   await new Promise<void>((resolve) => {
     server = app.listen(0, () => resolve())

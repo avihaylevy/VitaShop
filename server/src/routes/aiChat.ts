@@ -18,10 +18,12 @@
 // 🔴 ZERO DATABASE WRITES (prohibition #8): this module performs reads only,
 // and the integration suite proves it by row-count comparison across every
 // table after a full conversation.
-// ⚠️ §3.3 minimisation/redaction of sensitive specifics is NOT implemented
-// here — it is the real-provider gate's checklist item (plan §11.5 step 6):
-// today the only provider is in-process, so no text leaves the machine. The
-// length cap below bounds payload size; it is not redaction.
+// §3.3 minimisation: redaction of known sensitive specifics lives at the
+// PROVIDER boundary (lib/ai/groqProvider.ts calls
+// triggers.redactSensitiveTerms on every user-authored string before it
+// leaves the process — DEC-094 item 6). It is a keyword screen, not NER;
+// its honest scope is documented beside the vocabulary in triggers.ts.
+// The length cap below bounds payload size; it is not redaction.
 
 import { Router, type RequestHandler } from 'express'
 import type { PrismaClient } from '@prisma/client'
