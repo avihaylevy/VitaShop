@@ -131,6 +131,38 @@ const PRICE_MAX_PATTERNS = [
 /** "מעל 50" / "over 50" → priceMin "50". */
 const PRICE_MIN_PATTERNS = [/מעל\s+(\d{1,5})/, /(?:over|above|at least)\s+(\d{1,5})/]
 
+/**
+ * ISSUE-150 — the last-resort PRODUCT-NAME path. When no taxonomy keyword
+ * matched, the message may still be naming a product ("בריאמיל", "liposomal
+ * vitamin C"). Conversational filler is stripped; whatever content remains
+ * becomes `productQuery`, which Stage 2 screens with the catalogue's own q
+ * rule and Stage 3 runs through the SAME free-text search /catalog uses.
+ * Only when NOTHING remains does the mock still clarify.
+ */
+const FILLER_WORDS = new Set([
+  // Hebrew: politeness, verbs of asking/showing, and generic nouns.
+  'תוכל', 'תוכלי', 'להראות', 'תראה', 'תציג', 'לי', 'לנו', 'מוצרי', 'מוצרים',
+  'מוצר', 'טובים', 'טוב', 'טובה', 'אני', 'רוצה', 'מחפש', 'מחפשת', 'צריך',
+  'צריכה', 'משהו', 'יש', 'לכם', 'לקנות', 'בבקשה', 'תודה', 'שלום', 'היי',
+  'אפשר', 'האם', 'מה', 'איזה', 'איזו', 'אילו', 'עבור', 'בשביל', 'כדאי',
+  'יותר', 'הכי', 'את', 'הזה', 'זה', 'גם', 'או', 'אבל', 'רק', 'עזרה',
+  'לקחת', 'עוזר',
+  // English.
+  'show', 'me', 'can', 'you', 'i', 'want', 'need', 'some', 'good', 'best',
+  'products', 'product', 'looking', 'for', 'please', 'thanks', 'thank',
+  'hi', 'hello', 'a', 'an', 'the', 'to', 'of', 'do', 'have', 'buy', 'get',
+  'find', 'is', 'there', 'any', 'something', 'what', 'which', 'help',
+])
+
+function extractProductQuery(lowered: string): string | undefined {
+  const tokens = lowered
+    .split(/[^א-ת0-9a-z]+/)
+    .filter((token) => token.length > 1 && !FILLER_WORDS.has(token))
+  if (tokens.length === 0) return undefined
+  // Capped: a rambling sentence is not a product name.
+  return tokens.slice(0, 6).join(' ')
+}
+
 const CLARIFY_QUESTION: Record<AgentLang, string> = {
   he: 'כדי שאמצא מוצרים מתאימים — איזה רכיב, מטרה בריאותית או טווח מחיר מעניינים אותך?',
   en: 'To find matching products — which ingredient, health goal, or price range are you interested in?',
@@ -219,6 +251,11 @@ export class MockProvider implements AIProvider {
     )
 
     if (empty) {
+      // ISSUE-150 — before clarifying, try the message as a product NAME.
+      const productQuery = extractProductQuery(lowered)
+      if (productQuery !== undefined) {
+        return { kind: 'criteria', criteria: { ...criteria, productQuery } }
+      }
       return { kind: 'clarify', question: CLARIFY_QUESTION[lang] }
     }
     return { kind: 'criteria', criteria }

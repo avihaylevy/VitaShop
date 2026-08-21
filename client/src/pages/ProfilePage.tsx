@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
+import { useOptionalSession } from '../state/SessionContext'
 import {
   addAddress,
   makeDefaultAddress,
@@ -26,7 +27,7 @@ import type { AddressBook, ManagedAddress } from '../types/account'
  * presses are ignored via one busy flag per section.
  */
 
-type ProfileForm = { firstName: string; lastName: string; phone: string }
+type ProfileForm = { firstName: string; lastName: string; phone: string; email: string }
 type AddressForm = { line1: string; city: string; zipCode: string }
 
 const EMPTY_ADDRESS: AddressForm = { line1: '', city: '', zipCode: '' }
@@ -36,7 +37,12 @@ export function ProfilePage() {
 
   // ── the details form ────────────────────────────────────────────────
   const [profileState, setProfileState] = useState<'loading' | 'ready' | 'failed' | 'unauthenticated'>('loading')
-  const [profile, setProfile] = useState<ProfileForm>({ firstName: '', lastName: '', phone: '' })
+  // ISSUE-173 — the current email comes from the session (GET /profile
+  // deliberately does not return it); refresh() after a change keeps the
+  // header's signed-in identity truthful.
+  const session = useOptionalSession()
+  const sessionEmail = session?.email ?? null
+  const [profile, setProfile] = useState<ProfileForm>({ firstName: '', lastName: '', phone: '', email: '' })
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileNotice, setProfileNotice] = useState('')
   const [profileError, setProfileError] = useState('')
@@ -89,11 +95,16 @@ export function ProfilePage() {
     void requestShopperProfile().then((result) => {
       if (!live) return
       if (result.ok) {
-        setProfile({
+        // Review fix: email is NOT seeded here — the session may resolve
+        // after this fetch, and keying this effect on it refetched the
+        // whole profile (and clobbered in-progress edits) on every session
+        // change. The dedicated effect below owns the email field.
+        setProfile((current) => ({
+          ...current,
           firstName: result.profile.firstName,
           lastName: result.profile.lastName,
           phone: result.profile.phone ?? '',
-        })
+        }))
         setProfileState('ready')
       } else {
         setProfileState(result.failure === 'unauthenticated' ? 'unauthenticated' : 'failed')
@@ -105,12 +116,31 @@ export function ProfilePage() {
     }
   }, [loadBook])
 
+  // The email field follows the session identity while the shopper has not
+  // typed into it (it starts ''); once edited, their draft wins.
+  useEffect(() => {
+    if (sessionEmail === null) return
+    setProfile((current) => (current.email === '' ? { ...current, email: sessionEmail } : current))
+  }, [sessionEmail])
+
   async function onSaveProfile(event: FormEvent) {
     event.preventDefault()
     if (savingProfile) return
     setSavingProfile(true)
     setProfileError('')
-    const result = await patchShopperProfile(profile)
+    // Review fix: compare in the server's own normal form (lowercased) and
+    // only when the session identity is KNOWN — a raw compare re-sent the
+    // email on every save for a differently-cased entry, and a still-null
+    // session made a plain name save carry the email too.
+    const typedEmail = profile.email.trim().toLowerCase()
+    const emailChanged =
+      sessionEmail !== null && typedEmail !== '' && typedEmail !== sessionEmail.toLowerCase()
+    const result = await patchShopperProfile({
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      phone: profile.phone,
+      ...(emailChanged ? { email: typedEmail } : {}),
+    })
     setSavingProfile(false)
     if (!result.ok) {
       setProfileNotice('')
@@ -127,11 +157,20 @@ export function ProfilePage() {
       }
       return
     }
-    setProfile({
+    setProfile((current) => ({
+      ...current,
       firstName: result.profile.firstName,
       lastName: result.profile.lastName,
       phone: result.profile.phone ?? '',
-    })
+    }))
+    // The header greets by the session's identity — re-read it so an email
+    // change shows up everywhere at once. A CLEARED field was not sent
+    // (empty is not an email); put the real address back so the form never
+    // claims an emptiness the server never stored.
+    if (emailChanged) void session?.refresh()
+    if (typedEmail === '' && sessionEmail !== null) {
+      setProfile((current) => ({ ...current, email: sessionEmail }))
+    }
     setProfileNotice(t('details.saved'))
   }
 
@@ -284,9 +323,22 @@ export function ProfilePage() {
               />
               <p className="text-xs text-text-muted">{t('details.phoneHint')}</p>
             </div>
-            {/* DEC-090 O2 — the email is shown NOWHERE as editable; a line
-                says why rather than leaving its absence mysterious. */}
-            <p className="text-xs text-text-muted">{t('details.emailNote')}</p>
+            {/* ISSUE-173 — DEC-090 O2 amended by the user: the email is
+                editable here now. EMAIL_TAKEN arrives as a named refusal. */}
+            <div className="flex flex-col gap-1">
+              <label htmlFor="profile-email" className="text-text-ink">
+                {t('details.email')}
+              </label>
+              <input
+                id="profile-email"
+                type="email"
+                dir="ltr"
+                value={profile.email}
+                onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
+                className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
+              />
+              <p className="text-xs text-text-muted">{t('details.emailHint')}</p>
+            </div>
             <Button type="submit" loading={savingProfile} className="self-start">
               {savingProfile ? t('details.saving') : t('details.save')}
             </Button>

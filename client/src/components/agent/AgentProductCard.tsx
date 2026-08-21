@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import type { ProductCardModel } from '../../types/product'
 import { getStockState } from '../../lib/stockState'
 import { PriceBlock } from '../catalog/PriceBlock'
+import { ProductImage } from '../catalog/ProductImage'
 import { StockState } from '../catalog/StockState'
 import { ADD_TO_CART_ATTRIBUTE } from '../catalog/ProductCard'
 import { Button } from '../ui/Button'
@@ -51,30 +52,39 @@ export function AgentProductCard({
         as="article"
         variant="section"
         bordered
-        className="flex flex-col gap-2 p-3"
+        className="flex flex-col gap-2.5 p-3"
       >
-        <div className="flex flex-col gap-0.5">
-          <h4 className="text-sm font-semibold leading-5 text-text-ink">
-            {/* Navigating from inside the panel closes it — the page the
-                link lands on must not sit under a modal (review, Checkpoint
-                B's altitude finding). onClick never prevents the Link's own
-                navigation. */}
-            <Link
-              to={`/product/${product.slug}`}
-              onClick={onNavigateClick}
-              className={`${FOCUS_RING} rounded-compact`}
-            >
-              {product.name}
-            </Link>
-          </h4>
-          {product.brandName && (
-            <p className="text-[13px] font-semibold text-text-muted">{product.brandName}</p>
-          )}
+        {/* ISSUE-164 — a product THUMBNAIL joins the card (the same
+            ProductImage pipeline every catalogue surface uses: filename /
+            external URL / upload path, contain-only), and the text column
+            sits beside it at chat scale. */}
+        <div className="flex items-start gap-3">
+          <div className="w-16 shrink-0 overflow-hidden rounded-compact">
+            <ProductImage imageFile={product.imageFile} alt="" />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <h4 className="text-sm font-semibold leading-6 text-text-ink">
+              {/* Navigating from inside the panel closes it — the page the
+                  link lands on must not sit under a modal (review, Checkpoint
+                  B's altitude finding). onClick never prevents the Link's own
+                  navigation. */}
+              <Link
+                to={`/product/${product.slug}`}
+                onClick={onNavigateClick}
+                className={`${FOCUS_RING} rounded-compact`}
+              >
+                {product.name}
+              </Link>
+            </h4>
+            {product.brandName && (
+              <p className="text-xs font-semibold text-text-muted">{product.brandName}</p>
+            )}
+            <StockState
+              stockQuantity={product.stockQuantity}
+              lowStockThreshold={product.lowStockThreshold}
+            />
+          </div>
         </div>
-        <StockState
-          stockQuantity={product.stockQuantity}
-          lowStockThreshold={product.lowStockThreshold}
-        />
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-hairline pt-2">
           <PriceBlock price={product.price} size="price" />
           <Button

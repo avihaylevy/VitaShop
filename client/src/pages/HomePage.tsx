@@ -67,7 +67,9 @@ export function HomePage() {
       <section className="rounded-card bg-surface-section p-6 md:p-10">
         <div className="grid items-center gap-8 md:grid-cols-[1fr_auto]">
           <div>
-            <h1 className="heading-page max-w-xl">{t('home.heroTitle', { ns: 'catalog' })}</h1>
+            {/* text-balance — ISSUE-151: the headline stranded one word on
+                its own line; balanced wrapping equalizes the lines. */}
+            <h1 className="heading-page max-w-xl text-balance">{t('home.heroTitle', { ns: 'catalog' })}</h1>
             <p className="mt-3 max-w-xl text-base text-text-muted">
               {t('home.tagline', { ns: 'catalog' })}
             </p>

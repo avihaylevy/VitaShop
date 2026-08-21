@@ -73,7 +73,9 @@ function FilterGroup({
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t('filters.searchGroup')}
           aria-label={t('filters.searchGroup')}
-          className={`${FOCUS_RING} mb-2 h-9 w-full rounded-compact border border-border-control bg-well px-3 text-sm text-text-ink`}
+          // ISSUE-157: the single-frame search focus, everywhere a search
+          // field lives (border + halo, no offset outline).
+          className="search-field mb-2 h-9 w-full rounded-compact border border-border-control bg-well px-3 text-sm text-text-ink"
         />
       )}
 

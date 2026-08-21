@@ -139,7 +139,10 @@ const pageSchema = z
 
 const inStockSchema = z.literal('true')
 
-const qSchema = z
+// Exported since the ninth list (ISSUE-150): the agent's productQuery is
+// screened with the catalogue's OWN q rule, so a handoff URL carrying it
+// can never be rejected by the endpoint it targets.
+export const qSchema = z
   .string()
   .transform((value) => value.trim())
   .pipe(z.string().min(1).max(80))

@@ -315,6 +315,24 @@ describe('🔴 PATCH — the edit reaches the next read, and frozen figures neve
     expect(row.nameHe).toBe('מוצר בדיקת ניהול')
   })
 
+  it('ISSUE-158: a DOSAGE FORM patch lands, and a bad value is its named 400', async () => {
+    const cookie = await signIn(ADMIN)
+    const ok = await api(`/${productId}`, { method: 'PATCH', cookie, body: { dosageForm: 'SYRUP' } })
+    expect(ok.status).toBe(200)
+    const row = await prisma.product.findUniqueOrThrow({
+      where: { slug: SLUG },
+      select: { dosageForm: true },
+    })
+    expect(row.dosageForm).toBe('SYRUP')
+    // Back to the fixture's shape for the suite's other tests.
+    await prisma.product.update({ where: { slug: SLUG }, data: { dosageForm: 'CAPSULE' } })
+
+    const bad = await api(`/${productId}`, { method: 'PATCH', cookie, body: { dosageForm: 'GUMMY' } })
+    expect(bad.status).toBe(400)
+    const body = (await bad.json()) as { error: { codes: string[] } }
+    expect(body.error.codes).toContain('DOSAGE_FORM_INVALID')
+  })
+
   it('🔴 refusals carry NAMED codes: bad price, negative stock, empty body, unknown key', async () => {
     const cookie = await signIn(ADMIN)
 

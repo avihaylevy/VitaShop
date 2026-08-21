@@ -51,3 +51,15 @@ export function handoffToCatalogPath(handoff: Record<string, string | string[]>)
   const query = params.toString()
   return query === '' ? '/catalog' : `/catalog?${query}`
 }
+
+/**
+ * Review consolidation: the ONE guard for "this handoff actually carries
+ * criteria" — written three times (announcement, success link, empty-state
+ * link) before; a drift between them made the live region voice a link the
+ * screen did not show, or the reverse.
+ */
+export function hasCriteriaHandoff(
+  handoff: Record<string, string | string[]> | null,
+): handoff is Record<string, string | string[]> {
+  return handoff !== null && handoffToCatalogPath(handoff) !== '/catalog'
+}

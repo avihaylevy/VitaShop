@@ -1,10 +1,10 @@
-import { useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Drawer } from '../ui/Drawer'
+import { ChatCard } from '../ui/ChatCard'
 import { AgentTranscript } from './AgentTranscript'
 import { AgentComposer } from './AgentComposer'
 import { sendAgentMessage } from '../../lib/agentApi'
-import { handoffToCatalogPath } from '../../lib/agentHandoff'
+import { hasCriteriaHandoff } from '../../lib/agentHandoff'
 import { CatalogApiError } from '../../lib/catalogApi'
 import {
   describeTurn,
@@ -64,6 +64,11 @@ export function AgentPanel({
   const inputRef = useRef<HTMLInputElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // ISSUE-144: one flag for "a turn is in flight", owned HERE because both
+  // send paths (the composer and the empty-state suggestion chips) funnel
+  // through sendMessage — the transcript renders the typing indicator off
+  // it, and the chips disable off it.
+  const [awaiting, setAwaiting] = useState(false)
 
   const locked = isConversationLocked(entries)
 
@@ -78,10 +83,15 @@ export function AgentPanel({
   }, [open])
 
   async function sendMessage(message: string): Promise<void> {
+    // Review fix: ONE turn at a time, enforced at the single send path —
+    // a composer submit racing a chip's in-flight turn used to fork the
+    // history and overwrite abortRef.
+    if (awaiting) return
     setEntries((previous) => [...previous, { kind: 'user', text: message }])
     const history = toWireHistory(entries)
     const abort = new AbortController()
     abortRef.current = abort
+    setAwaiting(true)
     try {
       const response = await sendAgentMessage(message, history, language, abort.signal)
       setEntries((previous) => [...previous, { kind: 'agent', lang: language, response }])
@@ -92,12 +102,10 @@ export function AgentPanel({
       // transcript renders it as a link, not prose) — but its existence
       // must still be voiced, and the transcript's log region is
       // deliberately non-live. Appended to the announcement only.
-      if (
-        response.emptyResult &&
-        response.handoff !== null &&
-        handoffToCatalogPath(response.handoff) !== '/catalog'
-      ) {
-        lines.push(t('reply.handoff'))
+      if (hasCriteriaHandoff(response.handoff)) {
+        // ISSUE-161 — the link exists on SUCCESS turns too now; both
+        // renditions are voiced with their own visible label.
+        lines.push(response.emptyResult ? t('reply.handoff') : t('reply.handoffBrowse'))
       }
       announce(lines.length > 0 ? lines.join(' ') : t('a11y.responseArrived'))
     } catch (error) {
@@ -112,6 +120,7 @@ export function AgentPanel({
       const key = errorMessageKey(code)
       announce(key !== null ? t(key) : t('reply.turnLimit'))
     } finally {
+      setAwaiting(false)
       if (abortRef.current === abort) abortRef.current = null
       // Scroll the newest turn into view; focus never moved off the input.
       // scrollTop assignment, not scrollTo(): jsdom implements the property
@@ -130,7 +139,7 @@ export function AgentPanel({
   }
 
   return (
-    <Drawer
+    <ChatCard
       open={open}
       onClose={onClose}
       title={t('panel.title')}
@@ -145,6 +154,18 @@ export function AgentPanel({
           onAddToCart={onAddToCart}
           onNavigate={onNavigate}
           scrollRef={transcriptRef}
+          awaiting={awaiting}
+          // The chips reuse the ONE send path, so every rule that binds a
+          // typed message (turn budget, history, announcement) binds a
+          // suggested one identically.
+          onSuggestion={(text) => {
+            if (awaiting || locked) return
+            // Review fix (the unmount-takes-focus family, the project's own
+            // red rule): the pressed chip unmounts with the first turn —
+            // focus moves DELIBERATELY to the composer input first.
+            inputRef.current?.focus()
+            void sendMessage(text)
+          }}
         />
         {/* The visible add-to-cart confirmation — quiet adds (the drawer
             only auto-opens once per session) must still SHOW somewhere, and
@@ -157,12 +178,13 @@ export function AgentPanel({
         )}
         <AgentComposer
           locked={locked}
+          awaiting={awaiting}
           onSend={sendMessage}
           onReset={resetConversation}
           inputRef={inputRef}
         />
       </div>
-    </Drawer>
+    </ChatCard>
   )
 }
 

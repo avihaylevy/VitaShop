@@ -6,6 +6,7 @@ import { CATALOG_RELATIONS_INCLUDE } from '../lib/catalogProductLookup.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireActiveShopper } from './requireActiveShopper.js'
 import { parseProfilePatch } from '../lib/profileForm.js'
+import { isUniqueViolationOn } from '../lib/prismaUniqueViolation.js'
 import {
   ADDRESS_CAP,
   ADDRESS_SELECT,
@@ -390,10 +391,18 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
       const user = await prisma.user.update({
         where: { id: userId },
         data: parsed.value,
-        select: { firstName: true, lastName: true, phone: true },
+        select: { firstName: true, lastName: true, phone: true, email: true },
       })
       res.json({ profile: user })
     } catch (error) {
+      // ISSUE-173 (DEC-090 O2 amended) — the email column's unique index is
+      // the guarantee; its violation is the named refusal, never a 503.
+      if (isUniqueViolationOn(error, ['email', 'users_email_key'])) {
+        res.status(400).json({
+          error: { code: 'PROFILE_INVALID', message: 'The profile failed validation.', codes: ['EMAIL_TAKEN'] },
+        })
+        return
+      }
       console.error(`[account] profile update failed for ${userId}`, error)
       res.status(503).json({ error: { code: 'PROFILE_UNAVAILABLE', message: 'Try again shortly.' } })
     }

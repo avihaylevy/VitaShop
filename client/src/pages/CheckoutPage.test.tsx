@@ -535,13 +535,20 @@ describe('F2c — confirming and paying', () => {
     expect(JSON.parse(String(calls[0]!.body)).saveAddress).toBe(true)
   })
 
-  it('REQ-F-043 — BOTH outcomes are triggerable, and the choice travels', async () => {
+  it('ISSUE-174 (REQ-F-043 amended by the user): no outcome selector exists; the client always requests success, and a server 402 still renders the declined state', async () => {
     const calls = payRoute(402, { error: { code: 'PAYMENT_DECLINED' } })
     renderPage()
-    fireEvent.click(await screen.findByRole('radio', { name: /declined payment/i }))
+    // The OUTCOME control is GONE — the deviation the user asked for.
+    // (Delivery-method radios legitimately remain.)
+    await screen.findByRole('button', { name: /pay/i })
+    expect(screen.queryByRole('radio', { name: /declined|successful/i })).toBeNull()
     await fillAndPay()
     await waitFor(() => expect(calls).toHaveLength(1))
-    expect(JSON.parse(String(calls[0]!.body)).simulatedOutcome).toBe('failure')
+    expect(JSON.parse(String(calls[0]!.body)).simulatedOutcome).toBe('success')
+    // Review fix: the title's second claim is now ASSERTED here too — a 402
+    // renders the declined state (was previously only covered by a sibling
+    // test this one's title could be mistaken for).
+    expect(await screen.findByText(/no order was placed/i)).toBeTruthy()
   })
 
   it('🔴 a BLOCKED order names its lines on the PAY path too', async () => {

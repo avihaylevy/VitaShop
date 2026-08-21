@@ -45,7 +45,7 @@ export function CatalogSortSelect({ value, onChange, className = '' }: CatalogSo
          * secondary-button look. Compact h-9 from md up; full 44px touch
          * target below.
          */
-        className={`${FOCUS_RING} h-11 cursor-pointer rounded-card border border-border-control bg-well px-3 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:bg-surface-sunken md:h-9`}
+        className={`${FOCUS_RING} h-11 cursor-pointer rounded-card border border-border-control bg-well px-3 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:border-brand-teal hover:text-brand-teal-strong md:h-9`}
       >
         {CATALOG_SORT_VALUES.map((sortValue) => (
           <option key={sortValue} value={sortValue}>

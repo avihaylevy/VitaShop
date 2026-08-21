@@ -9,8 +9,8 @@
     "self_pickup": "Self pickup",
     "courier": "Courier to your door",
     "pickup_point": "Collect from a pickup point",
-    "readyWithin": "Ready to collect within {{days}} business days",
-    "deliveredBetween": "Arrives in {{min}}–{{max}} business days"
+    "readyWithin": "Usually ready to collect within about {{days}} business days",
+    "deliveredBetween": "Estimated arrival: {{min}}–{{max}} business days"
   },
   "summary": {
     "itemsTotal": "Items total",
@@ -57,9 +57,6 @@
   "pay": {
     "legend": "Payment",
     "simulated": "Simulated payment — nothing is charged and no card details are collected.",
-    "outcomeLegend": "Payment outcome to simulate",
-    "outcomeSuccess": "Successful payment",
-    "outcomeFailure": "Declined payment",
     "saveAddress": "Save this address for next time",
     "submit": "Confirm and pay",
     "submitting": "Placing your order…"
@@ -70,7 +67,9 @@
     "total": "Amount paid",
     "replayed": "This order was already placed. This is a repeat confirmation, not a second charge.",
     "backToCatalog": "Continue shopping",
-    "status": "Order status: {{status}}"
+    "status": "Order status: {{status}}",
+    "subtitle": "Thanks for your order! A confirmation is on its way, and we will update you as it moves.",
+    "viewOrders": "My orders"
   },
   "payFailure": {
     "declined": "The payment was declined. No order was placed, your cart is unchanged, and you can try again.",

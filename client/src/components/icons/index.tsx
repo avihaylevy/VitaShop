@@ -111,6 +111,44 @@ export function PlusIcon(props: IconSvgProps) {
   )
 }
 
+export function ChatBubbleIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M12 4.5c-4.6 0-8 3-8 6.8 0 2.1 1 3.9 2.7 5.1-.1.9-.5 2-1.4 2.9 1.6 0 3-.6 3.9-1.2.9.3 1.8.4 2.8.4 4.6 0 8-3 8-6.8s-3.4-7.2-8-7.2Z" />
+      <line x1="8.5" y1="10" x2="15.5" y2="10" />
+      <line x1="8.5" y1="13" x2="13" y2="13" />
+    </svg>
+  )
+}
+
+export function SparkleIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M12 4.5 13.6 10 19 11.5 13.6 13 12 18.5 10.4 13 5 11.5 10.4 10 12 4.5Z" />
+      <path d="M18.5 4.5v3" />
+      <path d="M17 6h3" />
+    </svg>
+  )
+}
+
+export function LeafIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M19.5 4.5c-7.5 0-13 3.5-13 9.5a5.5 5.5 0 0 0 5.5 5.5c6 0 8.5-6.5 7.5-15Z" />
+      <path d="M5 20c3-4.5 6.5-7.5 10.5-9.5" />
+    </svg>
+  )
+}
+
+export function SendIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M4.5 11.2 19.5 4.8c.4-.2.8.2.6.6l-6.4 15c-.2.4-.8.4-.9-.1l-1.6-5.8a.7.7 0 0 0-.5-.5L4.6 12.1c-.5-.1-.5-.7-.1-.9Z" />
+      <line x1="11.3" y1="12.7" x2="15.5" y2="8.5" />
+    </svg>
+  )
+}
+
 export function TrashIcon(props: IconSvgProps) {
   return (
     <svg {...BASE} {...props}>

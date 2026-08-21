@@ -17,6 +17,7 @@ import {
   decimalToCents,
   DOSAGE_FORM_VALUES,
   MAX_REPEATABLE_VALUES,
+  qSchema,
   SUPPORTED_QUERY_PARAMS,
   type DosageFormValue,
 } from '../catalogQuery.js'
@@ -25,6 +26,8 @@ import type { ExtractedCriteriaNames } from './provider.js'
 
 /** Ids-form criteria — the shape buildProductWhere + the handoff params need. */
 export interface ResolvedCriteria {
+  /** ISSUE-150 — the free-text product search, the catalogue's own `q`. */
+  q: string | undefined
   categorySlug: string | undefined
   categoryNameHe: string | undefined
   brandIds: string[]
@@ -306,7 +309,20 @@ export async function resolveCriteria(
     priceMax = undefined
   }
 
+  // ISSUE-150 — screened with the catalogue's OWN q schema (trim, 1..80);
+  // a phrase the endpoint would reject is dropped, never forwarded.
+  let q: string | undefined
+  if (names.productQuery !== undefined) {
+    const parsedQ = qSchema.safeParse(names.productQuery)
+    if (parsedQ.success) {
+      q = parsedQ.data
+    } else {
+      dropped.push(`productQuery:${names.productQuery}`)
+    }
+  }
+
   const resolved: ResolvedCriteria = {
+    q,
     categorySlug: category?.slug,
     categoryNameHe: category?.nameHe,
     brandIds,
@@ -338,6 +354,7 @@ export async function resolveCriteria(
  */
 export function toHandoffParams(resolved: ResolvedCriteria): HandoffParams {
   const params: HandoffParams = {}
+  if (resolved.q !== undefined) params.q = resolved.q
   if (resolved.categorySlug !== undefined) params.category = resolved.categorySlug
   if (resolved.brandIds.length > 0) params.brand = resolved.brandIds
   if (resolved.ingredientIds.length > 0) params.ingredient = resolved.ingredientIds

@@ -241,7 +241,7 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
         <button
           type="button"
           onClick={onClose}
-          className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-compact text-sm font-medium text-brand-teal underline`}
+          className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-compact text-sm font-medium text-brand-teal underline transition-colors duration-150 ease-standard hover:text-brand-teal-strong hover:decoration-2`}
         >
           {t('drawer.continue')}
         </button>

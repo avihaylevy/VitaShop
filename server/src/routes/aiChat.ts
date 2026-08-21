@@ -243,7 +243,10 @@ export function createAiChatRouter(deps: AiChatRouterDeps): Router {
 
     const where = buildProductWhere(
       {
-        q: undefined,
+        // ISSUE-150 — the provider's product-name phrase rides the SAME
+        // free-text search /catalog runs (already screened by qSchema in
+        // criteriaMapping).
+        q: resolved.q,
         brand: resolved.brandIds,
         ingredient: resolved.ingredientIds,
         healthGoal: resolved.healthGoalIds,
@@ -286,10 +289,25 @@ export function createAiChatRouter(deps: AiChatRouterDeps): Router {
     }
 
     if (products.length === 0) {
+      // ISSUE-150 ∩ TEST-072, review-hardened: a free-text q that reached
+      // ZERO results is a phrase the catalogue search already rejected —
+      // a handoff link carrying it promises a search known to find
+      // nothing. So q is STRIPPED from the offer (decided on `resolved`,
+      // never on a param count — the count proxy silently broke the
+      // moment q rode with one more criterion). Whatever criteria remain
+      // decide the branch: some → the honest empty-result handoff
+      // ("בריאמיל עד 50" still offers the ₪50 filter); none → the coded
+      // clarify the acceptance row pins ("שיעור כימיה" still clarifies).
+      const offeredParams = { ...handoffParams }
+      if (resolved.q !== undefined) delete offeredParams.q
+      if (Object.keys(offeredParams).length === 0) {
+        res.json(emptyResponse({ notice, clarifyCode: 'NO_CRITERIA_MATCHED' }))
+        return
+      }
       // REQ-F-077: say so explicitly (client renders the fixed empty-state
       // string), offer the handoff with the criteria preserved. The agent
       // NEVER invents a product to fill the gap.
-      res.json(emptyResponse({ notice, handoff: handoffParams, emptyResult: true }))
+      res.json(emptyResponse({ notice, handoff: offeredParams, emptyResult: true }))
       return
     }
 

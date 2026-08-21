@@ -15,6 +15,7 @@ import { CartDrawer } from '../components/cart/CartDrawer'
 import { AddedToCartToast } from '../components/cart/AddedToCartToast'
 import { useAddToCart } from '../hooks/useAddToCart'
 import { Button } from '../components/ui/Button'
+import { FOCUS_RING } from '../components/ui/focusRing'
 import { Drawer } from '../components/ui/Drawer'
 import { VisuallyHidden } from '../components/ui/VisuallyHidden'
 import { catalogViewState } from '../features/catalog/catalogViewState'
@@ -41,6 +42,17 @@ import type { SupportedLanguage } from '../i18n/index'
  * categories list against `urlState.category`, and wiring the data layer's
  * six-state output into `catalogViewState`.
  */
+
+/**
+ * ISSUE-162 — the catalogue chrome's own control look: white ground with a
+ * teal border/text lift on hover, matching the search field's quiet accent
+ * language instead of Button's beige sunken fill (the user, eleventh list: the
+ * filter/sort colour "does not fit the rest of the site"). Hand-styled because a className cannot
+ * outrank Button's baked hover at equal specificity (the documented trap).
+ */
+const CHROME_BUTTON =
+  'inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-card border border-border-control bg-well px-4 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:border-brand-teal hover:text-brand-teal-strong active:scale-[0.98] motion-reduce:transition-none'
+
 export function CatalogPage() {
   const { t, i18n } = useTranslation(['layout', 'catalog'])
   const language = i18n.language as SupportedLanguage
@@ -304,13 +316,12 @@ export function CatalogPage() {
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <CategoryShelf categories={categories} activeCategorySlug={categorySlug} className="min-w-0 flex-1" />
         <div className="flex items-center gap-2">
-          <Button
+          <button
             type="button"
-            variant="secondary"
-            className="md:hidden"
             aria-haspopup="dialog"
             aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen(true)}
+            className={`${FOCUS_RING} ${CHROME_BUTTON} md:hidden`}
           >
             <span aria-hidden="true">
               {t('filters.openLabel', { ns: 'catalog' })}
@@ -326,7 +337,7 @@ export function CatalogPage() {
                 ? `${t('filters.openLabel', { ns: 'catalog' })} — ${t('filters.activeCount', { ns: 'catalog', count: activeCount })}`
                 : t('filters.openLabel', { ns: 'catalog' })}
             </VisuallyHidden>
-          </Button>
+          </button>
 
           {/*
             ISSUE-052 — the desktop rail's own toggle. A separate button from
@@ -337,14 +348,13 @@ export function CatalogPage() {
             never fought at the same specificity.
           */}
           <div className="hidden md:block">
-            <Button
+            <button
               type="button"
-              variant="secondary"
               // md:h-9 matches the compacted sort select beside it (review
               // finding: 42px next to 34px read unfinished). Responsive
               // utilities are emitted after base ones, so this wins over
-              // Button's own h-11 at md+.
-              className="md:h-9"
+              // the base h-11 at md+.
+              className={`${FOCUS_RING} ${CHROME_BUTTON} md:h-9`}
               aria-expanded={railOpen}
               onClick={() => setRailOpen((value) => !value)}
             >
@@ -357,7 +367,7 @@ export function CatalogPage() {
                   ? `${t('filters.openLabel', { ns: 'catalog' })} — ${t('filters.activeCount', { ns: 'catalog', count: activeCount })}`
                   : t('filters.openLabel', { ns: 'catalog' })}
               </VisuallyHidden>
-            </Button>
+            </button>
           </div>
 
           <CatalogSortSelect value={urlState.sort} onChange={handleSortChange} />

@@ -196,3 +196,15 @@ export function useCart(): CartContextValue {
   }
   return context
 }
+
+/**
+ * ISSUE-178 — the cart refresh alone, TOLERANT of a missing provider (a
+ * no-op then). CheckoutPage calls it after a successful payment; its test
+ * harness renders without CartProvider, and mounting the provider there
+ * would add an early cart fetch that shuffles every call-order assertion
+ * (the ISSUE-095 family). The useSessionFirstName pattern.
+ */
+const NO_OP_REFRESH = async () => {}
+export function useCartRefresh(): () => Promise<void> {
+  return useContext(CartContext)?.refresh ?? NO_OP_REFRESH
+}

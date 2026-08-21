@@ -155,3 +155,14 @@ export function useSession(): SessionContextValue {
   }
   return context
 }
+
+/**
+ * ISSUE-148/173 — the whole session value, or null outside a provider.
+ * TOLERANT deliberately: agent/profile surfaces render in component tests
+ * without the session machinery, and a missing identity must degrade
+ * (nameless greeting, empty email field), never throw. Review: the ONE
+ * tolerant shape — per-field wrappers were dead weight beside it.
+ */
+export function useOptionalSession(): SessionContextValue | null {
+  return useContext(SessionContext)
+}

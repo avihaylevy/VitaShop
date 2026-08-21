@@ -391,6 +391,24 @@ describe('AgentPanel', () => {
     expect(screen.queryByRole('link', { name: i18n.t('agent:reply.handoff') })).toBeNull()
   })
 
+  it('ISSUE-161: a SUCCESSFUL turn renders the browse-catalog link; clicking it navigates with the criteria and closes', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockResponse(
+        200,
+        agentResponse({ products: [productDto()], explanations: [''], handoff: { ingredient: ['abc'] } }),
+      ),
+    )
+    renderPanel()
+    await sendMessage('מגנזיום')
+    const browseLink = await screen.findByRole('link', { name: i18n.t('agent:reply.handoffBrowse') })
+    // Voiced from the one announcement region, like the empty-state link.
+    expect(announceSpy.mock.calls[0]![0]).toContain(i18n.t('agent:reply.handoffBrowse'))
+
+    fireEvent.click(browseLink)
+    expect(screen.getByTestId('location').textContent).toBe('/catalog?ingredient=abc')
+    expect(closeSpy).toHaveBeenCalled()
+  })
+
   it('control: a NON-empty result renders no handoff link; a product-name click navigates AND closes', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       mockResponse(
@@ -406,6 +424,51 @@ describe('AgentPanel', () => {
     fireEvent.click(nameLink)
     expect(screen.getByTestId('location').textContent).toBe('/product/magnesium-citrate-200')
     expect(closeSpy).toHaveBeenCalled()
+  })
+
+  it('🔴 ISSUE-144: a suggestion chip sends ITS OWN text through the one send path, and the chips leave with the first turn', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(mockResponse(200, agentResponse({ clarifyingQuestion: 'איזה רכיב?' })))
+    renderPanel()
+
+    const chipText = i18n.t('agent:suggestions.s1')
+    fireEvent.click(screen.getByRole('button', { name: chipText }))
+    await within(transcript()).findByText('איזה רכיב?')
+
+    // The wire carried the chip's exact text — not a paraphrase, not empty.
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string) as {
+      message: string
+    }
+    expect(body.message).toBe(chipText)
+    // The chip text is now a USER TURN in the transcript…
+    expect(within(transcript()).getByText(chipText)).toBeTruthy()
+    // …and the chips themselves are gone (they belong to the empty state).
+    expect(screen.queryByRole('button', { name: i18n.t('agent:suggestions.s2') })).toBeNull()
+    expect(screen.queryByText(i18n.t('agent:suggestions.title'))).toBeNull()
+  })
+
+  it('control: a transcript that already has turns renders NO suggestion chips', () => {
+    renderPanel({ initialEntries: [{ kind: 'user', text: 'שלום' }, agentTurn()] })
+    expect(screen.queryByRole('button', { name: i18n.t('agent:suggestions.s1') })).toBeNull()
+  })
+
+  it('ISSUE-144: the typing indicator appears ONLY while a turn is in flight, and it is aria-hidden ornament', async () => {
+    let release: (value: Response) => void = () => {}
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () => new Promise<Response>((resolve) => (release = resolve)),
+    )
+    renderPanel()
+    expect(screen.queryByTestId('agent-typing')).toBeNull()
+
+    await sendMessage('מגנזיום')
+    const typing = screen.getByTestId('agent-typing')
+    // Ornament only: the widget's live region is the one voice.
+    expect(typing.getAttribute('aria-hidden')).toBe('true')
+
+    release(mockResponse(200, agentResponse({ clarifyingQuestion: 'איזה רכיב?' })))
+    await within(transcript()).findByText('איזה רכיב?')
+    expect(screen.queryByTestId('agent-typing')).toBeNull()
   })
 
   it('history sent to the server carries the whole ANSWERED conversation, agent content = provider prose', async () => {

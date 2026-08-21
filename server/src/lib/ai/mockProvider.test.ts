@@ -75,12 +75,30 @@ describe('MockProvider.extractCriteria', () => {
   })
 
   it('"שיעור" does not fire the skin-and-hair goal; "לעור" does', async () => {
+    // ISSUE-150 changed the contract's second half: unmatched content now
+    // leaves as productQuery and THE ROUTE's search is the arbiter (zero
+    // matches → the coded clarify). What this test still owns: the token
+    // guard — "שיעור" must not smuggle in the skin-and-hair GOAL.
     const lesson = await extract('שיעור כימיה')
-    expect(lesson.kind).toBe('clarify')
+    expect(lesson.kind).toBe('criteria')
+    if (lesson.kind !== 'criteria') return
+    expect(lesson.criteria.healthGoals).toEqual([])
+    expect(lesson.criteria.productQuery).toBe('שיעור כימיה')
+
     const skin = await extract('משהו לעור')
     expect(skin.kind).toBe('criteria')
     if (skin.kind !== 'criteria') return
     expect(skin.criteria.healthGoals).toContain('עור ושיער')
+    // Control: a matched goal means NO productQuery rides along.
+    expect(skin.criteria.productQuery).toBeUndefined()
+  })
+
+  it('ISSUE-150: a product-name-ish message emits productQuery with the filler stripped', async () => {
+    const named = await extract('תוכל להראות לי בריאמיל בבקשה?')
+    expect(named.kind).toBe('criteria')
+    if (named.kind !== 'criteria') return
+    expect(named.criteria.productQuery).toBe('בריאמיל')
+    expect(named.criteria.ingredients).toEqual([])
   })
 
   it('asks a clarifying question when nothing matched — in the request language', async () => {

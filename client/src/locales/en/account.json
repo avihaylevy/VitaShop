@@ -12,10 +12,11 @@
     "lastName": "Last name",
     "phone": "Mobile phone",
     "phoneHint": "For example: 050-9871234",
-    "emailNote": "Your email address is your sign-in identity and cannot be changed.",
     "save": "Save details",
     "saving": "Saving…",
-    "saved": "Your details were saved."
+    "saved": "Your details were saved.",
+    "email": "Email",
+    "emailHint": "The email is also your sign-in. Changing it updates your login details."
   },
   "addresses": {
     "heading": "Shipping addresses",
@@ -48,6 +49,8 @@
     "PHONE_INVALID": "The phone must be a valid Israeli mobile number.",
     "LINE1_REQUIRED": "Enter a street and house number.",
     "CITY_REQUIRED": "Enter a city.",
-    "ZIP_INVALID": "The zip code is not valid."
+    "ZIP_INVALID": "The zip code is not valid.",
+    "EMAIL_INVALID": "The email address is not valid.",
+    "EMAIL_TAKEN": "This email address is already in use."
   }
 }

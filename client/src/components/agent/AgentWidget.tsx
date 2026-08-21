@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button } from '../ui/Button'
+import { Icon } from '../ui/Icon'
+import { ChatBubbleIcon } from '../icons'
+import { FOCUS_RING } from '../ui/focusRing'
 import { VisuallyHidden } from '../ui/VisuallyHidden'
 import { CartDrawer } from '../cart/CartDrawer'
 import { useAddToCart } from '../../hooks/useAddToCart'
@@ -82,11 +84,33 @@ export function AgentWidget() {
        * it sits bottom-left in Hebrew RTL and bottom-right in English LTR.
        * z-30: above page content, below the dropdown/overlay/modal scale
        * (40/50/60), so an open drawer's scrim covers it.
+       *
+       * ISSUE-144 (the eighth list): a ROUND floating pill in the agent's
+       * own plum — hand-styled rather than a Button variant, because the
+       * pill radius would collide with Button's baked-in rounded-card at
+       * equal specificity (the exact trap Button.tsx's aria-disabled note
+       * documents). The halo ring is a sibling span, transform+opacity only,
+       * and motion-safe-gated; it hides while the panel is open so the
+       * breathing never plays under the scrim.
        */}
       <div className="fixed bottom-4 end-4 z-30">
-        <Button ref={buttonRef} variant="primary" onClick={() => setPanelOpen(true)}>
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-0 rounded-round bg-agent motion-reduce:hidden ${
+            panelOpen ? 'hidden' : 'motion-safe:animate-[agent-fab-halo_3.2s_var(--ease)_infinite]'
+          }`}
+        />
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={() => setPanelOpen(true)}
+          className={`${FOCUS_RING} relative inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-round bg-agent px-4 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgb(122_62_107/0.35)] transition-[background-color,box-shadow,transform] duration-150 ease-standard hover:-translate-y-0.5 hover:bg-agent-strong hover:shadow-[0_8px_20px_rgb(122_62_107/0.45)] active:translate-y-0 active:scale-[0.98] motion-reduce:transition-none motion-reduce:hover:translate-y-0`}
+        >
+          <Icon size={17}>
+            <ChatBubbleIcon />
+          </Icon>
           {t('button.open')}
-        </Button>
+        </button>
       </div>
 
       <AgentPanel

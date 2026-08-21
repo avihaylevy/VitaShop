@@ -104,6 +104,10 @@ const FIELD_SCHEMAS = {
 export const productPatchSchema = z
   .object({
     ...FIELD_SCHEMAS,
+    // ISSUE-158 (the tenth list): a WRONG dosage form must be fixable —
+    // the same enum rule the create form runs. Slug/category/brand stay
+    // immutable; dosage form is a fact about the product, not identity.
+    dosageForm: z.enum(DOSAGE_FORMS, { message: 'DOSAGE_FORM_INVALID' }),
     // DEC-093 — a PROTOCOL field, never a column: acknowledges the
     // PRODUCT_DUPLICATE refusal on a rename. Excluded from the
     // at-least-one-field rule below, or {allowDuplicate:true} alone

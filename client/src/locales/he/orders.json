@@ -51,6 +51,9 @@
     "selfPickup": "איסוף עצמי — אין כתובת משלוח",
     "shippingCost": "דמי משלוח",
     "tracking": "מספר מעקב",
-    "noTracking": "טרם הונפק מספר מעקב"
+    "noTracking": "טרם הונפק מספר מעקב",
+    "reorder": "הזמנה חוזרת",
+    "reorderDone": "{{added}} פריטים נוספו לעגלה.",
+    "reorderPartial": "{{added}} מתוך {{total}} פריטים נוספו לעגלה. לא נוספו: {{names}}."
   }
 }

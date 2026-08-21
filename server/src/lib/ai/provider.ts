@@ -34,6 +34,14 @@ export interface ExtractedCriteriaNames {
   healthGoals: string[]
   /** Free words ("קפסולות", "drops") — mapped to the DosageForm enum. */
   dosageForms: string[]
+  /**
+   * ISSUE-150 — a PRODUCT-NAME-ish phrase ("בריאמיל", "liposomal vitamin
+   * C"). Mapped to the catalogue's own `q` free-text search — the same
+   * engine /catalog runs (§4.8.1: not a second search engine), so the
+   * agent can finally surface a SPECIFIC product the user names instead
+   * of clarifying at it.
+   */
+  productQuery?: string
   /** Validated-decimal strings, same contract as GET /api/products. */
   priceMin?: string
   priceMax?: string

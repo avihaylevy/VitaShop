@@ -248,6 +248,58 @@ describe('who may read a profile', () => {
   })
 })
 
+describe('ISSUE-173 — the email edit (DEC-090 O2 amended by the user)', () => {
+  it('a valid new email lands, normalised, and a revert restores it', async () => {
+    const cookie = await signIn(ALICE)
+    const fresh = 'ZZ-Account-Alice-NEW@Example.Test'
+    const r = await fetch(`${baseUrl}/api/account/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: fresh }),
+    })
+    expect(r.status).toBe(200)
+    const body = (await r.json()) as { profile: { email: string } }
+    // normalizeEmail's form — lowercased.
+    expect(body.profile.email).toBe(fresh.toLowerCase())
+    const row = await prisma.user.findUniqueOrThrow({
+      where: { id: aliceId },
+      select: { email: true },
+    })
+    expect(row.email).toBe(fresh.toLowerCase())
+    // Back to the fixture email so the rest of the suite keeps signing in.
+    await prisma.user.update({ where: { id: aliceId }, data: { email: ALICE } })
+  })
+
+  it("🔴 a TAKEN email is the named refusal, and Alice's row is untouched", async () => {
+    const cookie = await signIn(ALICE)
+    const r = await fetch(`${baseUrl}/api/account/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: BOB }),
+    })
+    expect(r.status).toBe(400)
+    const body = (await r.json()) as { error: { codes: string[] } }
+    expect(body.error.codes).toContain('EMAIL_TAKEN')
+    const row = await prisma.user.findUniqueOrThrow({
+      where: { id: aliceId },
+      select: { email: true },
+    })
+    expect(row.email).toBe(ALICE)
+  })
+
+  it('a malformed email is EMAIL_INVALID before any write', async () => {
+    const cookie = await signIn(ALICE)
+    const r = await fetch(`${baseUrl}/api/account/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: 'not-an-email' }),
+    })
+    expect(r.status).toBe(400)
+    const body = (await r.json()) as { error: { codes: string[] } }
+    expect(body.error.codes).toContain('EMAIL_INVALID')
+  })
+})
+
 describe('how long the response is allowed to live', () => {
   it('🔴 says no-store — personal data over a cacheable GET', async () => {
     const cookie = await signIn(ALICE)

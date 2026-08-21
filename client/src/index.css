@@ -97,6 +97,19 @@
   --state-oos: #66625A;
 
   /*
+   * The agent accent — ISSUE-144 (the eighth list): the assistant must be
+   * "in a colour distinct from the rest of the site but still fitting".
+   * One meaning, like every colour above: THE ASSISTANT, nothing else.
+   * Deep muted plum — the one hue family no other token occupies, in the
+   * same low-saturation register as the rest of the palette. Measured:
+   * white on --agent 7.70:1 · white on --agent-strong 10.49:1 · ink on
+   * --agent-soft 12.58:1 · --agent as text on --well 7.70:1.
+   */
+  --agent: #7A3E6B;
+  --agent-strong: #5F2E53;
+  --agent-soft: #F3E4EE;
+
+  /*
    * Shape — §3. 999px is circular-only: status dots, count badges.
    * --r-sm is aliased below as --radius-compact, NOT --radius-sm —
    * Tailwind v4 already defines a built-in --radius-sm (0.25rem);
@@ -161,6 +174,10 @@
   --color-state-commerce: var(--state-commerce);
   --color-state-lowstock: var(--state-lowstock);
   --color-state-oos: var(--state-oos);
+
+  --color-agent: var(--agent);
+  --color-agent-strong: var(--agent-strong);
+  --color-agent-soft: var(--agent-soft);
 
   --radius-card: var(--r);
   --radius-compact: var(--r-sm);
@@ -322,13 +339,38 @@ body {
 
 /*
  * SearchBox's one exception to "every control has its own ring"
- * (DESIGN_SYSTEM.md §4): keyboard focus on the input outlines the wrapper.
+ * (DESIGN_SYSTEM.md §4): keyboard focus on the input emphasizes the wrapper.
  * The submit IconButton keeps its own .focus-ring without also triggering a
- * second wrapper outline around the whole field.
+ * second wrapper treatment around the whole field.
+ *
+ * ISSUE-147 (the ninth list): the old treatment drew a 2px OUTLINE offset
+ * outside the field's own border — two nested rectangles, the "doubled"
+ * frame the user rejected (text inputs match :focus-visible on POINTER
+ * focus too in Chromium, so every click showed it). One frame now: the
+ * border itself turns brand-teal and a soft same-hue halo hugs it — a
+ * visible focus indicator (teal-on-white 4.6:1) without a second box.
  */
+.searchbox {
+  transition:
+    border-color var(--motion-fast) var(--ease),
+    box-shadow var(--motion-fast) var(--ease);
+}
+
+.searchbox:hover {
+  border-color: var(--brand-teal);
+}
+
 .searchbox:has(input:focus-visible) {
-  outline: var(--focus-w) solid var(--brand-teal-strong);
-  outline-offset: var(--focus-off);
+  border-color: var(--brand-teal);
+  box-shadow:
+    0 0 0 3px rgb(21 112 106 / 0.16),
+    0 2px 10px rgb(31 37 46 / 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .searchbox {
+    transition: none;
+  }
 }
 
 .sr-only-focusable:focus {
@@ -388,5 +430,81 @@ body {
   100% {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/*
+ * ISSUE-144 — the agent FAB's "floating" halo: a soft plum ring behind the
+ * pill that breathes on a slow cycle. Transform+opacity only (GPU-composited,
+ * never box-shadow animation), motion-safe-gated at the call site. The pause
+ * between breaths lives inside the timeline (60%..100% at rest) so the
+ * rhythm reads as calm, not as a notification demanding a click.
+ */
+@keyframes agent-fab-halo {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  45% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+  60%,
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+  85% {
+    opacity: 0.45;
+  }
+}
+
+/*
+ * ISSUE-144 — the typing indicator's three dots, staggered at the call site
+ * with animation-delay. Opacity+transform only; motion-reduce collapses to
+ * static dots (the "assistant is typing" text is carried by the composer's
+ * aria-disabled state and the widget's live region, never by this ornament).
+ */
+@keyframes agent-typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+/*
+ * ISSUE-157 — the single-frame focus for STANDALONE search inputs (the
+ * admin lists' q fields). Same treatment as .searchbox above: the border
+ * itself turns brand-teal with a soft same-hue halo — never an offset
+ * outline drawing a second box. Applied instead of .focus-ring on search
+ * fields that have no wrapper label.
+ */
+.search-field {
+  outline: none;
+  transition:
+    border-color var(--motion-fast) var(--ease),
+    box-shadow var(--motion-fast) var(--ease);
+}
+
+.search-field:hover {
+  border-color: var(--brand-teal);
+}
+
+.search-field:focus-visible {
+  border-color: var(--brand-teal);
+  box-shadow:
+    0 0 0 3px rgb(21 112 106 / 0.16),
+    0 2px 10px rgb(31 37 46 / 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-field {
+    transition: none;
   }
 }

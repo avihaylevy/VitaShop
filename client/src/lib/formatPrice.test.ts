@@ -6,6 +6,13 @@ import { formatPrice } from './formatPrice'
 const VERIFIED_PRICES = ['94.90', '69.90', '49.90', '84.90', '64.90', '79.90']
 
 describe('formatPrice', () => {
+  it('ISSUE-167: the ₪ sign FOLLOWS the number, both languages', () => {
+    // Pinned as full strings — an order regression cannot hide behind
+    // toContain (the vacuous-check family).
+    expect(formatPrice('109.90', 'en')).toBe('109.90 ₪')
+    expect(formatPrice('109.90', 'he')).toBe('109.90 ₪')
+  })
+
   it.each(VERIFIED_PRICES)('formats %s for he with the shekel sign and two decimals', (price) => {
     const result = formatPrice(price, 'he')
     expect(result).toContain('₪')

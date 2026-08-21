@@ -5,6 +5,8 @@ import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import { requestOrder } from '../lib/ordersApi'
+import { addCartItem } from '../lib/cartApi'
+import { useCartRefresh } from '../state/CartContext'
 import { orderStatusLabelKey } from '../lib/orderStatus'
 import type { SupportedLanguage } from '../i18n'
 import type { OrderDetail, OrderDetailResult } from '../types/orderHistory'
@@ -137,6 +139,36 @@ export function OrderDetailPage() {
 function OrderBody({ order, language }: { order: OrderDetail; language: SupportedLanguage }) {
   const { t, i18n } = useTranslation('orders')
   const statusKey = orderStatusLabelKey(order.status)
+  const refreshCart = useCartRefresh()
+  // ISSUE-172 — reorder. Sequential adds through the SAME cart API every
+  // surface uses (server clamps stock, refuses inactive rows); the outcome
+  // is announced from an always-mounted status region, and the button
+  // survives its own success (aria-disabled while busy, never unmounted).
+  const [reorderBusy, setReorderBusy] = useState(false)
+  const [reorderOutcome, setReorderOutcome] = useState<{ id: number; text: string } | null>(null)
+
+  async function reorder() {
+    if (reorderBusy) return
+    setReorderBusy(true)
+    const failures: string[] = []
+    let added = 0
+    for (const item of order.items) {
+      const name = language === 'he' ? item.nameHe : item.nameEn
+      const result = await addCartItem(item.slug, item.quantity, name)
+      if (result.ok) {
+        added += 1
+      } else {
+        failures.push(name)
+      }
+    }
+    await refreshCart()
+    setReorderBusy(false)
+    const summary =
+      failures.length === 0
+        ? t('detail.reorderDone', { added })
+        : t('detail.reorderPartial', { added, total: order.items.length, names: failures.join(', ') })
+    setReorderOutcome((previous) => ({ id: (previous?.id ?? 0) + 1, text: summary }))
+  }
 
   return (
     <article className="mt-4">
@@ -149,6 +181,21 @@ function OrderBody({ order, language }: { order: OrderDetail; language: Supporte
         {' · '}
         {statusKey === null ? order.status : t(statusKey)}
       </p>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button
+          variant="secondary"
+          loading={reorderBusy}
+          aria-disabled={reorderBusy || undefined}
+          onClick={() => void reorder()}
+        >
+          {t('detail.reorder')}
+        </Button>
+        {/* Always mounted; keyed so a repeat outcome re-announces. */}
+        <p role="status" aria-live="polite" className="text-sm text-brand-teal">
+          {reorderOutcome !== null && <span key={reorderOutcome.id}>{reorderOutcome.text}</span>}
+        </p>
+      </div>
 
       <ul className="mt-4 flex flex-col gap-2">
         {order.items.map((item) => (

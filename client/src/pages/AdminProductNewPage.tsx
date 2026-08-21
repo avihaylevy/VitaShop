@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
@@ -9,6 +9,7 @@ import {
   uploadAdminProductImage,
 } from '../lib/adminProductsApi'
 import { DOSAGE_FORM_KEYS } from '../lib/catalogApi'
+import { normalizePriceInput } from '../lib/adminPrice'
 import type {
   AdminProductDuplicate,
   AdminProductOptions,
@@ -84,6 +85,23 @@ export function AdminProductNewPage() {
   const [uploadStatus, setUploadStatus] = useState('')
   const [failureText, setFailureText] = useState('')
   const [created, setCreated] = useState<{ product: AdminProductRow; id: number } | null>(null)
+  /** ISSUE-145 — the outcome block beside the submit button; scrolled into
+   * view on every settle so the refusal (or the success) is never rendered
+   * off-screen after a long-form submit. */
+  const outcomeRef = useRef<HTMLDivElement>(null)
+
+  // Review fix: called EXPLICITLY when an outcome lands, never from an
+  // effect keyed on the outcome values — the effect version scrolled to a
+  // STALE success at submit-start (setFailureText('') re-fired it while
+  // `created` still held the previous product) and stayed silent when the
+  // same refusal text repeated. Nearest edge only — no smooth scroll (the
+  // motion-reduce rule); typeof-guarded: jsdom implements neither
+  // scrollIntoView nor scrollTo (the AgentPanel scrollTop note's sibling).
+  function showOutcome() {
+    if (typeof outcomeRef.current?.scrollIntoView === 'function') {
+      outcomeRef.current.scrollIntoView({ block: 'nearest' })
+    }
+  }
 
   useEffect(() => {
     // A staleness flag, honestly named (review finding: an AbortController
@@ -179,7 +197,7 @@ export function AdminProductNewPage() {
       dosageForm: form.dosageForm,
       packageQuantity: asNumber(form.packageQuantity),
       usageInstructions: form.usageInstructions,
-      price: form.price,
+      price: normalizePriceInput(form.price),
       stockQuantity: asNumber(form.stockQuantity),
       descriptionHe: form.descriptionHe,
       descriptionEn: form.descriptionEn,
@@ -206,6 +224,7 @@ export function AdminProductNewPage() {
         // surfaced the collision.
         const twin = result.failure.duplicate
         setDuplicateOf(twin)
+        showOutcome()
         setFailureText(
           [
             t('products.duplicate.message', {
@@ -237,12 +256,14 @@ export function AdminProductNewPage() {
       } else {
         setFailureText(t('products.failure.server'))
       }
+      showOutcome()
       return
     }
 
     // Success: announced (keyed, re-announces on repeat), form cleared for
     // the next product — the form itself never unmounts.
     setCreated((previous) => ({ product: result.product, id: (previous?.id ?? 0) + 1 }))
+    showOutcome()
     // A just-created company joins the picker so the NEXT product can pick
     // it without a reload (the server answers the resolved brand row).
     setOptionsState((current) =>
@@ -279,29 +300,6 @@ export function AdminProductNewPage() {
     <main className="mx-auto w-full max-w-2xl px-4 py-8">
       <h1 className="heading-page">{t('products.newTitle')}</h1>
       <p className="mt-2 text-sm text-text-muted">{t('products.newIntro')}</p>
-
-      {/* Always-mounted outcome regions. The SLUG is bidi-isolated (review
-          finding: a Latin hyphenated token at the end of an RTL sentence
-          can reorder — and this screen's whole purpose per DEC-088 O4 is
-          showing the identity the server chose, exactly). */}
-      <p role="status" aria-live="polite" className="mt-3 text-sm text-brand-teal">
-        {created ? (
-          <Trans
-            i18nKey="products.createdAs"
-            t={t}
-            values={{
-              name: i18n.language === 'he' ? created.product.nameHe : created.product.nameEn,
-              slug: created.product.slug,
-            }}
-            components={{ slugSpan: <span dir="ltr" style={{ unicodeBidi: 'isolate' }} /> }}
-          />
-        ) : (
-          ''
-        )}
-      </p>
-      <p role="alert" className="mt-1 text-sm text-state-error">
-        {failureText}
-      </p>
 
       {optionsState.status === 'loading' && (
         <p className="mt-6 text-text-muted">{t('products.loading')}</p>
@@ -704,6 +702,37 @@ export function AdminProductNewPage() {
           </Button>
         </form>
       )}
+
+      {/* Always-mounted outcome regions, BESIDE the submit button — ISSUE-145:
+          they used to sit at the top of the page, so a refusal after
+          submitting a long form rendered entirely off-screen and the click
+          read as "nothing happened". scrollIntoView below makes the outcome
+          visible even when the regions are just outside the viewport. The
+          SLUG is bidi-isolated (review finding: a Latin hyphenated token at
+          the end of an RTL sentence can reorder — and this screen's whole
+          purpose per DEC-088 O4 is showing the identity the server chose,
+          exactly). */}
+
+      <div ref={outcomeRef}>
+        <p role="status" aria-live="polite" className="mt-3 text-sm text-brand-teal">
+          {created ? (
+            <Trans
+              i18nKey="products.createdAs"
+              t={t}
+              values={{
+                name: i18n.language === 'he' ? created.product.nameHe : created.product.nameEn,
+                slug: created.product.slug,
+              }}
+              components={{ slugSpan: <span dir="ltr" style={{ unicodeBidi: 'isolate' }} /> }}
+            />
+          ) : (
+            ''
+          )}
+        </p>
+        <p role="alert" className="mt-1 text-sm text-state-error">
+          {failureText}
+        </p>
+      </div>
 
       <p className="mt-6 text-sm">
         <Link to="/admin/products" className={`${FOCUS_RING} rounded-compact text-brand-teal underline`}>

@@ -549,6 +549,34 @@ describe('MILESTONE-011 Checkpoint D — the TEST-070..077 acceptance sweep (the
     expect(body.medicalStop).toBe(false)
   })
 
+  it('🔴 ISSUE-150: a message NAMING a product finds it through the catalogue search, with the q handoff-ready', async () => {
+    // "בריאמיל" is no taxonomy label — before ISSUE-150 this clarified.
+    // Now the productQuery rides the catalogue's own q search and the
+    // seeded בריאמיל+ MINI product comes back as a real DTO.
+    const url = await mockApp()
+    const response = await chat({ message: 'תוכל להראות לי בריאמיל?', lang: 'he' }, url)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as ChatEnvelope
+    expect(body.clarifyingQuestion).toBeNull()
+    expect(body.clarifyCode).toBeNull()
+    expect(body.products.length).toBeGreaterThan(0)
+    expect(body.products.every((p) => `${p.nameHe} ${p.nameEn}`.includes('בריאמיל') || p.nameEn.toLowerCase().includes('briamil'))).toBe(true)
+  })
+
+  it('review pin: a zero-match q RIDING another criterion is STRIPPED from the handoff — the survivor is offered alone', async () => {
+    // "qqqq wwww eeee עד 1" → q (matches nothing) + priceMax 1 (matches
+    // nothing at ₪1). The handoff must offer ONLY the price filter — a q
+    // the search already rejected would be a link to a known-empty search.
+    const url = await mockApp()
+    const response = await chat({ message: 'qqqq wwww eeee עד 1', lang: 'he' }, url)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as ChatEnvelope
+    expect(body.emptyResult).toBe(true)
+    expect(body.handoff).not.toBeNull()
+    expect(body.handoff!.q).toBeUndefined()
+    expect(body.handoff!.maxPrice).toBe('1')
+  })
+
   it('🔴 TEST-073(3): every returned product exists in the database with the SAME price', async () => {
     const url = await mockApp()
     const response = await chat({ message: 'מגנזיום', lang: 'he' }, url)
@@ -585,11 +613,17 @@ describe('MILESTONE-011 Checkpoint D — the TEST-070..077 acceptance sweep (the
   })
 
   it('unknown vocabulary clarifies — never guesses, never dumps the catalogue', async () => {
+    // ISSUE-150 reshaped the wire: unmatched content travels as a free-text
+    // search and the SEARCH decides. Gibberish matches nothing, so the
+    // route answers the CODED clarify — still a clarification, still zero
+    // products, still no handoff link promising an empty search.
     const url = await mockApp()
     const response = await chat({ message: 'qqqq wwww eeee', lang: 'en' }, url)
     expect(response.status).toBe(200)
     const body = (await response.json()) as ChatEnvelope
-    expect(body.clarifyingQuestion).not.toBeNull()
+    expect(body.clarifyCode).toBe('NO_CRITERIA_MATCHED')
+    expect(body.emptyResult).toBe(false)
+    expect(body.handoff).toBeNull()
     expect(body.products).toEqual([])
   })
 

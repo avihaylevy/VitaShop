@@ -50,6 +50,9 @@
     "selfPickup": "Self pickup — no delivery address",
     "shippingCost": "Shipping",
     "tracking": "Tracking number",
-    "noTracking": "No tracking number yet"
+    "noTracking": "No tracking number yet",
+    "reorder": "Reorder",
+    "reorderDone": "{{added}} items were added to the cart.",
+    "reorderPartial": "{{added}} of {{total}} items were added to the cart. Not added: {{names}}."
   }
 }

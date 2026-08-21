@@ -203,6 +203,8 @@ export async function patchShopperProfile(fields: {
   firstName: string
   lastName: string
   phone: string
+  /** ISSUE-173 (DEC-090 O2 amended) — sent only when the shopper changed it. */
+  email?: string
 }): Promise<ProfileWriteResult> {
   const raw = await accountCall('/profile', { method: 'PATCH', body: fields })
   if (raw === null) return { ok: false, failure: 'unavailable' }

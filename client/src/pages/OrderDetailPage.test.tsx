@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen , waitFor} from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../i18n'
@@ -181,4 +181,41 @@ describe('one order', () => {
       '/account/orders',
     )
   })
+
+  it('ISSUE-172: Reorder POSTs each line through the cart API and announces the outcome', async () => {
+    // First call: the order. Then one POST per item (here: one), which the
+    // page follows with a cart refresh attempt (tolerated as any response).
+    const calls: { url: string; init?: RequestInit }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url: String(url), init })
+        if (String(url).endsWith('/api/orders/o1')) {
+          return { status: 200, json: async () => DETAIL } as unknown as Response
+        }
+        if (String(url).endsWith('/api/cart/items')) {
+          return {
+            status: 200,
+            json: async () => ({ cart: { id: 'c1', items: [], clubMember: false, clubSavings: '0.00' }, dropped: [] }),
+          } as unknown as Response
+        }
+        return { status: 200, json: async () => ({}) } as unknown as Response
+      }),
+    )
+    renderDetail()
+    const button = await screen.findByRole('button', { name: 'Reorder' })
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      const post = calls.find((c) => c.url.endsWith('/api/cart/items') && c.init?.method === 'POST')
+      expect(post).toBeDefined()
+      expect(JSON.parse(String(post!.init!.body))).toEqual({ slug: 'magnesium-citrate', quantity: 2 })
+    })
+    // The button survived its own success, and the outcome was voiced.
+    expect(screen.getByRole('button', { name: 'Reorder' })).toBeDefined()
+    await waitFor(() =>
+      expect(screen.getAllByRole('status').some((n) => /added to the cart/.test(n.textContent ?? ''))).toBe(true),
+    )
+  })
+
 })

@@ -6,6 +6,7 @@ import { FOCUS_RING } from '../components/ui/focusRing'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import { payForCheckout, requestCheckoutQuote } from '../lib/checkoutApi'
 import { newIdempotencyKey } from '../lib/idempotencyKey'
+import { useCartRefresh } from '../state/CartContext'
 import {
   DEMO_CARD_NUMBER,
   cardIsComplete,
@@ -171,7 +172,6 @@ export function CheckoutPage() {
   }
 
   const [saveAddress, setSaveAddress] = useState(false)
-  const [outcome, setOutcome] = useState<'success' | 'failure'>('success')
   const [payState, setPayState] = useState<
     | { status: 'idle' }
     | { status: 'paying' }
@@ -187,6 +187,10 @@ export function CheckoutPage() {
    */
   const idempotencyKey = useRef(newIdempotencyKey())
   const confirmationHeading = useRef<HTMLHeadingElement>(null)
+  // ISSUE-178 — the order transaction CLEARS the cart server-side, but the
+  // app-wide CartContext (header badge, drawer, /cart) kept the stale
+  // snapshot until its next mount. The success branch re-reads it.
+  const refreshCart = useCartRefresh()
 
   useEffect(() => {
     let live = true
@@ -307,7 +311,11 @@ export function CheckoutPage() {
       deliveryMethod: quote.deliveryMethod,
       address: quote.deliveryMethod === 'self_pickup' ? null : { ...address, zipCode: address.zipCode || null },
       idempotencyKey: idempotencyKey.current,
-      simulatedOutcome: outcome,
+      // ISSUE-174 (the eleventh list, the user's own spec deviation from
+      // REQ-F-043's selector): the outcome control is gone from the UI —
+      // the client always requests success. The declined branch stays
+      // fully supported server-side (and still renders here on a 402).
+      simulatedOutcome: 'success',
       // Belt to the checkbox gate: consent is only meaningful for 'new'.
       saveAddress: saveAddress && pickedAddressId === 'new',
     })
@@ -320,6 +328,10 @@ export function CheckoutPage() {
      */
     if (result.ok) {
       setPayState({ status: 'done', order: result.order })
+      // ISSUE-178: the server emptied the cart inside the order
+      // transaction; pull the shared state up to date so the badge, the
+      // drawer and /cart show the emptiness immediately.
+      void refreshCart()
       return
     }
 
@@ -344,8 +356,18 @@ export function CheckoutPage() {
    * is the one thing the shopper keeps.
    */
   if (payState.status === 'done') {
+    // ISSUE-176 — the receipt is a RECEIPT now: a centred ticket card with
+    // a confirmation mark, the order number in its own stub, and the total
+    // writ large. Same a11y spine as before (focused role=status heading,
+    // isolated numeric runs); the creativity is composition, not noise.
     return (
-      <main className="mx-auto flex max-w-[900px] flex-col gap-4 px-4 py-6">
+      <main className="mx-auto flex max-w-md flex-col gap-4 px-4 py-10">
+        <div className="flex flex-col items-center gap-4 rounded-2xl border border-border-hairline bg-well p-7 text-center shadow-[0_10px_36px_rgb(31_37_46/0.08)]">
+          <span aria-hidden="true" className="flex size-14 items-center justify-center rounded-round bg-brand-teal text-white">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4.5 12.5 9.5 17.5 19.5 6.5" />
+            </svg>
+          </span>
         {/*
           🔴 THE BUTTON THAT WAS PRESSED IS UNMOUNTED, so focus falls to
           <body> and nothing is announced: a keyboard or screen-reader user
@@ -353,14 +375,15 @@ export function CheckoutPage() {
           `role="status"` announces it; `tabIndex={-1}` plus the autofocus
           effect puts the caret on it.
         */}
-        <h1
-          ref={confirmationHeading}
-          tabIndex={-1}
-          role="status"
-          className={`${FOCUS_RING} rounded-card heading-page`}
-        >
-          {t('done.heading')}
-        </h1>
+          <h1
+            ref={confirmationHeading}
+            tabIndex={-1}
+            role="status"
+            className={`${FOCUS_RING} rounded-card heading-page`}
+          >
+            {t('done.heading')}
+          </h1>
+          <p className="text-sm leading-6 text-text-muted">{t('done.subtitle')}</p>
         {/*
           🔴 THE NUMBER IS ISOLATED, NOT THE SENTENCE. `dir="ltr"` on the whole
           paragraph forced the Hebrew label into LTR and put the colon on the
@@ -369,28 +392,29 @@ export function CheckoutPage() {
           stepper — which is what "LTR numeric isolation" means in
           .claude/rules/browser-verification.md.
         */}
-        <p className="heading-section">
-          <Trans
-            i18nKey="done.orderNumber"
-            t={t}
-            values={{ number: payState.order.orderNumber }}
-            components={{ n: <span dir="ltr" style={{ unicodeBidi: 'isolate' }} /> }}
-          />
-        </p>
-        <p className="flex flex-wrap items-baseline gap-1.5 text-sm">
-          <span className="text-text-muted">{t('done.total')}</span>
-          <PriceBlock price={payState.order.totalAmount} />
-        </p>
-        <p className="text-sm text-text-muted">{estimateText(payState.order.estimate, t)}</p>
+          {/* The ticket stub — dashed like a tear-off, the number isolated. */}
+          <p className="w-full rounded-card border border-dashed border-border-control bg-surface-page px-4 py-3 text-sm font-semibold text-text-ink">
+            <Trans
+              i18nKey="done.orderNumber"
+              t={t}
+              values={{ number: payState.order.orderNumber }}
+              components={{ n: <span dir="ltr" style={{ unicodeBidi: 'isolate' }} /> }}
+            />
+          </p>
+          <p className="flex flex-wrap items-baseline justify-center gap-1.5">
+            <span className="text-sm text-text-muted">{t('done.total')}</span>
+            <PriceBlock price={payState.order.totalAmount} size="price" />
+          </p>
+          <p className="text-sm leading-6 text-text-muted">{estimateText(payState.order.estimate, t)}</p>
         {/*
           🔴 A REPLAY IS A CONFIRMATION, AND IT SAYS SO. §8.12 records the
           opposite defect four times: a retry told the shopper the order
           failed, for an order that existed. This says the order exists AND
           that nothing was charged twice.
         */}
-        {payState.order.replayed && (
-          <p className="text-sm text-text-ink">{t('done.replayed')}</p>
-        )}
+          {payState.order.replayed && (
+            <p className="text-sm text-text-ink">{t('done.replayed')}</p>
+          )}
 
         {/*
           🔴 THE STORED STATUS, RENDERED — it was validated, carried and then
@@ -400,16 +424,22 @@ export function CheckoutPage() {
           (ISSUE-082), rendered an identical "Order received". Checkpoint F0's
           labels exist for exactly this.
         */}
-        {payState.order.status && orderStatusLabelKey(payState.order.status) && (
-          <p className="text-sm text-text-muted">
-            {t('done.status', {
-              status: statusT(orderStatusLabelKey(payState.order.status)!),
-            })}
-          </p>
-        )}
-        <Link to="/catalog" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
-          {t('done.backToCatalog')}
-        </Link>
+          {payState.order.status && orderStatusLabelKey(payState.order.status) && (
+            <p className="text-sm text-text-muted">
+              {t('done.status', {
+                status: statusT(orderStatusLabelKey(payState.order.status)!),
+              })}
+            </p>
+          )}
+          <div className="mt-1 flex flex-wrap items-center justify-center gap-4">
+            <Link to="/account/orders" className={`${FOCUS_RING} rounded-card text-sm font-medium text-brand-teal underline transition-colors duration-150 ease-standard hover:text-brand-teal-strong hover:decoration-2`}>
+              {t('done.viewOrders')}
+            </Link>
+            <Link to="/catalog" className={`${FOCUS_RING} rounded-card text-sm font-medium text-brand-teal underline transition-colors duration-150 ease-standard hover:text-brand-teal-strong hover:decoration-2`}>
+              {t('done.backToCatalog')}
+            </Link>
+          </div>
+        </div>
       </main>
     )
   }
@@ -787,22 +817,6 @@ export function CheckoutPage() {
             real thing and invite someone to type a real number into it.
           */}
           <p className="mb-2 text-xs text-text-muted">{t('pay.simulated')}</p>
-
-          <div className="mb-3 flex flex-col gap-2" role="group" aria-label={t('pay.outcomeLegend')}>
-            {(['success', 'failure'] as const).map((value) => (
-              <label key={value} className="flex min-h-11 items-center gap-2 text-sm text-text-ink">
-                <input
-                  type="radio"
-                  name="simulatedOutcome"
-                  value={value}
-                  checked={outcome === value}
-                  onChange={() => setOutcome(value)}
-                  className={`${FOCUS_RING} size-4 shrink-0 accent-brand-teal`}
-                />
-                <span>{value === 'success' ? t('pay.outcomeSuccess') : t('pay.outcomeFailure')}</span>
-              </label>
-            ))}
-          </div>
 
           {/* ISSUE-093 — opt-in, default off; M-009: offered only for a NEW
               address (saving an already-saved row would duplicate it, and

@@ -181,6 +181,75 @@ describe('🔴 inline save — only the CHANGED fields travel', () => {
   })
 })
 
+describe('🔴 ISSUE-153 — the full editor', () => {
+  it('opens from its disclosure, PATCHes ONLY the changed description, and closes state survives the save', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, listBody([row()])))
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Test product')).toBeDefined())
+
+    const disclosure = screen.getByRole('button', { name: 'Full edit' })
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(disclosure)
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
+
+    fetchMock.mockResolvedValueOnce(
+      mockResponse(200, { product: row({ descriptionHe: 'תיאור חדש' }) }),
+    )
+    fireEvent.change(screen.getByLabelText('Description in Hebrew'), {
+      target: { value: 'תיאור חדש' },
+    })
+    // Two Save buttons exist now (inline + editor); the editor's is the
+    // enabled one — the inline row is not dirty.
+    const saves = screen.getAllByRole('button', { name: 'Save' })
+    const editorSave = saves.find((b) => b.getAttribute('aria-disabled') !== 'true')!
+    fireEvent.click(editorSave)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [url, init] = fetchMock.mock.calls[1] as [string, { method: string; body: string }]
+    expect(url).toBe(`${BASE_URL}/api/admin/products/prod-1`)
+    expect(init.method).toBe('PATCH')
+    // 🔴 ONLY the changed field travels — names, usage, warnings, package
+    // and the dietary claims were untouched.
+    expect(JSON.parse(init.body)).toEqual({ descriptionHe: 'תיאור חדש' })
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('was updated'))
+    // The editor stayed open and its disclosure survived the save.
+    expect(screen.getByRole('button', { name: 'Close editor' })).toBeDefined()
+  })
+
+  it('ISSUE-158: a dosage-form change travels alone through the PATCH', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, listBody([row()])))
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Test product')).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: 'Full edit' }))
+
+    fetchMock.mockResolvedValueOnce(mockResponse(200, { product: row({ dosageForm: 'SYRUP' }) }))
+    fireEvent.change(screen.getByLabelText('Dosage form'), { target: { value: 'SYRUP' } })
+    const saves = screen.getAllByRole('button', { name: 'Save' })
+    fireEvent.click(saves.find((b) => b.getAttribute('aria-disabled') !== 'true')!)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [, init] = fetchMock.mock.calls[1] as [string, { method: string; body: string }]
+    expect(JSON.parse(init.body)).toEqual({ dosageForm: 'SYRUP' })
+  })
+
+  it('a dietary claim change travels as the column tri-state (null for "no claim")', async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(200, listBody([row({ isKosher: true })])))
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Test product')).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: 'Full edit' }))
+
+    fetchMock.mockResolvedValueOnce(mockResponse(200, { product: row({ isKosher: null }) }))
+    fireEvent.change(screen.getByLabelText('Kosher'), { target: { value: '' } })
+    const saves = screen.getAllByRole('button', { name: 'Save' })
+    fireEvent.click(saves.find((b) => b.getAttribute('aria-disabled') !== 'true')!)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [, init] = fetchMock.mock.calls[1] as [string, { method: string; body: string }]
+    expect(JSON.parse(init.body)).toEqual({ isKosher: null })
+  })
+})
+
 describe('🔴 the INV-03 toggle', () => {
   it('deactivate announces, and the SAME control becomes the reactivation', async () => {
     fetchMock.mockResolvedValueOnce(mockResponse(200, listBody([row()])))

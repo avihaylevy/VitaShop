@@ -377,7 +377,7 @@ export function CartPage() {
               <p className="mt-6">
                 <Link
                   to="/catalog"
-                  className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline`}
+                  className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline transition-colors duration-150 ease-standard hover:text-brand-teal-strong hover:decoration-2`}
                 >
                   {t('page.backToCatalog')}
                 </Link>

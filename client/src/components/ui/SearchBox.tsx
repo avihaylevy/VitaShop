@@ -2,7 +2,8 @@ import { useEffect, useId, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { SearchIcon } from '../icons'
-import { IconButton } from './IconButton'
+import { Icon } from './Icon'
+import { FOCUS_RING } from './focusRing'
 import {
   buildCatalogSearchParams,
   nextCatalogUrlState,
@@ -86,13 +87,24 @@ export function SearchBox({ className = '' }: SearchBoxProps) {
           aria-label={t('search.label')}
           className="h-full min-w-0 flex-1 bg-transparent text-base text-text-ink outline-none placeholder:text-text-muted"
         />
-        <IconButton
+        {/* ISSUE-159 — hand-styled, not IconButton: the primitive's square
+            rounded-card hover box broke the pill's geometry (the user's
+            screenshot). A ROUND tint that matches the pill's own curvature,
+            teal-soft instead of gray, with a light press squeeze. Still a
+            44px target (size-11 hit area), radius collision avoided the
+            documented way (no equal-specificity override of rounded-card). */}
+        <button
           type="submit"
-          icon={<SearchIcon />}
           aria-label={t('search.submit')}
-          variant="ghost"
-          className="shrink-0"
-        />
+          // ISSUE-169: the tint returned to the STANDARD control hover
+          // (surface-sunken, every other button's color) — the round shape
+          // and fitted size stay, only the foreign teal wash left.
+          className={`${FOCUS_RING} inline-flex size-11 shrink-0 items-center justify-center rounded-round text-text-muted transition-[background-color,color,transform] duration-150 ease-standard hover:bg-surface-sunken hover:text-text-ink active:scale-[0.92] motion-reduce:transition-none`}
+        >
+          <Icon size={18}>
+            <SearchIcon />
+          </Icon>
+        </button>
       </label>
     </form>
   )

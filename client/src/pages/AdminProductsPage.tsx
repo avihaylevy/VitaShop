@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
@@ -10,6 +10,8 @@ import {
   requestAdminProducts,
   setAdminProductActive,
 } from '../lib/adminProductsApi'
+import { normalizePriceInput } from '../lib/adminPrice'
+import { DOSAGE_FORM_KEYS } from '../lib/catalogApi'
 import type {
   AdminProductRow,
   AdminProductsFailure,
@@ -43,6 +45,33 @@ type LoadState =
 
 type Draft = { price: string; stock: string }
 
+/**
+ * ISSUE-153 — the full-edit drawer row. Exactly the PATCH route's editable
+ * vocabulary (adminProductForm.ts): names, descriptions, usage, warnings,
+ * package quantity, the three dietary claims, and (ISSUE-158) the dosage
+ * form. category/brand/slug are NOT patchable — deliberately absent
+ * (identity, not facts).
+ */
+type DetailDraft = {
+  nameHe: string
+  nameEn: string
+  dosageForm: string
+  descriptionHe: string
+  descriptionEn: string
+  usageInstructions: string
+  warningsAllergens: string
+  packageQuantity: string
+  isKosher: '' | 'true' | 'false'
+  isGlutenFree: '' | 'true' | 'false'
+  isVegan: '' | 'true' | 'false'
+}
+
+const DETAIL_DIETARY_KEYS = ['isKosher', 'isGlutenFree', 'isVegan'] as const
+
+function claimValue(claim: boolean | null): '' | 'true' | 'false' {
+  return claim === null ? '' : claim ? 'true' : 'false'
+}
+
 export function AdminProductsPage() {
   const { t, i18n } = useTranslation('admin')
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -57,6 +86,9 @@ export function AdminProductsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   /** Per-row edit drafts. Absent = untouched, so the row shows the server value. */
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  /** ISSUE-153 — which row's full editor is open, and its drafts. */
+  const [detailId, setDetailId] = useState<string | null>(null)
+  const [detailDrafts, setDetailDrafts] = useState<Record<string, DetailDraft>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
   /** Keyed announcements so repeat outcomes re-announce (the ClubPage pattern). */
   const [announced, setAnnounced] = useState<{ text: string; id: number } | null>(null)
@@ -79,6 +111,7 @@ export function AdminProductsPage() {
         // Server truth replaces every draft — a stale draft over a fresh
         // row would look like an unsaved edit that never happened.
         setDrafts({})
+        setDetailDrafts({})
       } else {
         setState({ status: 'failed', failure: result.failure })
       }
@@ -144,7 +177,96 @@ export function AdminProductsPage() {
         const { [product.id]: _dropped, ...rest } = current
         return rest
       })
+      setDetailDrafts((current) => {
+        const { [product.id]: _dropped, ...rest } = current
+        return rest
+      })
     }
+  }
+
+  /** ISSUE-153 — the full editor's draft machinery, the Draft pattern's twin. */
+  function initialDetailDraft(row: AdminProductRow): DetailDraft {
+    return {
+      nameHe: row.nameHe,
+      nameEn: row.nameEn,
+      dosageForm: row.dosageForm,
+      descriptionHe: row.descriptionHe,
+      descriptionEn: row.descriptionEn,
+      usageInstructions: row.usageInstructions,
+      warningsAllergens: row.warningsAllergens,
+      packageQuantity: String(row.packageQuantity),
+      isKosher: claimValue(row.isKosher),
+      isGlutenFree: claimValue(row.isGlutenFree),
+      isVegan: claimValue(row.isVegan),
+    }
+  }
+
+  function detailDraftFor(row: AdminProductRow): DetailDraft {
+    return detailDrafts[row.id] ?? initialDetailDraft(row)
+  }
+
+  function setDetailDraft(row: AdminProductRow, patch: Partial<DetailDraft>) {
+    setDetailDrafts((current) => ({
+      ...current,
+      [row.id]: { ...(current[row.id] ?? initialDetailDraft(row)), ...patch },
+    }))
+  }
+
+  /** Changed-fields-only PATCH body — an omitted field is never overwritten. */
+  function detailChanges(row: AdminProductRow): Record<string, unknown> {
+    const draft = detailDraftFor(row)
+    const base = initialDetailDraft(row)
+    const body: Record<string, unknown> = {}
+    for (const key of [
+      'nameHe',
+      'nameEn',
+      'dosageForm',
+      'descriptionHe',
+      'descriptionEn',
+      'usageInstructions',
+      'warningsAllergens',
+    ] as const) {
+      if (draft[key] !== base[key]) body[key] = draft[key]
+    }
+    if (draft.packageQuantity !== base.packageQuantity) {
+      // A blank travels as NaN → null on the wire; the server refuses BY
+      // NAME (the create form's asNumber reasoning, verbatim).
+      body.packageQuantity =
+        draft.packageQuantity.trim() === '' ? Number.NaN : Number(draft.packageQuantity)
+    }
+    for (const key of DETAIL_DIETARY_KEYS) {
+      if (draft[key] !== base[key]) body[key] = draft[key] === '' ? null : draft[key] === 'true'
+    }
+    return body
+  }
+
+  async function saveDetails(row: AdminProductRow) {
+    if (busyId !== null) return
+    const body = detailChanges(row)
+    if (Object.keys(body).length === 0) return
+
+    setBusyId(row.id)
+    setFailureText('')
+    const result = await patchAdminProduct(row.id, body)
+    setBusyId(null)
+
+    if (!result.ok) {
+      if (result.failure.kind === 'invalid') {
+        // ALL codes, not codes[0] — the create form's reasoning: one
+        // response already names every problem.
+        const codes = result.failure.codes
+        setFailureText(
+          codes.length > 0
+            ? codes.map((code) => t([`products.errors.${code}`, 'products.failure.server'])).join(' ')
+            : t('products.failure.server'),
+        )
+      } else {
+        setFailureText(failureMessage(result.failure.kind))
+      }
+      return
+    }
+    replaceRow(result.product)
+    announce(t('products.saved', { name: rowName(result.product) }))
   }
 
   function failureMessage(kind: string): string {
@@ -170,7 +292,10 @@ export function AdminProductsPage() {
      * A blank stock parses to null on the wire (JSON has no NaN), which
      * the server refuses BY NAME rather than reading as zero.
      */
-    const priceChanged = draft.price !== row.price
+    // ISSUE-152: "190" means ₪190.00 — completed BEFORE the dirty check so
+    // typing the canonical value's shorthand over itself stays a no-op.
+    const normalizedPrice = normalizePriceInput(draft.price)
+    const priceChanged = normalizedPrice !== row.price
     const stockChanged = draft.stock !== String(row.stockQuantity)
     if (!priceChanged && !stockChanged) return
 
@@ -178,7 +303,7 @@ export function AdminProductsPage() {
     setFailureText('')
     const result = await patchAdminProduct(row.id, {
       // Only what changed — an omitted field is never overwritten.
-      ...(priceChanged ? { price: draft.price } : {}),
+      ...(priceChanged ? { price: normalizedPrice } : {}),
       ...(stockChanged
         ? { stockQuantity: draft.stock.trim() === '' ? Number.NaN : Number(draft.stock) }
         : {}),
@@ -253,7 +378,9 @@ export function AdminProductsPage() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            className={`${FOCUS_RING} h-11 w-64 rounded-card border border-border-control bg-well px-3`}
+            // ISSUE-157: the single-frame search focus (border + halo, no
+            // offset outline) — the same treatment the header search got.
+            className="search-field h-11 w-64 rounded-card border border-border-control bg-well px-3"
           />
         </div>
         <div className="flex flex-col gap-1 text-sm">
@@ -351,12 +478,25 @@ export function AdminProductsPage() {
                 {state.page.products.map((row) => {
                   const draft = draftFor(row)
                   const busy = busyId === row.id
+                  // The SAME normalization as save() — the dirty flag and
+                  // the PATCH body must never disagree (this file's own
+                  // NO_FIELDS lesson): "190" over "190.00" is NOT dirty.
                   const dirty =
-                    draft.price !== row.price || draft.stock !== String(row.stockQuantity)
+                    normalizePriceInput(draft.price) !== row.price ||
+                    draft.stock !== String(row.stockQuantity)
+                  const detailOpen = detailId === row.id
+                  // Review fix: only the ONE open row pays for its draft
+                  // diff — computed per row per render, a keystroke on a
+                  // full page churned 50×11 comparisons for rows whose
+                  // editor is closed.
+                  const detailDraft = detailOpen ? detailDraftFor(row) : null
+                  const detailDirty = detailOpen && Object.keys(detailChanges(row)).length > 0
+                  const detailAreaClass = `${FOCUS_RING} min-h-20 w-full rounded-card border border-border-control bg-well px-3 py-2`
+                  const detailInputClass = `${FOCUS_RING} h-10 w-full rounded-card border border-border-control bg-well px-3`
                   return (
+                    <Fragment key={row.id}>
                     <tr
-                      key={row.id}
-                      className={`border-b border-border-hairline align-top ${row.isActive ? '' : 'opacity-60'}`}
+                      className={`${detailOpen ? '' : 'border-b border-border-hairline'} align-top ${row.isActive ? '' : 'opacity-60'}`}
                     >
                       <td className="px-2 py-3">
                         <p
@@ -440,9 +580,149 @@ export function AdminProductsPage() {
                           >
                             {row.isActive ? t('products.deactivate') : t('products.reactivate')}
                           </Button>
+                          {/* ISSUE-153 — the full editor's disclosure. The
+                              button stays mounted through open/close and
+                              through its row's own save (state-driven
+                              label, aria-expanded carries the state). */}
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            aria-expanded={detailOpen}
+                            onClick={() => setDetailId(detailOpen ? null : row.id)}
+                          >
+                            {detailOpen ? t('products.editClose') : t('products.edit')}
+                          </Button>
                         </div>
                       </td>
                     </tr>
+                    {detailOpen && (
+                      <tr className="border-b border-border-hairline bg-surface-section/60">
+                        <td colSpan={5} className="px-2 py-4">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.nameHe')}</span>
+                              <input
+                                value={detailDraft!.nameHe}
+                                onChange={(e) => setDetailDraft(row, { nameHe: e.target.value })}
+                                className={detailInputClass}
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.nameEn')}</span>
+                              <input
+                                value={detailDraft!.nameEn}
+                                onChange={(e) => setDetailDraft(row, { nameEn: e.target.value })}
+                                className={detailInputClass}
+                                dir="ltr"
+                              />
+                            </label>
+                            {/* ISSUE-158 — the dosage form is finally
+                                fixable (the PATCH schema gained the same
+                                enum rule the create form runs). */}
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.dosageForm')}</span>
+                              <select
+                                value={detailDraft!.dosageForm}
+                                onChange={(e) => setDetailDraft(row, { dosageForm: e.target.value })}
+                                className={`${FOCUS_RING} h-10 w-40 rounded-card border border-border-control bg-well px-2`}
+                              >
+                                {DOSAGE_FORM_KEYS.map((formName) => (
+                                  <option key={formName} value={formName}>
+                                    {t(`products.dosage.${formName}`)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.descriptionHe')}</span>
+                              <textarea
+                                value={detailDraft!.descriptionHe}
+                                onChange={(e) => setDetailDraft(row, { descriptionHe: e.target.value })}
+                                className={detailAreaClass}
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.descriptionEn')}</span>
+                              <textarea
+                                value={detailDraft!.descriptionEn}
+                                onChange={(e) => setDetailDraft(row, { descriptionEn: e.target.value })}
+                                className={detailAreaClass}
+                                dir="ltr"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.usage')}</span>
+                              <textarea
+                                value={detailDraft!.usageInstructions}
+                                onChange={(e) =>
+                                  setDetailDraft(row, { usageInstructions: e.target.value })
+                                }
+                                className={detailAreaClass}
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.warnings')}</span>
+                              <textarea
+                                value={detailDraft!.warningsAllergens}
+                                onChange={(e) =>
+                                  setDetailDraft(row, { warningsAllergens: e.target.value })
+                                }
+                                className={detailAreaClass}
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.packageQuantity')}</span>
+                              <input
+                                inputMode="numeric"
+                                value={detailDraft!.packageQuantity}
+                                onChange={(e) =>
+                                  setDetailDraft(row, { packageQuantity: e.target.value })
+                                }
+                                className={`${FOCUS_RING} h-10 w-32 rounded-card border border-border-control bg-well px-3`}
+                                dir="ltr"
+                              />
+                            </label>
+                            <fieldset className="flex flex-wrap gap-3 text-sm">
+                              <legend className="mb-1 text-text-ink">
+                                {t('products.form.dietary')}
+                              </legend>
+                              {DETAIL_DIETARY_KEYS.map((key) => (
+                                <label key={key} className="flex flex-col gap-1">
+                                  <span className="text-text-muted">{t(`products.form.${key}`)}</span>
+                                  <select
+                                    value={detailDraft![key]}
+                                    onChange={(e) =>
+                                      setDetailDraft(row, {
+                                        [key]: e.target.value as '' | 'true' | 'false',
+                                      })
+                                    }
+                                    className={`${FOCUS_RING} h-10 rounded-card border border-border-control bg-well px-2`}
+                                  >
+                                    <option value="">{t('products.form.claimNone')}</option>
+                                    <option value="true">{t('products.form.claimYes')}</option>
+                                    <option value="false">{t('products.form.claimNo')}</option>
+                                  </select>
+                                </label>
+                              ))}
+                            </fieldset>
+                          </div>
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              type="button"
+                              loading={busy}
+                              aria-disabled={!detailDirty || busy || undefined}
+                              onClick={() => {
+                                if (!detailDirty || busy) return
+                                void saveDetails(row)
+                              }}
+                            >
+                              {t('products.save')}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   )
                 })}
               </tbody>

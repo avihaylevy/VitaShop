@@ -1,11 +1,13 @@
 {
   "button": {
-    "open": "Shopping assistant"
+    "open": "Need help?"
   },
   "panel": {
     "title": "Shopping assistant",
-    "intro": "Describe what you are looking for in your own words — an ingredient, a health goal, or a price range — and the assistant will find products from the catalog.",
-    "placeholder": "What would you like to find?",
+    "greeting": "Hi! I am the shopping assistant",
+    "greetingNamed": "Hi {{name}}! I am the shopping assistant",
+    "intro": "Tell me a product name, an ingredient, a goal, or a budget, and I will search the catalog.",
+    "placeholder": "What shall we look for today?",
     "send": "Send",
     "sending": "Sending…",
     "close": "Close the shopping assistant",
@@ -16,6 +18,7 @@
     "noCriteria": "I could not match that to an ingredient, goal, or filter. Try rephrasing — for example an active ingredient, a health goal, or a price range.",
     "empty": "No products matched your request. Try broadening the criteria or rephrasing.",
     "handoff": "Open these filters in the catalog search",
+    "handoffBrowse": "See all results in the catalog",
     "medicalStop": "For a question like this, please consult a physician or pharmacist. I would be glad to help you find products from the catalog.",
     "products": "Products found:",
     "turnLimit": "This conversation has reached its length limit.",
@@ -25,6 +28,12 @@
     "rateLimited": "Too many messages in a short time. Please try again in a few minutes.",
     "unavailable": "The assistant is unavailable right now. You can use the regular search.",
     "network": "Sending failed. You can try again."
+  },
+  "suggestions": {
+    "title": "A few ideas to start:",
+    "s1": "Vitamin D for stronger bones",
+    "s2": "Magnesium for better sleep",
+    "s3": "Omega 3 up to 100 shekels"
   },
   "a11y": {
     "conversation": "Conversation with the shopping assistant",
