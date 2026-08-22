@@ -35,11 +35,12 @@ Memory system:  C:\Users\aviha\תכנות\זיכרון AI\פרוייקט ECOMMER
                 פרוייקט Ecommerce\VitaShop-Project
 HEAD:           621d2d8 — the thirteenth list + pass-105 review fixes,
                 on top of 6158d1b (DEC-096/097/098 + the twelfth list).
-TREE:           CLEAN at `621d2d8` (hundred-fifth pass, 2026-08-22):
-                the thirteenth list (home footer-for-stats · volume/
-                weight units on card+details+CART line — cart DTO
-                gained dosageForm) + the review's 8 fixes (incl. the
-                whole-enum unit pin and the new admin i18n suite).
+TREE:           CLEAN at `44a9b15` (hundred-seventh pass): the
+                live-data test reds SETTLED — FULL server suite
+                1085/1085 GREEN, a trustworthy deploy gate. ISSUE-187
+                open (admin edits of seeded rows vs convergence, the
+                user's call). NEXT: pre-deploy step 2 — ISSUE-179
+                password-confirm on email change → deploy planning.
 Suites:         client 1002 green (count DROPPED from 1044 by design —
                 the deleted card suites) · server: ai/account/admin/
                 checkout suites green; the FULL server run carries 6
