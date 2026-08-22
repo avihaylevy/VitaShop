@@ -115,16 +115,21 @@ async function readIdentity(cookie: string) {
   throw new Error('the session never carried a guestCartId — the cart POST did not write one')
 }
 
-/** A minimal cookie jar — this test is about a cookie surviving requests. */
+/** A minimal cookie jar — this test is about a cookie surviving requests.
+ *  ⚠️ Multi-cookie aware since DEC-103: the cart route also sets vs_vid,
+ *  and the single-string capture dropped whichever cookie came second. */
 function jar() {
-  let cookie = ''
+  const cookies = new Map<string, string>()
   return {
     get header() {
-      return cookie
+      return [...cookies].map(([name, value]) => `${name}=${value}`).join('; ')
     },
     capture(response: Response) {
-      const set = response.headers.get('set-cookie')
-      if (set) cookie = set.split(';')[0] ?? cookie
+      for (const line of response.headers.getSetCookie()) {
+        const pair = line.split(';')[0] ?? ''
+        const eq = pair.indexOf('=')
+        if (eq > 0) cookies.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim())
+      }
     },
   }
 }

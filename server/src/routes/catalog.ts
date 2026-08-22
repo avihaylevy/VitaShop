@@ -19,6 +19,7 @@ import { resolvePopularityScores, sortByPopularity } from '../lib/catalogPopular
 import { resolveCatalogFallback, type CatalogFallback } from '../lib/catalogFallback.js'
 import { CATALOG_RELATIONS_INCLUDE, findActiveProductBySlug } from '../lib/catalogProductLookup.js'
 import { recordFunnelEvent } from '../lib/funnelEvents.js'
+import { ensureVisitorId } from '../lib/visitorId.js'
 import { createCatalogRateLimiters } from '../lib/rateLimit.js'
 
 export const catalogRouter = Router()
@@ -242,9 +243,11 @@ catalogRouter.get('/products/:slug', catalogLimiters.detail, async (req, res) =>
   // DEC-101 / §4.7.5 — the product_view funnel event. `void`, not awaited:
   // the response owes analytics nothing, and recordFunnelEvent catches its
   // own failures so this can never surface as an unhandled rejection.
+  // DEC-103 — the durable visitor id, captured BEFORE res.json (Set-Cookie
+  // is a header).
   void recordFunnelEvent(prisma, {
     eventType: 'product_view',
-    sessionId: req.sessionID ?? '',
+    sessionId: ensureVisitorId(req, res),
     userId: req.session?.userId ?? null,
     productId: product.id,
   })

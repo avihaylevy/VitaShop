@@ -12,6 +12,7 @@ import { requireShopper } from './requireShopper.js'
 import { createRequireVerifiedShopper } from './requireActiveShopper.js'
 import { saveShopperAddress } from '../lib/saveShopperAddress.js'
 import { recordCheckoutStarted, recordFunnelEvent } from '../lib/funnelEvents.js'
+import { ensureVisitorId } from '../lib/visitorId.js'
 
 /**
  * MILESTONE-008 Checkpoint D2 — `POST /api/checkout/validate` and
@@ -129,7 +130,8 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
     // screen repeats, and one checkout must count once. `void` — analytics
     // never blocks the response.
     void recordCheckoutStarted(prisma, {
-      sessionId: req.sessionID ?? '',
+      // DEC-103 — the durable visitor id, before res.json writes headers.
+      sessionId: ensureVisitorId(req, res),
       userId: req.session!.userId!,
     })
 
@@ -158,6 +160,11 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
   async function handlePay(req: Request, res: Response): Promise<void> {
     const body = (req.body ?? {}) as Record<string, unknown>
     const userId = req.session!.userId!
+    // DEC-103 — captured HERE, at the top: the purchase_completed record
+    // below runs AFTER respondWithOrder, when Set-Cookie can no longer be
+    // written; ensureVisitorId guards headersSent, but capturing early
+    // means a first-request payer still gets the cookie.
+    const visitorId = ensureVisitorId(req, res)
 
     // ── 0. THE RETRY, ANSWERED BEFORE ANYTHING ELSE IS EVALUATED ───────────
     // 🔴 THIS RAN NOWHERE, AND ITS ABSENCE BROKE INV-05 FROM THE OUTSIDE. A
@@ -411,7 +418,7 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
     if (!order.replayed) {
       void recordFunnelEvent(prisma, {
         eventType: 'purchase_completed',
-        sessionId: req.sessionID ?? '',
+        sessionId: visitorId,
         userId,
         orderId: order.orderId,
       })

@@ -11,13 +11,11 @@ import type { PrismaClient, FunnelEventType } from '@prisma/client'
  * over analytics is a defect. Callers `void` the promise — the catch lives
  * HERE, so an unawaited call can never surface an unhandled rejection.
  *
- * ⚠️ sessionId is express-session's req.sessionID. For a signed-in shopper
- * or a guest with a persisted session (a cart write) it is stable; a fresh
- * guest whose session was never saved gets a new id per request, so their
- * views fragment into one-request sessions. Recorded as a known KPI-01
- * approximation in DEC-101 — the alternative (persisting a session per
- * view) would mint a session row for every drive-by request, which
- * MILESTONE-007 Checkpoint B exists to prevent.
+ * 🔴 sessionId is DEC-103's durable VISITOR id (lib/visitorId.ts), not
+ * express-session's req.sessionID — the session id fragmented the funnel
+ * twice (anonymous sessions are never persisted, and login regenerates
+ * the id), which was ISSUE-189. The cookie-borne visitor id survives
+ * both, and mints no server-side row.
  *
  * 🔴 PRIVACY: no metadata column exists and none is written — nothing here
  * can carry typed text, payment details, or AI conversation content.

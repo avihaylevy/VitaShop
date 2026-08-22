@@ -164,16 +164,23 @@ afterAll(async () => {
   await prisma.$disconnect()
 })
 
-/** A minimal cookie jar. The cookie surviving the journey IS the subject. */
+/** A minimal cookie jar. The cookie surviving the journey IS the subject.
+ *  ⚠️ Multi-cookie aware since DEC-103: the instrumented cart route also
+ *  sets the vs_vid visitor cookie, and the old single-string capture
+ *  (headers.get('set-cookie').split(';')[0]) grabbed whichever came first
+ *  and DROPPED the session — every journey below then ran anonymous. */
 function jar() {
-  let cookie = ''
+  const cookies = new Map<string, string>()
   return {
     get header() {
-      return cookie
+      return [...cookies].map(([name, value]) => `${name}=${value}`).join('; ')
     },
     capture(response: Response) {
-      const set = response.headers.get('set-cookie')
-      if (set) cookie = set.split(';')[0] ?? cookie
+      for (const line of response.headers.getSetCookie()) {
+        const pair = line.split(';')[0] ?? ''
+        const eq = pair.indexOf('=')
+        if (eq > 0) cookies.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim())
+      }
     },
   }
 }

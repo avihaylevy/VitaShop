@@ -16,6 +16,7 @@ import { prewarmDummyHash } from '../lib/loginService.js'
 import { createSessionMiddleware } from '../lib/session.js'
 import { NullEmailProvider } from '../lib/emailService.js'
 import { TEST_FIXTURE_SLUG_PREFIX } from '../lib/testFixturePrefix.js'
+import { VISITOR_COOKIE } from '../lib/visitorId.js'
 
 /**
  * DEC-101 — §4.7.5's four funnel events, proven OVER THE WIRE at the exact
@@ -24,6 +25,11 @@ import { TEST_FIXTURE_SLUG_PREFIX } from '../lib/testFixturePrefix.js'
  * COUNT DELTA scoped to this suite's own fixtures, so a parallel suite's
  * events cannot leak in — and every recording test carries a control
  * request that must record NOTHING.
+ *
+ * 🔴 DEC-103: requests travel through a per-test COOKIE JAR, because the
+ * funnel's identity is the vs_vid visitor cookie — a browser carries it
+ * automatically; a bare fetch does not, and cookieless calls would each
+ * mint a fresh visitor and quietly defeat the dedupe under test.
  */
 
 let prisma: PrismaClient
@@ -37,27 +43,50 @@ const PASSWORD = 'Abcdef12xyz'
 let productId = ''
 let shopperId = ''
 
-async function signIn(): Promise<string> {
-  const r = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: SHOPPER, password: PASSWORD }),
-  })
-  expect(r.status).toBe(200)
-  const set = r.headers.get('set-cookie')
-  if (!set) throw new Error('no session cookie')
-  return set.split(';')[0] ?? ''
+/** The browser's half of the cookie contract, minimally. */
+function makeJar() {
+  const cookies = new Map<string, string>()
+  return {
+    header(): string {
+      return [...cookies].map(([name, value]) => `${name}=${value}`).join('; ')
+    },
+    absorb(response: Response): void {
+      for (const line of response.headers.getSetCookie()) {
+        const pair = line.split(';')[0] ?? ''
+        const eq = pair.indexOf('=')
+        if (eq > 0) cookies.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim())
+      }
+    },
+    get(name: string): string | undefined {
+      return cookies.get(name)
+    },
+  }
 }
+type Jar = ReturnType<typeof makeJar>
 
-function api(path: string, init: { method?: string; cookie?: string; body?: unknown } = {}) {
-  return fetch(`${baseUrl}${path}`, {
+async function api(
+  jar: Jar,
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<Response> {
+  const response = await fetch(`${baseUrl}${path}`, {
     method: init.method ?? 'GET',
     headers: {
       'content-type': 'application/json',
-      ...(init.cookie ? { cookie: init.cookie } : {}),
+      ...(jar.header() === '' ? {} : { cookie: jar.header() }),
     },
     ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
   })
+  jar.absorb(response)
+  return response
+}
+
+async function signIn(jar: Jar): Promise<void> {
+  const r = await api(jar, '/api/auth/login', {
+    method: 'POST',
+    body: { email: SHOPPER, password: PASSWORD },
+  })
+  expect(r.status).toBe(200)
 }
 
 /** Rows attributable to THIS suite's fixtures only. */
@@ -201,10 +230,13 @@ async function waitForOwnCount(eventType: string, expected: number): Promise<num
 
 describe('product_view — GET /api/products/:slug', () => {
   it('records one event carrying the product id; a 404 slug records none', async () => {
+    const jar = makeJar()
     const before = await countOwn('product_view')
 
-    const ok = await api(`/api/products/${SLUG}`)
+    const ok = await api(jar, `/api/products/${SLUG}`)
     expect(ok.status).toBe(200)
+    // DEC-103 — the visitor cookie is minted on the instrumented read.
+    expect(jar.get(VISITOR_COOKIE)).toMatch(/^[0-9a-f-]{36}$/)
     expect(await waitForOwnCount('product_view', before + 1)).toBe(before + 1)
 
     const event = await prisma.funnelEvent.findFirst({
@@ -212,10 +244,10 @@ describe('product_view — GET /api/products/:slug', () => {
       orderBy: { createdAt: 'desc' },
     })
     expect(event?.productId).toBe(productId)
-    expect(event?.sessionId).not.toBe('')
+    expect(event?.sessionId).toBe(jar.get(VISITOR_COOKIE))
 
     // CONTROL — the failure path must record nothing.
-    const missing = await api(`/api/products/${SLUG}-no-such`)
+    const missing = await api(jar, `/api/products/${SLUG}-no-such`)
     expect(missing.status).toBe(404)
     await new Promise((r) => setTimeout(r, 200))
     expect(await countOwn('product_view')).toBe(before + 1)
@@ -224,12 +256,12 @@ describe('product_view — GET /api/products/:slug', () => {
 
 describe('add_to_cart — POST /api/cart/items', () => {
   it('records one event with the product id; a refused add records none', async () => {
+    const jar = makeJar()
     const before = await countOwn('add_to_cart')
-    const cookie = await signIn()
+    await signIn(jar)
 
-    const ok = await api('/api/cart/items', {
+    const ok = await api(jar, '/api/cart/items', {
       method: 'POST',
-      cookie,
       body: { slug: SLUG, quantity: 1 },
     })
     expect(ok.status).toBe(200)
@@ -240,11 +272,11 @@ describe('add_to_cart — POST /api/cart/items', () => {
     })
     expect(event?.productId).toBe(productId)
     expect(event?.userId).toBe(shopperId)
+    expect(event?.sessionId).toBe(jar.get(VISITOR_COOKIE))
 
     // CONTROL — an unknown slug is refused and records nothing.
-    const missing = await api('/api/cart/items', {
+    const missing = await api(jar, '/api/cart/items', {
       method: 'POST',
-      cookie,
       body: { slug: `${SLUG}-no-such`, quantity: 1 },
     })
     expect(missing.status).toBe(404)
@@ -253,22 +285,21 @@ describe('add_to_cart — POST /api/cart/items', () => {
   })
 
   it('🔴 a no-op add at the cap records NOTHING — five taps are not five conversions', async () => {
+    const jar = makeJar()
     const before = await countOwn('add_to_cart')
-    const cookie = await signIn()
+    await signIn(jar)
 
     // Fill the line to the whole stock (50) — recorded, one event.
-    const fill = await api('/api/cart/items', {
+    const fill = await api(jar, '/api/cart/items', {
       method: 'POST',
-      cookie,
       body: { slug: SLUG, quantity: 50 },
     })
     expect(fill.status).toBe(200)
     expect(await waitForOwnCount('add_to_cart', before + 1)).toBe(before + 1)
 
     // The tap that changes nothing: alreadyAtMaximum, no event.
-    const capped = await api('/api/cart/items', {
+    const capped = await api(jar, '/api/cart/items', {
       method: 'POST',
-      cookie,
       body: { slug: SLUG, quantity: 1 },
     })
     expect(capped.status).toBe(200)
@@ -280,33 +311,31 @@ describe('add_to_cart — POST /api/cart/items', () => {
 })
 
 describe('checkout_started — POST /api/checkout/validate', () => {
-  it('🔴 two validates in one session record ONE start; a 400 records none', async () => {
+  it('🔴 two validates for one visitor record ONE start; a 400 records none', async () => {
+    const jar = makeJar()
     const before = await countOwn('checkout_started')
-    const cookie = await signIn()
-    await api('/api/cart/items', { method: 'POST', cookie, body: { slug: SLUG, quantity: 1 } })
+    await signIn(jar)
+    await api(jar, '/api/cart/items', { method: 'POST', body: { slug: SLUG, quantity: 1 } })
 
     // CONTROL first — a malformed method never started a checkout.
-    const bad = await api('/api/checkout/validate', {
+    const bad = await api(jar, '/api/checkout/validate', {
       method: 'POST',
-      cookie,
       body: { deliveryMethod: 'WRONG' },
     })
     expect(bad.status).toBe(400)
     await new Promise((r) => setTimeout(r, 200))
     expect(await countOwn('checkout_started')).toBe(before)
 
-    const first = await api('/api/checkout/validate', {
+    const first = await api(jar, '/api/checkout/validate', {
       method: 'POST',
-      cookie,
       body: { deliveryMethod: 'self_pickup' },
     })
     expect(first.status).toBe(200)
     expect(await waitForOwnCount('checkout_started', before + 1)).toBe(before + 1)
 
     // The dedupe — a re-quote is the same checkout, not a second one.
-    const second = await api('/api/checkout/validate', {
+    const second = await api(jar, '/api/checkout/validate', {
       method: 'POST',
-      cookie,
       body: { deliveryMethod: 'courier' },
     })
     expect(second.status).toBe(200)
@@ -317,22 +346,21 @@ describe('checkout_started — POST /api/checkout/validate', () => {
 
 describe('purchase_completed — POST /api/checkout/pay', () => {
   it('🔴 records ONE event per order, and a replayed /pay adds none', async () => {
+    const jar = makeJar()
     const before = await countOwn('purchase_completed')
-    const cookie = await signIn()
-    await api('/api/cart/items', { method: 'POST', cookie, body: { slug: SLUG, quantity: 1 } })
+    await signIn(jar)
+    await api(jar, '/api/cart/items', { method: 'POST', body: { slug: SLUG, quantity: 1 } })
 
-    const validated = await api('/api/checkout/validate', {
+    const validated = await api(jar, '/api/checkout/validate', {
       method: 'POST',
-      cookie,
       body: { deliveryMethod: 'self_pickup' },
     })
     expect(validated.status).toBe(200)
     const quote = (await validated.json()) as { fingerprint: string }
 
     const idempotencyKey = randomUUID()
-    const paid = await api('/api/checkout/pay', {
+    const paid = await api(jar, '/api/checkout/pay', {
       method: 'POST',
-      cookie,
       body: { deliveryMethod: 'self_pickup', fingerprint: quote.fingerprint, idempotencyKey },
     })
     expect(paid.status).toBe(201)
@@ -348,9 +376,8 @@ describe('purchase_completed — POST /api/checkout/pay', () => {
 
     // CONTROL — the retry answers 200 replayed and must not double-count
     // the conversion (the respondWithOrder 200-vs-201 reasoning).
-    const retry = await api('/api/checkout/pay', {
+    const retry = await api(jar, '/api/checkout/pay', {
       method: 'POST',
-      cookie,
       body: { deliveryMethod: 'self_pickup', fingerprint: quote.fingerprint, idempotencyKey },
     })
     expect(retry.status).toBe(200)
@@ -365,13 +392,13 @@ describe('purchase_completed — POST /api/checkout/pay', () => {
     // answered by createOrder's replay lookup, and only the winner may
     // count. Removing the guard was RUN and stayed green against the
     // sequential test; this one is the assertion that bites.
+    const jar = makeJar()
     const before = await countOwn('purchase_completed')
-    const cookie = await signIn()
-    await api('/api/cart/items', { method: 'POST', cookie, body: { slug: SLUG, quantity: 1 } })
+    await signIn(jar)
+    await api(jar, '/api/cart/items', { method: 'POST', body: { slug: SLUG, quantity: 1 } })
 
-    const validated = await api('/api/checkout/validate', {
+    const validated = await api(jar, '/api/checkout/validate', {
       method: 'POST',
-      cookie,
       body: { deliveryMethod: 'self_pickup' },
     })
     const quote = (await validated.json()) as { fingerprint: string }
@@ -381,11 +408,15 @@ describe('purchase_completed — POST /api/checkout/pay', () => {
       fingerprint: quote.fingerprint,
       idempotencyKey,
     }
+    const cookie = jar.header()
+    const pay = () =>
+      fetch(`${baseUrl}/api/checkout/pay`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify(payBody),
+      })
 
-    const [first, second] = await Promise.all([
-      api('/api/checkout/pay', { method: 'POST', cookie, body: payBody }),
-      api('/api/checkout/pay', { method: 'POST', cookie, body: payBody }),
-    ])
+    const [first, second] = await Promise.all([pay(), pay()])
     // One creation; the loser is a replay (200) or a halt (409, when the
     // loser's re-quote saw the emptied cart before step 0 found the order).
     const statuses = [first.status, second.status].sort()
@@ -395,5 +426,60 @@ describe('purchase_completed — POST /api/checkout/pay', () => {
     // Settle, then assert the count did not keep climbing.
     await new Promise((r) => setTimeout(r, 400))
     expect(await countOwn('purchase_completed')).toBe(before + 1)
+  })
+})
+
+describe('🔴 DEC-103 — ONE visitor identity across the whole journey (ISSUE-189)', () => {
+  it('guest view → login (session REGENERATES) → add → start → purchase share one sessionId', async () => {
+    const jar = makeJar()
+    const before = await Promise.all(
+      ['product_view', 'add_to_cart', 'checkout_started', 'purchase_completed'].map(countOwn),
+    )
+
+    // 1. Anonymous view — mints the visitor cookie.
+    expect((await api(jar, `/api/products/${SLUG}`)).status).toBe(200)
+    const visitorId = jar.get(VISITOR_COOKIE)
+    expect(visitorId).toMatch(/^[0-9a-f-]{36}$/)
+
+    // 2. Login — DEC-053 regenerates the SESSION id; the visitor cookie
+    //    must survive untouched.
+    await signIn(jar)
+    expect(jar.get(VISITOR_COOKIE)).toBe(visitorId)
+
+    // 3–5. Add, start, pay.
+    expect(
+      (await api(jar, '/api/cart/items', { method: 'POST', body: { slug: SLUG, quantity: 1 } }))
+        .status,
+    ).toBe(200)
+    const validated = await api(jar, '/api/checkout/validate', {
+      method: 'POST',
+      body: { deliveryMethod: 'self_pickup' },
+    })
+    expect(validated.status).toBe(200)
+    const quote = (await validated.json()) as { fingerprint: string }
+    expect(
+      (
+        await api(jar, '/api/checkout/pay', {
+          method: 'POST',
+          body: {
+            deliveryMethod: 'self_pickup',
+            fingerprint: quote.fingerprint,
+            idempotencyKey: randomUUID(),
+          },
+        })
+      ).status,
+    ).toBe(201)
+
+    // All four events landed, all under the ONE visitor id — the exact
+    // journey ISSUE-189 said fragments into two-plus identities.
+    const types = ['product_view', 'add_to_cart', 'checkout_started', 'purchase_completed']
+    for (const [index, eventType] of types.entries()) {
+      expect(await waitForOwnCount(eventType, before[index]! + 1)).toBe(before[index]! + 1)
+      const event = await prisma.funnelEvent.findFirst({
+        where: ownEventsWhere(eventType),
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(event?.sessionId).toBe(visitorId)
+    }
   })
 })

@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js'
 import { addItem, deleteLine, getCart, updateLine, type CartIdentity } from '../lib/cartService.js'
 import { ensureGuestCartId, peekGuestCartId } from '../lib/guestSession.js'
 import { recordFunnelEvent } from '../lib/funnelEvents.js'
+import { ensureVisitorId } from '../lib/visitorId.js'
 
 /**
  * MILESTONE-007 Checkpoint C — `GET` and `POST /api/cart`.
@@ -70,7 +71,8 @@ cartRouter.post('/items', async (req, res) => {
   if (!result.alreadyAtMaximum) {
     void recordFunnelEvent(prisma, {
       eventType: 'add_to_cart',
-      sessionId: req.sessionID ?? '',
+      // DEC-103 — the durable visitor id, before the response writes.
+      sessionId: ensureVisitorId(req, res),
       userId: req.session?.userId ?? null,
       productId: result.cart.items.find((line) => line.slug === body.slug)?.productId ?? null,
     })

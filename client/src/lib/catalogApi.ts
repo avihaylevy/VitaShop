@@ -187,7 +187,12 @@ export async function requestCatalogJson(
 
   let response: Response
   try {
-    response = await fetch(`${base.value}${path}`, { ...init, signal })
+    // DEC-103 — `credentials: 'include'`, like every other transport: the
+    // funnel's visitor cookie (vs_vid) rides catalogue reads, and a
+    // credential-less cross-origin fetch would neither send it nor honour
+    // the Set-Cookie that mints it. CORS is one exact origin (DEC-010),
+    // which is what makes credentials safe here.
+    response = await fetch(`${base.value}${path}`, { ...init, credentials: 'include', signal })
   } catch (error) {
     // An aborted fetch rejects because `signal` was aborted — propagate
     // it unchanged so callers can tell "cancelled" from "failed".
