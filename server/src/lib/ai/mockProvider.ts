@@ -24,6 +24,7 @@ import type { AgentLang } from './notices.js'
 import type {
   AIProvider,
   ChatTurn,
+  ExplanationResult,
   ExtractedCriteriaNames,
   ExtractionResult,
 } from './provider.js'
@@ -265,7 +266,7 @@ export class MockProvider implements AIProvider {
     products: PublicCatalogProduct[],
     _message: string,
     lang: AgentLang,
-  ): Promise<string[]> {
+  ): Promise<ExplanationResult> {
     // Deterministic templates built from DTO fields ONLY — the mock has no
     // other knowledge to leak, which is exactly the honesty the plan asks
     // for. Facts still render from the DTO on the client; this string sits
@@ -274,11 +275,24 @@ export class MockProvider implements AIProvider {
     // Checkpoint B's client-side job (dir/bdi), noted here so it isn't
     // mistaken for a data error: inventing a translation is forbidden
     // (DEC-032/DEC-080).
-    return products.map((product) => {
+    const explanations = products.map((product) => {
       if (lang === 'he') {
         return `${product.nameHe} מבית ${product.brandName}, בקטגוריית ${product.categoryNameHe}.`
       }
       return `${product.nameEn} by ${product.brandNameEn ?? product.brandName}, in ${product.categoryNameEn}.`
     })
+    // DEC-104 — a DETERMINISTIC rank so tests can prove the pin actually
+    // reorders: the CHEAPEST product (ties → the earliest). "First" would
+    // be a vacuous pick — already first, a dropped reorder stays green.
+    let topPickIndex: number | null = null
+    if (products.length >= 2) {
+      topPickIndex = 0
+      for (let index = 1; index < products.length; index++) {
+        if (Number(products[index]!.price) < Number(products[topPickIndex]!.price)) {
+          topPickIndex = index
+        }
+      }
+    }
+    return { explanations, topPickIndex }
   }
 }

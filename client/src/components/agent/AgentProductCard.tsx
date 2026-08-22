@@ -29,11 +29,14 @@ export function AgentProductCard({
   product,
   explanation,
   explanationLang,
+  topPick = false,
   onAddToCart,
   onNavigateClick,
 }: {
   product: ProductCardModel
   explanation: string
+  /** DEC-104 — this card is the provider's server-validated top pick. */
+  topPick?: boolean
   /** The language the explanation was authored in — frozen provider prose. */
   explanationLang: 'he' | 'en'
   onAddToCart: (slug: string, quantity: number) => void | Promise<boolean>
@@ -54,6 +57,13 @@ export function AgentProductCard({
         bordered
         className="flex flex-col gap-2.5 p-3"
       >
+        {topPick && (
+          /* DEC-104 — the ranked pick, in the agent's own plum accent so
+             it reads as the ASSISTANT's opinion, never a commerce claim. */
+          <span className="self-start rounded-round bg-agent-soft px-2.5 py-0.5 text-xs font-semibold text-agent">
+            {t('reply.topPick')}
+          </span>
+        )}
         {/* ISSUE-164 — a product THUMBNAIL joins the card (the same
             ProductImage pipeline every catalogue surface uses: filename /
             external URL / upload path, contain-only), and the text column

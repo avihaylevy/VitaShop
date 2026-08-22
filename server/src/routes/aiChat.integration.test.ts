@@ -53,6 +53,7 @@ interface ChatEnvelope {
   medicalStop: boolean
   handoff: Record<string, string | string[]> | null
   emptyResult: boolean
+  topPick: boolean
 }
 
 interface ApiErrorEnvelope {
@@ -167,7 +168,7 @@ async function makeApp(
 function criteriaProvider(result: ExtractionResult): AIProvider {
   return {
     extractCriteria: async () => result,
-    explainProducts: async (products) => products.map(() => ''),
+    explainProducts: async (products) => ({ explanations: products.map(() => ''), topPickIndex: null }),
   }
 }
 
@@ -449,8 +450,21 @@ describe('POST /api/ai/chat — injected providers (own apps, own limiters)', ()
   })
 
   it('🔴 sanitizes an explanation that smuggles in a product Stage 2 did not return', async () => {
+    // ⚠️ The smuggled product must be DISTINCT from every returned one —
+    // name included: findFirst with no orderBy once drifted onto a
+    // product whose nameHe was a SUBSTRING of a returned product's name,
+    // which the guard rightly allows (a mention of a returned product),
+    // and this test went red on healthy code (live-data flake, found
+    // during the DEC-104 pass). The name filter + orderBy pin the intent.
     const other = await testPrisma.product.findFirst({
-      where: { isActive: true, NOT: { ingredients: { some: { activeIngredient: { name: { contains: 'מגנזיום' } } } } } },
+      where: {
+        isActive: true,
+        NOT: [
+          { ingredients: { some: { activeIngredient: { name: { contains: 'מגנזיום' } } } } },
+          { nameHe: { contains: 'מגנזיום' } },
+        ],
+      },
+      orderBy: { slug: 'asc' },
       select: { nameHe: true },
     })
     expect(other).not.toBeNull()
@@ -459,8 +473,10 @@ describe('POST /api/ai/chat — injected providers (own apps, own limiters)', ()
         kind: 'criteria',
         criteria: { brands: [], ingredients: ['מגנזיום'], healthGoals: [], dosageForms: [] },
       }),
-      explainProducts: async (products) =>
-        products.map(() => `דווקא כדאי לקנות את ${other!.nameHe} במקום.`),
+      explainProducts: async (products) => ({
+        explanations: products.map(() => `דווקא כדאי לקנות את ${other!.nameHe} במקום.`),
+        topPickIndex: null,
+      }),
     }
     const url = await makeApp(malicious)
     const response = await chat({ message: 'מגנזיום', lang: 'he' }, url)
@@ -471,10 +487,50 @@ describe('POST /api/ai/chat — injected providers (own apps, own limiters)', ()
     }
   })
 
+  it('🔴 DEC-104 — a VALID top pick is pinned first with its explanation; out-of-range is dropped', async () => {
+    const magnesium: ExtractionResult = {
+      kind: 'criteria',
+      criteria: { brands: [], ingredients: ['מגנזיום'], healthGoals: [], dosageForms: [] },
+    }
+    const makeRanker = (topPickIndex: number | null): AIProvider => ({
+      extractCriteria: async () => magnesium,
+      explainProducts: async (products) => ({
+        explanations: products.map((_, index) => `הסבר ${index}.`),
+        topPickIndex,
+      }),
+    })
+
+    // Baseline — no pick: the catalogue's own order stands.
+    const baselineBody = (await (
+      await chat({ message: 'מגנזיום', lang: 'he' }, await makeApp(makeRanker(null)))
+    ).json()) as ChatEnvelope
+    expect(baselineBody.products.length).toBeGreaterThanOrEqual(2)
+    expect(baselineBody.topPick).toBe(false)
+    const baseline = baselineBody.products.map((product) => product.slug)
+
+    // A valid pick of the SECOND product pins it first, explanation riding.
+    const pinnedBody = (await (
+      await chat({ message: 'מגנזיום', lang: 'he' }, await makeApp(makeRanker(1)))
+    ).json()) as ChatEnvelope
+    expect(pinnedBody.topPick).toBe(true)
+    expect(pinnedBody.products[0]!.slug).toBe(baseline[1])
+    expect(pinnedBody.explanations[0]).toBe('הסבר 1.')
+    expect(pinnedBody.products.map((product) => product.slug).sort()).toEqual(
+      [...baseline].sort(),
+    )
+
+    // CONTROL — an out-of-range pick is DROPPED: no badge, order untouched.
+    const droppedBody = (await (
+      await chat({ message: 'מגנזיום', lang: 'he' }, await makeApp(makeRanker(99)))
+    ).json()) as ChatEnvelope
+    expect(droppedBody.topPick).toBe(false)
+    expect(droppedBody.products.map((product) => product.slug)).toEqual(baseline)
+  })
+
   it('maps a hung extraction to AI_PROVIDER_TIMEOUT (504)', async () => {
     const hung: AIProvider = {
       extractCriteria: () => new Promise<never>(() => {}),
-      explainProducts: async () => [],
+      explainProducts: async () => ({ explanations: [], topPickIndex: null }),
     }
     const url = await makeApp(hung, { timeoutMs: 50 })
     const response = await chat({ message: 'מגנזיום', lang: 'he' }, url)
@@ -488,7 +544,7 @@ describe('POST /api/ai/chat — injected providers (own apps, own limiters)', ()
       extractCriteria: async () => {
         throw new Error('vendor exploded')
       },
-      explainProducts: async () => [],
+      explainProducts: async () => ({ explanations: [], topPickIndex: null }),
     }
     const url = await makeApp(broken)
     const response = await chat({ message: 'מגנזיום', lang: 'he' }, url)

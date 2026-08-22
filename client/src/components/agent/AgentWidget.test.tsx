@@ -34,6 +34,7 @@ function agentReply(clarifyingQuestion: string): unknown {
     medicalStop: false,
     handoff: null,
     emptyResult: false,
+    topPick: false,
   }
 }
 

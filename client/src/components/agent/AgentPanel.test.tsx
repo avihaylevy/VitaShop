@@ -56,6 +56,7 @@ function agentResponse(overrides: Partial<AgentChatResponseDto> = {}): AgentChat
     medicalStop: false,
     handoff: null,
     emptyResult: false,
+    topPick: false,
     ...overrides,
   }
 }
@@ -168,6 +169,46 @@ describe('AgentPanel', () => {
     }
     expect(announceSpy).toHaveBeenCalledTimes(1)
     expect(announceSpy.mock.calls[0]![0].startsWith(FIXED_NOTICE_HE)).toBe(true)
+  })
+
+  it('🔴 DEC-104 — the FIRST card carries the top-pick badge when topPick is true, and only it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockResponse(
+        200,
+        agentResponse({
+          products: [productDto(), productDto({ slug: 'second', nameHe: 'מוצר שני', nameEn: 'Second' })],
+          explanations: ['הסבר ראשון.', 'הסבר שני.'],
+          topPick: true,
+        }),
+      ),
+    )
+    renderPanel()
+    await sendMessage('מגנזיום')
+
+    const badges = await screen.findAllByText(i18n.t('agent:reply.topPick'))
+    expect(badges).toHaveLength(1)
+    // The badge sits ABOVE the second product — it belongs to card one.
+    const secondLink = screen.getByRole('link', { name: 'מוצר שני' })
+    expect(
+      badges[0]!.compareDocumentPosition(secondLink) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('control: topPick false renders NO badge', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockResponse(
+        200,
+        agentResponse({
+          products: [productDto(), productDto({ slug: 'second', nameHe: 'מוצר שני', nameEn: 'Second' })],
+          explanations: ['', ''],
+          topPick: false,
+        }),
+      ),
+    )
+    renderPanel()
+    await sendMessage('מגנזיום')
+    await screen.findByRole('link', { name: 'מוצר שני' })
+    expect(screen.queryByText(i18n.t('agent:reply.topPick'))).toBeNull()
   })
 
   it('control: a reply WITHOUT a notice or clarify code renders neither string', async () => {

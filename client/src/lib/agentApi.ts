@@ -31,6 +31,8 @@ export interface AgentChatResponseDto {
    */
   handoff: Record<string, string | string[]> | null
   emptyResult: boolean
+  /** DEC-104 — true when the FIRST product is the server-validated top pick. */
+  topPick: boolean
 }
 
 function isHandoff(value: unknown): value is Record<string, string | string[]> {
@@ -55,7 +57,8 @@ function isAgentChatResponseDto(value: unknown): value is AgentChatResponseDto {
     (value.clarifyCode === null || value.clarifyCode === 'NO_CRITERIA_MATCHED') &&
     typeof value.medicalStop === 'boolean' &&
     (value.handoff === null || isHandoff(value.handoff)) &&
-    typeof value.emptyResult === 'boolean'
+    typeof value.emptyResult === 'boolean' &&
+    typeof value.topPick === 'boolean'
   )
 }
 

@@ -55,6 +55,21 @@ export type ExtractionResult =
   | { kind: 'criteria'; criteria: ExtractedCriteriaNames }
   | { kind: 'clarify'; question: string }
 
+/**
+ * Stage 3 output — ISSUE-161/DEC-104: beside the per-product prose the
+ * provider may RANK one product as its top pick for this request.
+ *
+ * 🔴 `topPickIndex` is an index INTO the products array it was given —
+ * the provider can only choose among rows the server already retrieved
+ * from PostgreSQL (drop-not-invent, applied to ranking). The ROUTE
+ * validates it (integer, in range, ≥2 products) and drops anything else;
+ * a provider cannot conjure a product by pointing outside the list.
+ */
+export interface ExplanationResult {
+  explanations: string[]
+  topPickIndex: number | null
+}
+
 export interface AIProvider {
   /**
    * Stage 1 — translate free text into criteria, or ask one clarifying
@@ -70,16 +85,17 @@ export interface AIProvider {
     signal?: AbortSignal,
   ): Promise<ExtractionResult>
   /**
-   * Stage 3 — one short explanation per product, in order. The route
-   * validates the result (length, count, no unknown-product mentions) —
-   * a provider's prose is never trusted as-is (AI_SAFETY_RULES layer 4).
+   * Stage 3 — one short explanation per product, in order, plus the
+   * ranked top pick (ExplanationResult above). The route validates both
+   * halves (length, count, no unknown-product mentions; pick in range) —
+   * a provider's output is never trusted as-is (AI_SAFETY_RULES layer 4).
    */
   explainProducts(
     products: PublicCatalogProduct[],
     message: string,
     lang: AgentLang,
     signal?: AbortSignal,
-  ): Promise<string[]>
+  ): Promise<ExplanationResult>
 }
 
 /**

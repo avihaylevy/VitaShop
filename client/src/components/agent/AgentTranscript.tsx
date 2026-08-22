@@ -202,6 +202,7 @@ export function AgentTranscript({
                           <AgentProductCard
                             product={mapCatalogProduct(dto, language)}
                             explanation={entry.response.explanations[productIndex] ?? ''}
+                            topPick={entry.response.topPick && productIndex === 0}
                             explanationLang={entry.lang}
                             onAddToCart={onAddToCart}
                             onNavigateClick={handleNavigateClick}

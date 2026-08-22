@@ -132,17 +132,27 @@ describe('MockProvider.explainProducts', () => {
 
   it('builds one explanation per product, from DTO fields only, per language', async () => {
     const he = await provider.explainProducts([product], 'מגנזיום', 'he')
-    expect(he).toHaveLength(1)
-    expect(he[0]).toContain('מגנזיום ציטראט')
-    expect(he[0]).toContain('אלטמן')
+    expect(he.explanations).toHaveLength(1)
+    expect(he.explanations[0]).toContain('מגנזיום ציטראט')
+    expect(he.explanations[0]).toContain('אלטמן')
+    // DEC-104 — one product is never a "top pick".
+    expect(he.topPickIndex).toBeNull()
 
     const en = await provider.explainProducts([product], 'magnesium', 'en')
-    expect(en).toHaveLength(1)
-    expect(en[0]).toContain('Magnesium Citrate')
-    expect(en[0]).toContain('Altman')
+    expect(en.explanations).toHaveLength(1)
+    expect(en.explanations[0]).toContain('Magnesium Citrate')
+    expect(en.explanations[0]).toContain('Altman')
   })
 
-  it('returns an empty array for an empty product list', async () => {
-    await expect(provider.explainProducts([], 'anything', 'he')).resolves.toEqual([])
+  it('🔴 DEC-104 — ranks the CHEAPEST product as the top pick (ties → the earliest)', async () => {
+    const dearer = { ...product, slug: 'dearer', price: '99.90' }
+    const cheaper = { ...product, slug: 'cheaper', price: '19.90' }
+    const tie = { ...product, slug: 'tie', price: '19.90' }
+    const result = await provider.explainProducts([dearer, cheaper, tie], 'מגנזיום', 'he')
+    expect(result.topPickIndex).toBe(1)
+  })
+
+  it('returns an empty result for an empty product list', async () => {
+    await expect(provider.explainProducts([], 'anything', 'he')).resolves.toEqual({ explanations: [], topPickIndex: null })
   })
 })

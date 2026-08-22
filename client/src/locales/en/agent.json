@@ -22,7 +22,8 @@
     "medicalStop": "For a question like this, please consult a physician or pharmacist. I would be glad to help you find products from the catalog.",
     "products": "Products found:",
     "turnLimit": "This conversation has reached its length limit.",
-    "newConversation": "New conversation"
+    "newConversation": "New conversation",
+    "topPick": "Our top pick"
   },
   "errors": {
     "rateLimited": "Too many messages in a short time. Please try again in a few minutes.",

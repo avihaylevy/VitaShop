@@ -41,7 +41,7 @@ import { REFERRAL_NOTICE } from '../lib/ai/notices.js'
 import { detectTriggers, isMedicalOnly } from '../lib/ai/triggers.js'
 import { resolveCriteria, type HandoffParams } from '../lib/ai/criteriaMapping.js'
 import { guardExplanations } from '../lib/ai/explanationGuard.js'
-import type { AIProvider } from '../lib/ai/provider.js'
+import type { AIProvider, ExplanationResult } from '../lib/ai/provider.js'
 
 // Operational limits — the spec's Proposed numbers become this plan's
 // defaults (§11.2): 5 products per response, 10 conversation turns, 15s
@@ -98,6 +98,14 @@ export interface AgentChatResponse {
   handoff: HandoffParams | null
   /** True when a search ran and matched nothing (the REQ-F-077 empty path). */
   emptyResult: boolean
+  /**
+   * ISSUE-161/DEC-104 — true when the FIRST product is the provider's
+   * ranked top pick (the server pins it to the front, explanations
+   * re-aligned). Validated server-side: an out-of-range or non-integer
+   * pick, or a list of fewer than two products, answers false — the
+   * provider can only rank rows the server retrieved.
+   */
+  topPick: boolean
 }
 
 /**
@@ -115,6 +123,7 @@ function emptyResponse(overrides: Partial<AgentChatResponse> = {}): AgentChatRes
     medicalStop: false,
     handoff: null,
     emptyResult: false,
+    topPick: false,
     ...overrides,
   }
 }
@@ -318,7 +327,7 @@ export function createAiChatRouter(deps: AiChatRouterDeps): Router {
     // used to degrade; other provider errors threw the products away as a
     // 502 blamed on the provider).
     let explanations = products.map(() => '')
-    let raw: string[] | null = null
+    let raw: ExplanationResult | null = null
     // Fired concurrently with the provider call; the no-op catch prevents
     // an unhandled rejection if the provider fails first and the names are
     // never awaited. A real failure still surfaces at the await below.
@@ -342,7 +351,29 @@ export function createAiChatRouter(deps: AiChatRouterDeps): Router {
     }
     if (raw !== null) {
       const catalogueNames = await catalogueNamesPromise
-      explanations = guardExplanations({ products, explanations: raw, catalogueNames })
+      explanations = guardExplanations({ products, explanations: raw.explanations, catalogueNames })
+    }
+
+    // ── ISSUE-161/DEC-104 — the ranked top pick, validated then pinned ──
+    // 🔴 The provider may only point INTO the retrieved list: a usable pick
+    // is an integer index within range, over at least two products (a "top
+    // pick of one" is noise). Anything else is DROPPED — never clamped,
+    // never guessed. A valid pick is pinned to the FRONT with its
+    // explanation, so the client's contract is one bit: first card is it.
+    let topPick = false
+    const pick = raw?.topPickIndex ?? null
+    if (
+      pick !== null &&
+      Number.isInteger(pick) &&
+      pick >= 0 &&
+      pick < products.length &&
+      products.length >= 2
+    ) {
+      if (pick > 0) {
+        products.unshift(products.splice(pick, 1)[0]!)
+        explanations.unshift(explanations.splice(pick, 1)[0]!)
+      }
+      topPick = true
     }
 
     res.json(
@@ -351,6 +382,7 @@ export function createAiChatRouter(deps: AiChatRouterDeps): Router {
         explanations,
         notice,
         handoff: handoffParams,
+        topPick,
       }),
     )
   })

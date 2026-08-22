@@ -27,6 +27,7 @@ import type { PublicCatalogProduct } from '../catalogMapper.js'
 import type { AgentLang } from './notices.js'
 import { redactSensitiveTerms } from './triggers.js'
 import type {
+  ExplanationResult,
   AIProvider,
   ChatTurn,
   ExtractedCriteriaNames,
@@ -110,6 +111,11 @@ const extractionResponseSchema = z.object({
 
 const explanationResponseSchema = z.object({
   explanations: z.array(z.string()),
+  // DEC-104 — the model's 1-based top pick. Lenient here (any number or
+  // absent parses); the ROUTE owns validation and drops anything not a
+  // usable in-range index — a malformed rank must cost the badge, never
+  // the explanations beside it.
+  topPick: z.number().optional(),
 })
 
 export class GroqApiError extends Error {
@@ -304,8 +310,8 @@ export class GroqProvider implements AIProvider {
     message: string,
     lang: AgentLang,
     signal?: AbortSignal,
-  ): Promise<string[]> {
-    if (products.length === 0) return []
+  ): Promise<ExplanationResult> {
+    if (products.length === 0) return { explanations: [], topPickIndex: null }
     const facts = products
       .map(
         (product, index) =>
@@ -323,7 +329,7 @@ export class GroqProvider implements AIProvider {
       // notice is the interface's job; a refusal beside a product card is
       // a broken answer.
       'Recommending catalogue products is allowed and expected. Do NOT refuse, and do NOT add your own medical disclaimer — the interface shows a fixed notice. Simply avoid dosages, diagnoses, and medication advice.',
-      'Reply with JSON ONLY: {"explanations": [one string per product, in order]}.',
+      'Reply with JSON ONLY: {"explanations": [one string per product, in order], "topPick": <the 1-based number of the ONE listed product you most recommend for this request>}.',
       `PRODUCTS:\n${facts}`,
     ].join('\n')
 
@@ -334,6 +340,14 @@ export class GroqProvider implements AIProvider {
       ],
       signal,
     )
-    return parseModelJson(raw, explanationResponseSchema).explanations
+    const parsed = parseModelJson(raw, explanationResponseSchema)
+    // 1-based on the wire (matches the numbered PRODUCTS lines the model
+    // read) → 0-based for the interface; anything unusable becomes null
+    // and the route's validation is the real gate.
+    const topPickIndex =
+      typeof parsed.topPick === 'number' && Number.isInteger(parsed.topPick)
+        ? parsed.topPick - 1
+        : null
+    return { explanations: parsed.explanations, topPickIndex }
   }
 }

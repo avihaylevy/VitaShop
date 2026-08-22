@@ -228,17 +228,33 @@ describe('GroqProvider.explainProducts', () => {
     const fetchSpy = vi.fn().mockResolvedValue(wireResponse({ explanations: ['מתאים לבקשה.'] }))
     const provider = makeProvider(fetchSpy as unknown as typeof fetch)
     const result = await provider.explainProducts([product], 'מגנזיום כי אני לוקח קומדין', 'he')
-    expect(result).toEqual(['מתאים לבקשה.'])
+    expect(result).toEqual({ explanations: ['מתאים לבקשה.'], topPickIndex: null })
     const wire = JSON.stringify(sentBody(fetchSpy))
     expect(wire).toContain('מגנזיום ציטראט')
     expect(wire).toContain('89.90')
     expect(wire).not.toContain('קומדין')
   })
 
+  it('🔴 DEC-104 — a 1-based wire topPick converts to a 0-based index; garbage becomes null', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(wireResponse({ explanations: ['א', 'ב'], topPick: 2 }))
+      .mockResolvedValueOnce(wireResponse({ explanations: ['א', 'ב'], topPick: 2.5 }))
+    const provider = makeProvider(fetchSpy as unknown as typeof fetch)
+    const second = { ...product, slug: 'second' }
+    const ranked = await provider.explainProducts([product, second], 'מגנזיום', 'he')
+    expect(ranked.topPickIndex).toBe(1)
+    const garbage = await provider.explainProducts([product, second], 'מגנזיום', 'he')
+    expect(garbage.topPickIndex).toBeNull()
+  })
+
   it('an empty product list makes NO network call', async () => {
     const fetchSpy = vi.fn()
     const provider = makeProvider(fetchSpy as unknown as typeof fetch)
-    await expect(provider.explainProducts([], 'מגנזיום', 'he')).resolves.toEqual([])
+    await expect(provider.explainProducts([], 'מגנזיום', 'he')).resolves.toEqual({
+      explanations: [],
+      topPickIndex: null,
+    })
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 })
