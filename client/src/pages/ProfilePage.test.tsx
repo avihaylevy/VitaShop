@@ -11,6 +11,16 @@ import { ProfilePage } from './ProfilePage'
  * Focus/visual behavior joins the browser matrix.
  */
 
+/*
+ * A signed-in session WITH an email — the ISSUE-179 password gate keys off
+ * the typed email differing from this identity. refresh is a spy so the
+ * post-change re-read stays observable.
+ */
+const { refreshSpy } = vi.hoisted(() => ({ refreshSpy: vi.fn() }))
+vi.mock('../state/SessionContext', () => ({
+  useOptionalSession: () => ({ email: 'moshe@example.test', firstName: 'משה', refresh: refreshSpy }),
+}))
+
 const BASE_URL = 'http://localhost:3000'
 
 const PROFILE = {
@@ -126,6 +136,102 @@ describe('the details form', () => {
     )
     // The form survived its own failure — same button, still there.
     expect(screen.getByRole('button', { name: 'Save details' })).toBeDefined()
+  })
+
+  it('🔴 ISSUE-179 — editing the EMAIL summons the password field, and the password rides the PATCH', async () => {
+    routeFetch({})
+    renderPage()
+    await waitFor(() =>
+      expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('משה'),
+    )
+    // Untouched email: no password field anywhere.
+    expect(screen.queryByLabelText('Current password')).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.test' } })
+    const password = await screen.findByLabelText('Current password')
+    fireEvent.change(password, { target: { value: 'Abcdef12xyz' } })
+
+    fetchMock.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ profile: { firstName: 'משה', lastName: 'לוי', phone: '0521234567', email: 'new@example.test' } }),
+    }) as unknown as Response)
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('status').some((el) => /details were saved/.test(el.textContent ?? '')),
+      ).toBe(true),
+    )
+    const patchCall = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'PATCH',
+    ) as [string, { body: string }]
+    expect(JSON.parse(patchCall[1].body)).toEqual({
+      firstName: 'משה',
+      lastName: 'לוי',
+      phone: '0521234567',
+      email: 'new@example.test',
+      currentPassword: 'Abcdef12xyz',
+    })
+    // The credential never outlives its save.
+    await waitFor(() =>
+      expect((screen.queryByLabelText('Current password') as HTMLInputElement | null)?.value ?? '').toBe(''),
+    )
+    // 🔴 The header greets by the session identity — the change must
+    // trigger a session re-read, or the old address lingers until reload.
+    // Pinned here because nothing else could observe the deleted call.
+    expect(refreshSpy).toHaveBeenCalled()
+  })
+
+  it('🔴 ISSUE-179 — a wrong password renders the named refusal and keeps the form alive', async () => {
+    routeFetch({})
+    renderPage()
+    await waitFor(() =>
+      expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('משה'),
+    )
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.test' } })
+    fireEvent.change(await screen.findByLabelText('Current password'), { target: { value: 'wrong' } })
+
+    fetchMock.mockImplementationOnce(async () => ({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: { code: 'PASSWORD_INCORRECT' } }),
+    }) as unknown as Response)
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('alert').some((el) => /password is incorrect/i.test(el.textContent ?? '')),
+      ).toBe(true),
+    )
+    expect(screen.getByRole('button', { name: 'Save details' })).toBeDefined()
+  })
+
+  it('⚠️ THE CONTROL — a plain name save shows NO password field and sends NO credential', async () => {
+    routeFetch({})
+    renderPage()
+    await waitFor(() =>
+      expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('משה'),
+    )
+    fetchMock.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ profile: { firstName: 'דוד', lastName: 'לוי', phone: '0521234567' } }),
+    }) as unknown as Response)
+    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'דוד' } })
+    expect(screen.queryByLabelText('Current password')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }))
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('status').some((el) => /details were saved/.test(el.textContent ?? '')),
+      ).toBe(true),
+    )
+    const patchCall = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'PATCH',
+    ) as [string, { body: string }]
+    const body = JSON.parse(patchCall[1].body) as Record<string, unknown>
+    expect('currentPassword' in body).toBe(false)
+    expect('email' in body).toBe(false)
   })
 })
 

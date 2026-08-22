@@ -43,6 +43,28 @@ export function ProfilePage() {
   const session = useOptionalSession()
   const sessionEmail = session?.email ?? null
   const [profile, setProfile] = useState<ProfileForm>({ firstName: '', lastName: '', phone: '', email: '' })
+  /**
+   * ISSUE-179 / DEC-100 — the password that authorises an IDENTITY change.
+   * Rendered (and sent) only while the typed email differs from the
+   * session's; cleared on success and never stored anywhere.
+   */
+  const [currentPassword, setCurrentPassword] = useState('')
+  /**
+   * 🔴 ONE predicate for the render gate, the submit payload and the
+   * post-save refresh — the first draft spelled the three-clause compare
+   * twice, and a casing drift between copies had already been review-fixed
+   * once before. Server-normal form on both sides.
+   */
+  const typedEmail = profile.email.trim().toLowerCase()
+  const emailEdited =
+    sessionEmail !== null && typedEmail !== '' && typedEmail !== sessionEmail.toLowerCase()
+
+  // The moment the shopper reverts the email, the field unmounts — and the
+  // credential must not outlive it in state (a shared machine would silently
+  // resubmit it the next time the field appears).
+  useEffect(() => {
+    if (!emailEdited) setCurrentPassword('')
+  }, [emailEdited])
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileNotice, setProfileNotice] = useState('')
   const [profileError, setProfileError] = useState('')
@@ -128,18 +150,16 @@ export function ProfilePage() {
     if (savingProfile) return
     setSavingProfile(true)
     setProfileError('')
-    // Review fix: compare in the server's own normal form (lowercased) and
-    // only when the session identity is KNOWN — a raw compare re-sent the
-    // email on every save for a differently-cased entry, and a still-null
-    // session made a plain name save carry the email too.
-    const typedEmail = profile.email.trim().toLowerCase()
-    const emailChanged =
-      sessionEmail !== null && typedEmail !== '' && typedEmail !== sessionEmail.toLowerCase()
+    // The component-level predicate — the same value the render gate uses,
+    // so the field and the payload can never disagree.
+    const emailChanged = emailEdited
     const result = await patchShopperProfile({
       firstName: profile.firstName,
       lastName: profile.lastName,
       phone: profile.phone,
-      ...(emailChanged ? { email: typedEmail } : {}),
+      // ISSUE-179 — the password rides ONLY with an identity change; the
+      // server refuses the change without it and re-verifies either way.
+      ...(emailChanged ? { email: typedEmail, currentPassword } : {}),
     })
     setSavingProfile(false)
     if (!result.ok) {
@@ -168,6 +188,8 @@ export function ProfilePage() {
     // (empty is not an email); put the real address back so the form never
     // claims an emptiness the server never stored.
     if (emailChanged) void session?.refresh()
+    // The credential's job is done — never keep it in state after a save.
+    setCurrentPassword('')
     if (typedEmail === '' && sessionEmail !== null) {
       setProfile((current) => ({ ...current, email: sessionEmail }))
     }
@@ -339,6 +361,29 @@ export function ProfilePage() {
               />
               <p className="text-xs text-text-muted">{t('details.emailHint')}</p>
             </div>
+            {/*
+              ISSUE-179 / DEC-100 — changing the SIGN-IN identity re-proves
+              the person: the password field appears the moment the typed
+              email differs from the session's, and the server refuses the
+              change without it. Same normal-form compare as the submit path.
+            */}
+            {emailEdited && (
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="profile-current-password" className="text-text-ink">
+                    {t('details.currentPassword')}
+                  </label>
+                  <input
+                    id="profile-current-password"
+                    type="password"
+                    autoComplete="current-password"
+                    dir="ltr"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
+                  />
+                  <p className="text-xs text-text-muted">{t('details.currentPasswordHint')}</p>
+                </div>
+              )}
             <Button type="submit" loading={savingProfile} className="self-start">
               {savingProfile ? t('details.saving') : t('details.save')}
             </Button>

@@ -205,11 +205,29 @@ export async function patchShopperProfile(fields: {
   phone: string
   /** ISSUE-173 (DEC-090 O2 amended) — sent only when the shopper changed it. */
   email?: string
+  /** ISSUE-179 / DEC-100 — required by the server when `email` differs from
+   * the stored identity. Sent only alongside an email change. */
+  currentPassword?: string
 }): Promise<ProfileWriteResult> {
   const raw = await accountCall('/profile', { method: 'PATCH', body: fields })
   if (raw === null) return { ok: false, failure: 'unavailable' }
   if (raw.status === 401) return { ok: false, failure: 'unauthenticated' }
   if (raw.status === 400) return { ok: false, failure: 'invalid', codes: codesOf(raw.body) }
+  // ISSUE-179 — a wrong password on an identity change, folded into the
+  // `invalid` shape so the form renders it through the same named-code path.
+  // ⚠️ BY THE BODY'S CODE, not the bare status (review): a future 403 from
+  // some other guard must not be mislabelled "the password is incorrect".
+  if (raw.status === 403) {
+    const body = raw.body
+    const code =
+      isPlainObject(body) && isPlainObject(body.error) && typeof body.error.code === 'string'
+        ? body.error.code
+        : null
+    if (code === 'PASSWORD_INCORRECT') {
+      return { ok: false, failure: 'invalid', codes: ['PASSWORD_INCORRECT'] }
+    }
+    return { ok: false, failure: 'unavailable' }
+  }
   if (raw.status !== 200) return { ok: false, failure: 'unavailable' }
   const body = raw.body
   if (!isPlainObject(body) || !isPlainObject(body.profile)) {

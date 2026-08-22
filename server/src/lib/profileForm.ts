@@ -24,6 +24,17 @@ export const profilePatchSchema = z
       .transform(normalizeEmail)
       .pipe(z.string().email('EMAIL_INVALID'))
       .optional(),
+    /**
+     * ISSUE-179 / DEC-100 — changing the SIGN-IN IDENTITY re-proves the
+     * person, not just the session: a hijacked or shared session must not
+     * be able to rotate the account's email unchallenged. Required by the
+     * ROUTE whenever `email` differs from the stored one; never persisted.
+     * Length-capped only, matching registration's own 200 cap so no legally
+     * set password can be refused here (no trim/normalise — a password is
+     * opaque bytes; the cap stops a megabyte string from reaching argon2,
+     * and over-cap answers the VALIDATION code, never "incorrect").
+     */
+    currentPassword: z.string({ message: 'PASSWORD_REQUIRED' }).max(200, 'PASSWORD_TOO_LONG').optional(),
   })
   .strict()
 

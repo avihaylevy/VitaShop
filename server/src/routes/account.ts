@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import argon2 from 'argon2'
 import type { PrismaClient } from '@prisma/client'
 import { createAccountRateLimiters, type AccountRateLimiters } from '../lib/rateLimit.js'
 import { CatalogIntegrityError, mapProductToPublicCatalog } from '../lib/catalogMapper.js'
@@ -6,6 +7,7 @@ import { CATALOG_RELATIONS_INCLUDE } from '../lib/catalogProductLookup.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireActiveShopper } from './requireActiveShopper.js'
 import { parseProfilePatch } from '../lib/profileForm.js'
+import { normalizeEmail } from '../lib/normalizeEmail.js'
 import { isUniqueViolationOn } from '../lib/prismaUniqueViolation.js'
 import {
   ADDRESS_CAP,
@@ -375,10 +377,24 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
 
   /**
    * REQ-F-051 "update personal details" — name and phone, Table 3's rules
-   * re-enforced with the registration form's exact vocabulary. 🔴 EMAIL is
-   * refused by the schema's .strict() (DEC-090 O2: the identity anchor).
+   * re-enforced with the registration form's exact vocabulary. EMAIL is
+   * editable since ISSUE-173 (DEC-090 O2 amended) — and since ISSUE-179 /
+   * DEC-100 a change of the SIGN-IN IDENTITY re-proves the person:
+   *
+   * 🔴 AN EMAIL CHANGE REQUIRES THE CURRENT PASSWORD. A hijacked or shared
+   * session could otherwise rotate the account's email in one authenticated
+   * PATCH and lock the owner out, with no confirmation to the old address
+   * and no password ever re-entered. The check runs ONLY when the email
+   * actually differs from the stored one — a same-value resubmit and every
+   * name/phone save stay password-free. Verification is argon2 against the
+   * stored hash, behind a DEDICATED login-strength limiter
+   * (identityChange, 10/15min — profileWrite's 60 alone made this the
+   * loosest password oracle in the app; hundred-ninth-pass review). A
+   * missing password is the validation family (400, PASSWORD_REQUIRED,
+   * beside this route's own PROFILE_INVALID codes); a wrong one is a
+   * refusal of THIS person (403, PASSWORD_INCORRECT).
    */
-  router.patch('/profile', limiters.profileWrite, requireShopper, requireActiveShopper, async (req, res) => {
+  router.patch('/profile', limiters.profileWrite, limiters.identityChange, requireShopper, requireActiveShopper, async (req, res) => {
     const userId = req.session!.userId!
     const parsed = parseProfilePatch(req.body)
     if (!parsed.ok) {
@@ -387,10 +403,64 @@ export function createAccountRouter(deps: AccountRouterDeps): ReturnType<typeof 
       })
       return
     }
+    // 🔴 SPLIT OFF before the update — `currentPassword` is a credential,
+    // never data; reaching prisma.update it would be an unknown column.
+    const { currentPassword, ...patch } = parsed.value
+
+    if (patch.email !== undefined) {
+      let current: { email: string; passwordHash: string } | null
+      try {
+        current = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { email: true, passwordHash: true },
+        })
+      } catch (error) {
+        console.error(`[account] profile identity read failed for ${userId}`, error)
+        res.status(503).json({ error: { code: 'PROFILE_UNAVAILABLE', message: 'Try again shortly.' } })
+        return
+      }
+      if (!current) {
+        res.status(401).json({ error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in.' } })
+        return
+      }
+      // The stored side normalised too — every app path writes lowercase,
+      // but a manually-seeded row must not make the SAME address look
+      // different and demand a password for a no-op.
+      if (patch.email !== normalizeEmail(current.email)) {
+        if (currentPassword === undefined || currentPassword === '') {
+          res.status(400).json({
+            error: {
+              code: 'PROFILE_INVALID',
+              message: 'The profile failed validation.',
+              codes: ['PASSWORD_REQUIRED'],
+            },
+          })
+          return
+        }
+        let matches = false
+        try {
+          matches = await argon2.verify(current.passwordHash, currentPassword)
+        } catch (error) {
+          // A malformed stored hash or verify fault reads as a mismatch —
+          // failing closed on an identity change, never open. LOGGED (the
+          // loginService precedent): a corrupted hash otherwise becomes a
+          // permanent, undiagnosable "wrong password" for that shopper.
+          console.error(`[account] argon2.verify failed for ${userId}`, error)
+          matches = false
+        }
+        if (!matches) {
+          res.status(403).json({
+            error: { code: 'PASSWORD_INCORRECT', message: 'The current password is incorrect.' },
+          })
+          return
+        }
+      }
+    }
+
     try {
       const user = await prisma.user.update({
         where: { id: userId },
-        data: parsed.value,
+        data: patch,
         select: { firstName: true, lastName: true, phone: true, email: true },
       })
       res.json({ profile: user })

@@ -255,7 +255,8 @@ describe('ISSUE-173 — the email edit (DEC-090 O2 amended by the user)', () => 
     const r = await fetch(`${baseUrl}/api/account/profile`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: fresh }),
+      // ISSUE-179 / DEC-100 — an identity change re-proves the person.
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: fresh, currentPassword: PASSWORD }),
     })
     expect(r.status).toBe(200)
     const body = (await r.json()) as { profile: { email: string } }
@@ -275,7 +276,9 @@ describe('ISSUE-173 — the email edit (DEC-090 O2 amended by the user)', () => 
     const r = await fetch(`${baseUrl}/api/account/profile`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: BOB }),
+      // With the CORRECT password — proving the refusal below is the unique
+      // index's, not the password gate's.
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: BOB, currentPassword: PASSWORD }),
     })
     expect(r.status).toBe(400)
     const body = (await r.json()) as { error: { codes: string[] } }
@@ -297,6 +300,91 @@ describe('ISSUE-173 — the email edit (DEC-090 O2 amended by the user)', () => 
     expect(r.status).toBe(400)
     const body = (await r.json()) as { error: { codes: string[] } }
     expect(body.error.codes).toContain('EMAIL_INVALID')
+  })
+
+  it("🔴 ISSUE-179 — an email change WITHOUT the password is refused, and the identity is untouched", async () => {
+    // The defect: a hijacked/shared session rotating the sign-in identity in
+    // one authenticated PATCH. The gate asks the PERSON, not the session.
+    const cookie = await signIn(ALICE)
+    const r = await fetch(`${baseUrl}/api/account/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: 'zz-hijack@example.test' }),
+    })
+    expect(r.status).toBe(400)
+    const body = (await r.json()) as { error: { codes: string[] } }
+    expect(body.error.codes).toContain('PASSWORD_REQUIRED')
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: aliceId }, select: { email: true } })
+    expect(row.email).toBe(ALICE)
+  })
+
+  it('🔴 ISSUE-179 — a WRONG password is 403 PASSWORD_INCORRECT, and the identity is untouched', async () => {
+    const cookie = await signIn(ALICE)
+    const r = await fetch(`${baseUrl}/api/account/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: 'zz-hijack@example.test', currentPassword: 'Wrong12345xyz' }),
+    })
+    expect(r.status).toBe(403)
+    expect(((await r.json()) as { error: { code: string } }).error.code).toBe('PASSWORD_INCORRECT')
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: aliceId }, select: { email: true } })
+    expect(row.email).toBe(ALICE)
+  })
+
+  it("🔴 ISSUE-179 — the guessing budget is LOGIN-strength: the 11th email-carrying PATCH is 429, while a name save still lands", async () => {
+    /*
+     * profileWrite alone gave this password oracle 60 guesses/15min — six
+     * times the login form's. The dedicated identityChange limiter (10,
+     * keyed per shopper, counting only email-carrying PATCHes) restores
+     * login's ceiling; the name-save control proves ordinary edits never
+     * spend the guessing budget.
+     */
+    const cookie = await signIn(ALICE)
+    let sawLimit = false
+    for (let attempt = 1; attempt <= 11; attempt += 1) {
+      const r = await fetch(`${baseUrl}/api/account/profile`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: 'zz-guess@example.test', currentPassword: `Wrong${attempt}xyzabc` }),
+      })
+      if (r.status === 429) {
+        sawLimit = true
+        expect(attempt).toBe(11)
+        break
+      }
+      expect(r.status).toBe(403)
+    }
+    expect(sawLimit).toBe(true)
+    // The identity survived every guess.
+    const row = await prisma.user.findUniqueOrThrow({ where: { id: aliceId }, select: { email: true } })
+    expect(row.email).toBe(ALICE)
+    // ⚠️ THE CONTROL — a name save carries no email, spends no guessing
+    // budget, and still lands after the 429.
+    const plain = await fetch(`${baseUrl}/api/account/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111' }),
+    })
+    expect(plain.status).toBe(200)
+  })
+
+  it('⚠️ THE CONTROL — a name/phone save and a SAME-email resubmit need no password', async () => {
+    // Without this, the gate could refuse everything and the two tests above
+    // would still pass. The window is the identity CHANGE, nothing else.
+    const cookie = await signIn(ALICE)
+    const plain = await fetch(`${baseUrl}/api/account/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111' }),
+    })
+    expect(plain.status).toBe(200)
+
+    const sameEmail = await fetch(`${baseUrl}/api/account/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ firstName: 'Alice', lastName: 'Account', phone: '050-1111111', email: ALICE }),
+    })
+    expect(sameEmail.status).toBe(200)
   })
 })
 
@@ -345,6 +433,7 @@ describe('the middleware ORDER, which the file calls the contract', () => {
           favourites: (_req, _res, next) => next(),
           club: (_req, _res, next) => next(),
           profileWrite: (_req, _res, next) => next(),
+          identityChange: (_req, _res, next) => next(),
           addresses: (_req, _res, next) => next(),
         },
       }),

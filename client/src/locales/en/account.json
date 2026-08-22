@@ -16,7 +16,9 @@
     "saving": "Saving…",
     "saved": "Your details were saved.",
     "email": "Email",
-    "emailHint": "The email is also your sign-in. Changing it updates your login details."
+    "emailHint": "The email is also your sign-in. Changing it updates your login details.",
+    "currentPassword": "Current password",
+    "currentPasswordHint": "Changing your email address requires your current password"
   },
   "addresses": {
     "heading": "Shipping addresses",
@@ -51,6 +53,8 @@
     "CITY_REQUIRED": "Enter a city.",
     "ZIP_INVALID": "The zip code is not valid.",
     "EMAIL_INVALID": "The email address is not valid.",
-    "EMAIL_TAKEN": "This email address is already in use."
+    "EMAIL_TAKEN": "This email address is already in use.",
+    "PASSWORD_REQUIRED": "Enter your current password to change the email address.",
+    "PASSWORD_INCORRECT": "The password is incorrect. The email address was not changed."
   }
 }

@@ -377,6 +377,14 @@ export interface AccountRateLimiters {
   club: RequestHandler
   /** M-009 — profile edits: human-driven writes, the admin `write` pacing. */
   profileWrite: RequestHandler
+  /**
+   * ISSUE-179 / DEC-100 — the password-verification budget for an EMAIL
+   * CHANGE. login-strength (10/15min), because PATCH /profile with an email
+   * is an online password-guessing surface: under profileWrite's 60 alone,
+   * the endpoint added to protect a hijacked session from rotating the
+   * identity handed that same session six times login's guessing budget.
+   */
+  identityChange: RequestHandler
   /** M-009 — the address book: reads + small writes while managing. */
   addresses: RequestHandler
 }
@@ -391,6 +399,25 @@ export function createAccountRateLimiters(): AccountRateLimiters {
       windowMs: 15 * MINUTE,
       limit: 60,
       keyGenerator: shopperKey,
+    }),
+    identityChange: rateLimit({
+      ...SHARED,
+      windowMs: 15 * MINUTE,
+      limit: 10,
+      keyGenerator: shopperKey,
+      /*
+       * ⚠️ A `skip`, against this module's header rule — DELIBERATE and in
+       * bounds. The frozen no-skip contract protects the UNAUTHENTICATED
+       * email-keyed limiters (/register, /login), where any outcome- or
+       * database-dependent counting leaks account existence. This skip is
+       * neither: it reads only the REQUEST'S OWN SHAPE (does the body carry
+       * an email?), on an authenticated route keyed by the session's user.
+       * Every email-carrying PATCH is counted regardless of outcome; a
+       * name/phone save is simply not a password-verification attempt and
+       * must not spend the guessing budget (or the gate would lock a
+       * shopper out of ordinary edits).
+       */
+      skip: (req) => typeof (req.body as { email?: unknown } | undefined)?.email !== 'string',
     }),
     addresses: rateLimit({
       ...SHARED,
