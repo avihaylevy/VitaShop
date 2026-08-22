@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { UserIcon, ChevronDownIcon } from '../icons'
 import { Icon } from '../ui/Icon'
 import { FOCUS_RING } from '../ui/focusRing'
+import { LinkButton } from '../ui/LinkButton'
 import { useSession } from '../../state/SessionContext'
 import { useOptionalCartClubMember } from '../../state/CartContext'
+import { isPlainNavigationClick } from '../../lib/agentConversation'
 
 /**
  * Account control + its dropdown. A WAI-ARIA menu-button disclosure, not a
@@ -122,6 +124,17 @@ export function AccountMenu() {
     triggerRef.current?.focus()
   }
 
+  /**
+   * Close only on the plain left-click that navigates THIS tab — a
+   * ctrl/cmd/shift/middle click opens a new tab without leaving this one,
+   * and closing anyway yanks the menu the user meant to keep (the
+   * LinkButton contract's decline rule, review finding). Shared by every
+   * menu entry so the family cannot fork again.
+   */
+  function closeOnPlainClick(event: React.MouseEvent<HTMLAnchorElement>) {
+    if (isPlainNavigationClick(event)) setOpen(false)
+  }
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -222,7 +235,7 @@ export function AccountMenu() {
                   <Link
                     role="menuitem"
                     to="/admin/dashboard"
-                    onClick={() => setOpen(false)}
+                    onClick={closeOnPlainClick}
                     className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
                   >
                     {t('account.adminDashboard')}
@@ -230,7 +243,7 @@ export function AccountMenu() {
                   <Link
                     role="menuitem"
                     to="/admin/orders"
-                    onClick={() => setOpen(false)}
+                    onClick={closeOnPlainClick}
                     className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
                   >
                     {t('account.adminOrders')}
@@ -238,7 +251,7 @@ export function AccountMenu() {
                   <Link
                     role="menuitem"
                     to="/admin/products"
-                    onClick={() => setOpen(false)}
+                    onClick={closeOnPlainClick}
                     className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
                   >
                     {t('account.adminProducts')}
@@ -250,7 +263,7 @@ export function AccountMenu() {
                   <Link
                     role="menuitem"
                     to="/account/profile"
-                    onClick={() => setOpen(false)}
+                    onClick={closeOnPlainClick}
                     className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
                   >
                     {t('account.profile')}
@@ -263,7 +276,7 @@ export function AccountMenu() {
                      * Checkpoint G2 built `/account/orders`.
                      */
                     to="/account/orders"
-                    onClick={() => setOpen(false)}
+                    onClick={closeOnPlainClick}
                     className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
                   >
                     {t('account.myOrders')}
@@ -275,7 +288,7 @@ export function AccountMenu() {
                   <Link
                     role="menuitem"
                     to="/account/club"
-                    onClick={() => setOpen(false)}
+                    onClick={closeOnPlainClick}
                     className={`${FOCUS_RING} flex items-center justify-between gap-2 rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
                   >
                     <span>{t('account.club')}</span>
@@ -301,22 +314,29 @@ export function AccountMenu() {
             </>
           ) : (
             <>
-              <Link
+              {/* LinkButton = the system's primary CTA from one source
+                  (the recorded cousin cleanup). */}
+              <LinkButton
                 role="menuitem"
                 to="/login"
-                onClick={() => setOpen(false)}
-                className={`${FOCUS_RING} mb-2 flex h-11 items-center justify-center rounded-card border border-transparent bg-brand-teal px-4 text-sm font-medium text-white hover:bg-brand-teal-strong`}
+                block
+                onClick={closeOnPlainClick}
+                className="mb-2"
               >
                 {t('account.signInCta')}
-              </Link>
-              <Link
+              </LinkButton>
+              {/* ghost — the register CTA's hand-copied class string WAS
+                  VARIANT_CLASS.ghost plus Button geometry (review finding:
+                  the half-migration left the drift beside its fix). */}
+              <LinkButton
                 role="menuitem"
                 to="/register"
-                onClick={() => setOpen(false)}
-                className={`${FOCUS_RING} flex h-11 items-center justify-center rounded-card px-3 text-sm font-medium text-text-ink hover:bg-surface-sunken`}
+                variant="ghost"
+                block
+                onClick={closeOnPlainClick}
               >
                 {t('account.registerCta')}
-              </Link>
+              </LinkButton>
             </>
           )}
           </div>

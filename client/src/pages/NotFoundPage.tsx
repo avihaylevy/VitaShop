@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { FOCUS_RING } from '../components/ui/focusRing'
+import { LinkButton } from '../components/ui/LinkButton'
 
 /**
  * 🔴 ISSUE-066 — the catch-all. Added 2026-08-12.
@@ -35,12 +36,10 @@ export function NotFoundPage() {
       <p className="mt-3 max-w-prose text-sm text-text-muted">{t('notFound.message')}</p>
 
       <div className="mt-6 flex flex-wrap items-center gap-4">
-        <Link
-          to="/catalog"
-          className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-card bg-brand-teal px-4 text-sm font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
-        >
-          {t('notFound.toCatalog')}
-        </Link>
+        {/* The system's primary-CTA clothes, from ONE source (LinkButton
+            draws Button's own VARIANT_CLASS) — this was a hand-copied,
+            already-drifted class string (the recorded cousin cleanup). */}
+        <LinkButton to="/catalog">{t('notFound.toCatalog')}</LinkButton>
         <Link
           to="/"
           className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline`}

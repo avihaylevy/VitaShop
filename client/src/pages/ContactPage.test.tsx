@@ -38,6 +38,18 @@ describe('ContactPage — the mock contact form', () => {
     expect(screen.queryByText(i18n.t('info:contact.received'))).toBeNull()
   })
 
+  it('🔴 an invalid MESSAGE field wears the error border like its Input siblings', () => {
+    // The review's finding: the first textarea branch set aria-invalid but
+    // kept a neutral border, so a failed submit outlined every field in
+    // red except the message. ui/Textarea now derives BOTH from `invalid`.
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('info:contact.submit') }))
+    const message = screen.getByLabelText(i18n.t('info:contact.messageLabel'))
+    expect(message.getAttribute('aria-invalid')).toBe('true')
+    expect(message.className).toContain('border-state-error')
+    expect(message.className).not.toContain('border-border-control')
+  })
+
   it('a malformed email gets the email error, not the required error', () => {
     renderPage()
     fireEvent.change(screen.getByLabelText(i18n.t('info:contact.emailLabel')), {

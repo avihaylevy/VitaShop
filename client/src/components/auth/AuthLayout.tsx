@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useId } from 'react'
 import { Input } from '../ui/Input'
+import { Textarea } from '../ui/Textarea'
 
 /**
  * Shared shell and field primitives for the MILESTONE-006 auth forms.
@@ -41,27 +42,36 @@ export function AuthCard({
  * ARIA snapshot in H's verification checks the accessible name, not the
  * presence of text nearby.
  */
-export function Field({
-  label,
-  hint,
-  error,
-  type = 'text',
-  value,
-  onChange,
-  autoComplete,
-  required = true,
-  inputMode,
-}: {
+type FieldCommonProps = {
   label: string
   hint?: string
   error?: string
-  type?: string
   value: string
   onChange: (value: string) => void
-  autoComplete?: string
   required?: boolean
-  inputMode?: 'text' | 'email' | 'tel'
-}) {
+}
+
+/**
+ * 🔴 A DISCRIMINATED UNION, not a flat prop bag (review finding): the
+ * first multiline draft kept type/autoComplete/inputMode on the shared
+ * type, so `<Field multiline autoComplete="street-address">` compiled
+ * and silently never autofilled. Now the compiler rejects the
+ * meaningless combination instead of the runtime ignoring it.
+ */
+type FieldProps =
+  | (FieldCommonProps & {
+      multiline: true
+      rows?: number
+    })
+  | (FieldCommonProps & {
+      multiline?: false
+      type?: string
+      autoComplete?: string
+      inputMode?: 'text' | 'email' | 'tel'
+    })
+
+export function Field(props: FieldProps) {
+  const { label, hint, error, value, onChange, required = true } = props
   const id = useId()
   const hintId = hint ? `${id}-hint` : undefined
   const errorId = error ? `${id}-error` : undefined
@@ -72,18 +82,33 @@ export function Field({
       <label htmlFor={id} className="block text-sm font-medium text-text-ink">
         {label}
       </label>
-      <Input
-        id={id}
-        type={type}
-        value={value}
-        required={required}
-        inputMode={inputMode}
-        autoComplete={autoComplete}
-        aria-describedby={describedBy}
-        invalid={Boolean(error)}
-        wrapperClassName="mt-1"
-        onChange={(event) => onChange(event.target.value)}
-      />
+      {props.multiline ? (
+        // ui/Textarea — Input's sibling primitive, so `invalid` drives the
+        // error border and ISSUE-046's text-base rule lives in ONE place.
+        <Textarea
+          id={id}
+          value={value}
+          required={required}
+          rows={props.rows ?? 5}
+          aria-describedby={describedBy}
+          invalid={Boolean(error)}
+          className="mt-1"
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : (
+        <Input
+          id={id}
+          type={props.type ?? 'text'}
+          value={value}
+          required={required}
+          inputMode={props.inputMode}
+          autoComplete={props.autoComplete}
+          aria-describedby={describedBy}
+          invalid={Boolean(error)}
+          wrapperClassName="mt-1"
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
       {hint && (
         <p id={hintId} className="mt-1 text-xs text-text-muted">
           {hint}

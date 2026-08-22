@@ -513,6 +513,17 @@ model FunnelEvent {
   order     Order?          @relation(fields: [orderId], references: [id])
   createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz
 
-  @@index([eventType, createdAt])
+  // ISSUE-189 hardening (user-approved 2026-08-22; shapes redesigned by
+  // the hundred-fifteenth-pass review): TWO secondaries on the
+  // highest-write table, each earning its insert cost —
+  //   (eventType, sessionId, createdAt): the checkout-started dedupe's
+  //   eq/eq/range probe, AND a strict superset of the retired
+  //   (eventType, createdAt) index, so the funnel groupBy still has its
+  //   prefix;
+  //   (createdAt, eventType, sessionId): covering for the dashboard's
+  //   range-filtered aggregations (per-event distinct sessions), which a
+  //   bare (createdAt) draft served not at all.
+  @@index([eventType, sessionId, createdAt])
+  @@index([createdAt, eventType, sessionId])
   @@map("funnel_events")
 }

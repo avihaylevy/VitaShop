@@ -6,6 +6,7 @@ import { getCartLines, type CartLineDisplay } from '../../lib/cartDisplay'
 import { PriceBlock } from '../catalog/PriceBlock'
 import { formatPrice } from '../../lib/formatPrice'
 import { Button } from '../ui/Button'
+import { LinkButton } from '../ui/LinkButton'
 import { FOCUS_RING } from '../ui/focusRing'
 import type { SupportedLanguage } from '../../i18n'
 import { CartItemRow, CART_ROW_ATTRIBUTE } from './CartItemRow'
@@ -364,12 +365,9 @@ export function CartPage() {
               */}
               {!cart.hasBlockingLine && (
                 <p className="mt-6">
-                  <Link
-                    to="/checkout"
-                    className={`${FOCUS_RING} inline-flex min-h-11 items-center justify-center rounded-card border border-transparent bg-brand-teal px-4 text-sm font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
-                  >
-                    {t('page.checkoutCta')}
-                  </Link>
+                  {/* LinkButton = Button's clothes from one source (the
+                      recorded cousin cleanup; the hand-copy had drifted). */}
+                  <LinkButton to="/checkout">{t('page.checkoutCta')}</LinkButton>
                 </p>
               )}
 

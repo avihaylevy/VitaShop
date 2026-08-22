@@ -145,6 +145,32 @@ describe('the account menu', () => {
   })
 })
 
+describe('modified clicks — the menu declines the close (the LinkButton contract)', () => {
+  it('🔴 a ctrl-click on a menu entry keeps the menu OPEN; a plain click closes it', async () => {
+    respondSession({ authenticated: false })
+    renderMenu()
+    await openMenu()
+
+    // Modified click: opens a new tab without navigating this one — the
+    // menu the user deliberately kept must survive.
+    const signIn = await screen.findByRole('menuitem', { name: /sign in/i })
+    fireEvent.click(signIn, { ctrlKey: true })
+    expect(screen.queryByRole('menu')).toBeTruthy()
+
+    // CONTROL — the plain left-click still closes.
+    fireEvent.click(screen.getByRole('menuitem', { name: /sign in/i }))
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  })
+
+  it('the register entry is a LinkButton menuitem too — the ghost half of the pair', async () => {
+    respondSession({ authenticated: false })
+    renderMenu()
+    await openMenu()
+    const register = await screen.findByRole('menuitem', { name: /create account/i })
+    expect(register.getAttribute('href')).toBe('/register')
+  })
+})
+
 describe('ISSUE-089 — the menu says WHO is signed in', () => {
   it('🔴 renders the name and email the session reported', async () => {
     respondSession({ authenticated: true, role: 'customer', firstName: 'Avihay', email: 'shopper@vitashop.local' })

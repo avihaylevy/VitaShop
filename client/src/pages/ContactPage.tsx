@@ -3,7 +3,6 @@ import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Field, FormError } from '../components/auth/AuthLayout'
 import { Button } from '../components/ui/Button'
-import { FOCUS_RING } from '../components/ui/focusRing'
 
 /**
  * ISSUE-125 — the יצירת קשר page, MOCK BY THE USER'S INSTRUCTION: the form
@@ -92,11 +91,12 @@ export function ContactPage() {
             onChange={setEmail}
             error={errors.email}
           />
-          <MessageField
+          <Field
             label={t('contact.messageLabel')}
             value={message}
             onChange={setMessage}
             error={errors.message}
+            multiline
           />
 
           {/* The auth forms' assertive form-level region — a failed submit
@@ -109,52 +109,6 @@ export function ContactPage() {
           </Button>
         </form>
       </section>
-    </div>
-  )
-}
-
-/**
- * The textarea sibling of AuthLayout's Field — same association contract
- * (htmlFor/id, aria-describedby, --border-control), just multiline. Kept
- * here because this page is its only consumer.
- */
-function MessageField({
-  label,
-  value,
-  onChange,
-  error,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  error?: string
-}) {
-  const id = useId()
-  const errorId = error ? `${id}-error` : undefined
-
-  return (
-    <div className="mt-4">
-      <label htmlFor={id} className="block text-sm font-medium text-text-ink">
-        {label}
-      </label>
-      <textarea
-        id={id}
-        value={value}
-        required
-        rows={5}
-        aria-describedby={errorId}
-        aria-invalid={error ? true : undefined}
-        onChange={(event) => onChange(event.target.value)}
-        // rounded-compact + FOCUS_RING: the same radius and ring source as
-        // the Input two fields up — a textarea with a different corner or a
-        // string-literal ring is exactly the drift focusRing.ts warns about.
-        className={`${FOCUS_RING} mt-1 block w-full resize-y rounded-compact border border-border-control bg-well px-3 py-2 text-base text-text-ink placeholder:text-text-muted`}
-      />
-      {error && (
-        <p id={errorId} className="mt-1 text-xs text-state-error">
-          {error}
-        </p>
-      )}
     </div>
   )
 }

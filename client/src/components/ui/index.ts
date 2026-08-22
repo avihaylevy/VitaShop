@@ -1,6 +1,8 @@
 export { Button } from './Button'
 export { IconButton } from './IconButton'
 export { Input } from './Input'
+export { Textarea } from './Textarea'
+export { LinkButton } from './LinkButton'
 export { Badge } from './Badge'
 export { Surface } from './Surface'
 export { Icon } from './Icon'

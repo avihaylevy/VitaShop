@@ -1,14 +1,15 @@
 import { useCallback, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 import { useCart } from '../../state/CartContext'
 import { toCartLineDisplay, type CartLineDisplay } from '../../lib/cartDisplay'
 import type { SupportedLanguage } from '../../i18n'
 import { PriceBlock } from '../catalog/PriceBlock'
 import { CenterDialog } from '../ui/CenterDialog'
 import { FOCUS_RING } from '../ui/focusRing'
+import { LinkButton } from '../ui/LinkButton'
 import { CartItemRow } from './CartItemRow'
 import { useCartOutcomeMessage } from './CartOutcomeNotice'
+import { isPlainNavigationClick } from '../../lib/agentConversation'
 import { ClubSavingsRow } from './ClubSavingsRow'
 
 type CartDrawerProps = {
@@ -64,6 +65,15 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
   const { t, i18n } = useTranslation('cart')
   const language = i18n.language as SupportedLanguage
   const { cart, outcome, failure, pending, setLineQuantity } = useCart()
+
+  /** Close only on the plain left-click that navigates THIS tab — a
+   *  modified click opens a new tab and must not yank the drawer. */
+  const closeOnPlainClick = useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (isPlainNavigationClick(event)) onClose()
+    },
+    [onClose],
+  )
 
   // Read live from the SERVER's cart on every render — no copied lines, so a
   // clamp, a removal or a concurrent change is reflected immediately.
@@ -171,23 +181,20 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
               <p className="text-sm text-state-error">{t('blocked.message')}</p>
             )}
             {!cart.hasBlockingLine && (
-              <Link
-                to="/checkout"
-                onClick={onClose}
-                className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-card bg-brand-teal px-4 text-sm font-medium text-white transition-colors duration-150 ease-standard hover:bg-brand-teal-strong`}
-              >
+              /* LinkButton = Button's clothes from one source (the recorded
+                 cousin cleanup; both hand-copies here had drifted). The
+                 close is DECLINED on modified clicks — a ctrl/cmd/middle
+                 click opens checkout in a new tab and must not yank the
+                 drawer the shopper kept open (the LinkButton contract). */
+              <LinkButton to="/checkout" block onClick={closeOnPlainClick}>
                 {t('page.checkoutCta')}
-              </Link>
+              </LinkButton>
             )}
 
             {/* The full cart page — shipping detail, undo, the wider layout. */}
-            <Link
-              to="/cart"
-              onClick={onClose}
-              className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-card border border-border-hairline px-4 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:bg-surface-sunken`}
-            >
+            <LinkButton to="/cart" variant="secondary" block onClick={closeOnPlainClick}>
               {t('drawer.goToCart')}
-            </Link>
+            </LinkButton>
           </>
         )}
 
