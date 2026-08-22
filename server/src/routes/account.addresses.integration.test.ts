@@ -163,7 +163,20 @@ describe('the profile edit (REQ-F-051)', () => {
     expect(body.phone).toBe('0521234567')
   })
 
-  it('🔴 refusals carry named codes, and EMAIL is refused by strictness (DEC-090 O2)', async () => {
+  it('🔴 refusals carry named codes; an UNKNOWN key is refused by strictness; a MALFORMED email is EMAIL_INVALID', async () => {
+    /*
+     * ⚠️ AMENDED in the hundred-sixth pass. The original probe PATCHed a
+     * VALID email expecting DEC-090 O2's strictness refusal — but ISSUE-173
+     * (user-approved amendment) made `email` a legal field, so the "refusal"
+     * probe started SUCCEEDING and silently ROTATED the fixture owner's
+     * sign-in email, 401-ing every later signIn(OWNER) in this file: one
+     * stale pin took six healthy tests down with it. The strictness half now
+     * probes a key that is still unknown; the email half pins the NEW
+     * contract's refusal (malformed → EMAIL_INVALID, row untouched). The
+     * accept path lives in account.integration.test.ts (ISSUE-173's tests).
+     * The rotated residue row this bug left behind (new@example.test) was
+     * removed the same day per DEC-063 — 0 addresses, 0 orders, fixture-born.
+     */
     const cookie = await signIn(OWNER)
     const bad = await api('/profile', {
       method: 'PATCH',
@@ -175,14 +188,25 @@ describe('the profile edit (REQ-F-051)', () => {
     expect(codes).toContain('FIRST_NAME_REQUIRED')
     expect(codes).toContain('PHONE_INVALID')
 
+    // Strictness still holds for keys the schema does not know.
+    const unknown = await api('/profile', {
+      method: 'PATCH',
+      cookie,
+      body: { firstName: 'א', lastName: 'ב', phone: '0521234567', role: 'admin' },
+    })
+    expect(unknown.status).toBe(400)
+
+    // A malformed email is refused by the field's own rule, not strictness.
     const email = await api('/profile', {
       method: 'PATCH',
       cookie,
-      body: { firstName: 'א', lastName: 'ב', phone: '0521234567', email: 'new@example.test' },
+      body: { firstName: 'א', lastName: 'ב', phone: '0521234567', email: 'not-an-email' },
     })
     expect(email.status).toBe(400)
+    const emailCodes = ((await email.json()) as { error: { codes: string[] } }).error.codes
+    expect(emailCodes).toContain('EMAIL_INVALID')
 
-    // Nothing changed on either refusal.
+    // Nothing changed on any refusal — the sign-in identity above all.
     const row = await prisma.user.findUniqueOrThrow({
       where: { id: ownerId },
       select: { email: true },

@@ -8,6 +8,7 @@ import {
   readVerifiedProductRows,
 } from '../lib/productsCsv.js'
 import { isTestFixtureSlug } from '../lib/testFixturePrefix.js'
+import { isUploadRef } from '../lib/uploadPaths.js'
 
 /**
  * 🔴 SEED CONVERGENCE — the database must EQUAL the CSV's desired state.
@@ -65,6 +66,57 @@ afterAll(async () => {
  */
 const isFixture = isTestFixtureSlug
 
+/**
+ * 🔴 DEC-089b MADE THE ADMIN A SECOND LEGITIMATE WRITER (ISSUE-154, the
+ * user's call, hundred-sixth pass): products created through the admin
+ * editor are REAL catalogue rows that the CSV never heard of — the user's
+ * own vitamin-c-liposomal is one. They are excluded from the CSV-equality
+ * sets by a NARROW, evidence-based discriminator, not a broad allowlist:
+ * the seed only ever writes `assets/products/…` image links, so a non-CSV
+ * row whose images exist and are ALL external http(s) URLs or upload refs
+ * (isUploadRef — THE prefix check, one fact one place) can only have come
+ * through the admin channel.
+ *
+ * ⚠️ TIGHTENED in the hundred-seventh-pass review:
+ * · A ZERO-IMAGE non-CSV row is NOT excluded. `[].some()` is false, and the
+ *   first draft therefore classified an imageless orphan — the classic
+ *   partial-write drift this file exists to police — as admin work. The
+ *   exclusion must be EARNED by positive evidence (an image only the admin
+ *   channel writes). Trade-off, recorded: an admin-created product saved
+ *   with no image will turn these sets red until it gets one.
+ * · A non-CSV row with a seed-shaped assets/ link still reds — the family
+ *   keeps its teeth (mutation-proved below, both directions).
+ *
+ * ⚠️ CREATION-ONLY SHIELD, deliberately. Admin EDITS of CSV-seeded rows
+ * (dietary flags, deactivation, image swaps) are NOT shielded and will
+ * red these sets — whether that is drift or a legal second writer is the
+ * user's open decision (ISSUE-187); this file's own precondition ("assume
+ * `prisma db seed` has been run against the current CSV") stands.
+ *
+ * Memoized: five tests, one scan.
+ */
+async function computeAdminCreatedSlugs(): Promise<Set<string>> {
+  const csvSlugs = new Set(readVerifiedProductRows().map((r) => r.slug ?? ''))
+  const rows = await prisma.product.findMany({
+    select: { slug: true, images: { select: { url: true } } },
+  })
+  const admin = new Set<string>()
+  for (const row of rows) {
+    if (csvSlugs.has(row.slug) || isFixture(row.slug)) continue
+    const adminShaped =
+      row.images.length > 0 &&
+      row.images.every((i) => /^https?:\/\//.test(i.url) || isUploadRef(i.url))
+    if (adminShaped) admin.add(row.slug)
+  }
+  return admin
+}
+
+let adminSlugsPromise: Promise<Set<string>> | null = null
+function adminCreatedSlugs(): Promise<Set<string>> {
+  adminSlugsPromise ??= computeAdminCreatedSlugs()
+  return adminSlugsPromise
+}
+
 /** Symmetric difference, reported both ways so a failure says WHICH side drifted. */
 function diff(actual: Set<string>, expected: Set<string>) {
   return {
@@ -91,10 +143,11 @@ describe('seed convergence — the database equals the CSV, in both directions',
     // a verified row marked `no` must be OFF sale — the seed no longer
     // resurrects a stated deactivation.
     const expected = new Set(readActiveStatedRows().map((r) => r.slug ?? ''))
+    const admin = await adminCreatedSlugs()
     const actual = new Set(
-      (await prisma.product.findMany({ where: { isActive: true }, select: { slug: true } })).map(
-        (p) => p.slug,
-      ),
+      (await prisma.product.findMany({ where: { isActive: true }, select: { slug: true } }))
+        .map((p) => p.slug)
+        .filter((slug) => !admin.has(slug)),
     )
 
     // 🔴 Both directions. `inCsvButNotInDatabase` is the bug 7baac10 fixed —
@@ -139,13 +192,17 @@ describe('seed convergence — the database equals the CSV, in both directions',
     const expected = new Set(
       readActiveStatedRows().map((r) => `${r.slug ?? ''}::assets/products/${r.image_file ?? ''}`),
     )
+    const admin = await adminCreatedSlugs()
     const actual = new Set(
       (
         await prisma.productImage.findMany({
           select: { url: true, product: { select: { slug: true, isActive: true } } },
         })
       )
-        .filter((row) => row.product.isActive && !isFixture(row.product.slug))
+        .filter(
+          (row) =>
+            row.product.isActive && !isFixture(row.product.slug) && !admin.has(row.product.slug),
+        )
         .map((row) => `${row.product.slug}::${row.url}`),
     )
 
@@ -154,6 +211,7 @@ describe('seed convergence — the database equals the CSV, in both directions',
 
   it('HEALTH-GOAL LINKS are exactly the pipe-separated CSV values — instance 2, second half', async () => {
     // Same DEC-076 scoping as the image set above.
+    const admin = await adminCreatedSlugs()
     const expected = new Set(
       readActiveStatedRows().flatMap((r) =>
         (r.health_goals ?? '')
@@ -172,7 +230,10 @@ describe('seed convergence — the database equals the CSV, in both directions',
           },
         })
       )
-        .filter((row) => row.product.isActive && !isFixture(row.product.slug))
+        .filter(
+          (row) =>
+            row.product.isActive && !isFixture(row.product.slug) && !admin.has(row.product.slug),
+        )
         .map((row) => `${row.product.slug}::${row.healthGoal.nameHe}`),
     )
 
@@ -184,8 +245,12 @@ describe('seed convergence — the database equals the CSV, in both directions',
       where: { isActive: true },
       select: { slug: true, _count: { select: { images: true } } },
     })
+    // Seed-owned rows only — an ADMIN row may carry zero images (the image
+    // URL is optional in the editor) or an external one; the one-image rule
+    // is the SEED's contract.
+    const admin = await adminCreatedSlugs()
     const wrong = counts
-      .filter((p) => !isFixture(p.slug) && p._count.images !== 1)
+      .filter((p) => !isFixture(p.slug) && !admin.has(p.slug) && p._count.images !== 1)
       .map((p) => `${p.slug}=${p._count.images}`)
     expect(wrong).toEqual([])
   })
@@ -257,7 +322,78 @@ describe('seed convergence — the database equals the CSV, in both directions',
     // the vacuous checks in .claude/rules/browser-verification.md.
     const stated = readActiveStatedRows()
     expect(stated.length).toBeGreaterThan(24) // at least a second page's worth
+    const admin = await adminCreatedSlugs()
     const active = await prisma.product.findMany({ where: { isActive: true }, select: { slug: true } })
-    expect(active.filter((p) => !isFixture(p.slug))).toHaveLength(stated.length)
+    // Seed-owned actives equal the CSV's stated actives; admin-channel rows
+    // (DEC-089b) sit OUTSIDE the equality, not inside a padded count.
+    expect(active.filter((p) => !isFixture(p.slug) && !admin.has(p.slug))).toHaveLength(stated.length)
+  })
+})
+
+describe('🔴 the admin-channel discriminator — BOTH controls, mutation-proved live', () => {
+  /*
+   * The browser-verification rule: a screen needs something that MUST pass
+   * and something that MUST fail — all-exclude and all-include are equally
+   * broken and equally green-looking. Rows are created INACTIVE (invisible
+   * to every storefront read and to this file's isActive-filtered sets),
+   * probed through the UNmemoized compute, and removed in finally
+   * (fixture-created, DEC-063).
+   */
+  it('excludes an admin-shaped row, keeps a seed-shaped orphan and an IMAGELESS orphan red-visible', async () => {
+    const seeded = await prisma.product.findFirstOrThrow({
+      where: { isActive: true },
+      select: { categoryId: true, brandId: true },
+    })
+    const base = {
+      categoryId: seeded.categoryId,
+      brandId: seeded.brandId,
+      nameHe: 'בדיקת מסנן',
+      nameEn: 'Discriminator control',
+      dosageForm: 'CAPSULE' as const,
+      packageQuantity: 10,
+      usageInstructions: 'בדיקה',
+      price: '10.00',
+      stockQuantity: 0,
+      descriptionHe: 'בדיקה',
+      descriptionEn: 'control',
+      warningsAllergens: '',
+      isActive: false,
+    }
+    const slugs = {
+      admin: 'zx-discriminator-admin-shaped',
+      drift: 'zx-discriminator-seed-shaped',
+      bare: 'zx-discriminator-imageless',
+    }
+    try {
+      await prisma.product.create({
+        data: {
+          ...base,
+          slug: slugs.admin,
+          images: { create: { url: 'https://example.test/x.webp', sortOrder: 0 } },
+        },
+      })
+      await prisma.product.create({
+        data: {
+          ...base,
+          slug: slugs.drift,
+          images: { create: { url: 'assets/products/zx-drift.jpg', sortOrder: 0 } },
+        },
+      })
+      await prisma.product.create({ data: { ...base, slug: slugs.bare } })
+
+      const admin = await computeAdminCreatedSlugs()
+      // MUST pass the exclusion: only the admin channel writes this shape.
+      expect(admin.has(slugs.admin)).toBe(true)
+      // MUST fail it: a seed-shaped asset link on a non-CSV slug is drift.
+      expect(admin.has(slugs.drift)).toBe(false)
+      // MUST fail it: an imageless orphan earned nothing (the first draft
+      // excluded it — `[].some()` is false — and was caught in review).
+      expect(admin.has(slugs.bare)).toBe(false)
+    } finally {
+      await prisma.productImage.deleteMany({
+        where: { product: { slug: { in: Object.values(slugs) } } },
+      })
+      await prisma.product.deleteMany({ where: { slug: { in: Object.values(slugs) } } })
+    }
   })
 })

@@ -33,16 +33,13 @@
 Repository:     C:\Users\aviha\תכנות\VitaShop
 Memory system:  C:\Users\aviha\תכנות\זיכרון AI\פרוייקט ECOMMERCE\
                 פרוייקט Ecommerce\VitaShop-Project
-HEAD:           6158d1b — DEC-096/097/098 + the twelfth list
-                (ISSUE-180..183) + the hundred-third-pass review fixes,
-                on top of 275fc3b (lists 8-11).
-🔴 UNCOMMITTED: the hundred-fourth pass's THIRTEENTH LIST
-                (ISSUE-185..186) — home stats strip replaced by a
-                site-signature footer · drops show מ"ל (PACKAGE_UNIT_
-                LABELS in mapCatalogProduct + packageUnit on the card
-                model + neutral details label; NO schema change).
-                Verified (client 1008 · tsc/build 0 · playwright he+en
-                × 8 widths). Earlier sets COMMITTED at `6158d1b`.
+HEAD:           621d2d8 — the thirteenth list + pass-105 review fixes,
+                on top of 6158d1b (DEC-096/097/098 + the twelfth list).
+TREE:           CLEAN at `621d2d8` (hundred-fifth pass, 2026-08-22):
+                the thirteenth list (home footer-for-stats · volume/
+                weight units on card+details+CART line — cart DTO
+                gained dosageForm) + the review's 8 fixes (incl. the
+                whole-enum unit pin and the new admin i18n suite).
 Suites:         client 1002 green (count DROPPED from 1044 by design —
                 the deleted card suites) · server: ai/account/admin/
                 checkout suites green; the FULL server run carries 6

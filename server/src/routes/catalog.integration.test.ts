@@ -9,6 +9,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { readVerifiedProductRows } from '../lib/productsCsv.js'
+import { UPLOAD_REF_PATTERN } from '../lib/uploadPaths.js'
 import { CANONICAL_CATEGORIES } from '../lib/catalogCategories.js'
 import type { PublicCatalogProduct } from '../lib/catalogMapper.js'
 import { prisma as appPrisma } from '../lib/prisma.js'
@@ -234,12 +235,29 @@ describe('GET /api/products', () => {
     }
   })
 
-  it('returns imageFile as a basename only (or null), never a path', async () => {
+  it('returns imageFile in one of DEC-089b/c’s THREE legal forms (or null), never an arbitrary path', async () => {
+    /*
+     * ⚠️ AMENDED per ISSUE-154 (the user's call, hundred-sixth pass). The
+     * old bare-basename pin predates DEC-089b/c and red-flagged the user's
+     * own admin-created product (external image URL) — a healthy, decided
+     * behaviour. The contract is toImageRef's, quoted: a build-time asset
+     * BASENAME, an ABSOLUTE http(s) URL (admin-added), or a root-relative
+     * '/uploads/products/…' upload ref. Anything else — an arbitrary
+     * relative path a client would resolve against its own origin — fails.
+     */
     const res = await fetch(`${baseUrl}/api/products`)
     const body = (await res.json()) as ProductsEnvelope
     for (const item of body.items) {
       if (item.imageFile !== null) {
         expect(typeof item.imageFile).toBe('string')
+        if (/^https?:\/\//.test(item.imageFile)) continue
+        if (item.imageFile.startsWith('/uploads/')) {
+          // ⚠️ Not a bare startsWith (review): the EXACT minted shape —
+          // one clean segment, no traversal, no nested path — is what the
+          // upload route guarantees, and this pin quotes ITS pattern.
+          expect(item.imageFile).toMatch(UPLOAD_REF_PATTERN)
+          continue
+        }
         expect(item.imageFile).not.toContain('/')
       }
     }
@@ -501,10 +519,29 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     })
     if (expected.length === 0) throw new Error(`fixture assumption failed: no active product matches "${term}"`)
 
-    const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent(term)}`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
+    /*
+     * ⚠️ ALL PAGES, not page 1 (ISSUE-154, hundred-sixth pass). The API's
+     * page size is a fixed 24 and the direct query is unbounded — the
+     * moment the LIVE catalogue's matches passed 24 (the user's own
+     * admin-created product did it), page 1 was a strict subset and this
+     * red-flagged a healthy search. The union over every page is the
+     * honest same-shape comparison.
+     */
+    const slugs = new Set<string>()
+    let page = 1
+    let totalPages = 1
+    do {
+      const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent(term)}&page=${page}`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as ProductsEnvelope
+      for (const item of body.items) slugs.add(item.slug)
+      // A broken envelope (totalPages missing/NaN) would silently end the
+      // loop after page 1 and pass on a one-page fixture — assert the shape.
+      expect(Number.isInteger(body.totalPages)).toBe(true)
+      totalPages = body.totalPages
+      page += 1
+    } while (page <= totalPages)
+    expect(slugs).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   /**
@@ -980,11 +1017,17 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
     // easy fix been taken (skip when none exists). The soft-delete guarantee
     // is INV-03's, so it must be provable whether or not the seed happens to
     // leave a casualty behind.
+    // ⚠️ CSV-VERIFIED ROWS ONLY (hundred-seventh-pass review): the crash
+    // repair (repairDeactivatedFixtures) reactivates only CSV slugs, so a
+    // victim picked from the user's ADMIN-CREATED rows (DEC-089b) would
+    // vanish from the storefront FOREVER if the run dies between the update
+    // and the finally — with seedConvergence's admin shield hiding the loss.
+    const csvSlugs = readVerifiedProductRows().map((r) => r.slug ?? '')
     const victim = await testPrisma.product.findFirst({
-      where: { isActive: true },
+      where: { isActive: true, slug: { in: csvSlugs } },
       select: { id: true, slug: true, nameHe: true },
     })
-    if (!victim) throw new Error('fixture assumption failed: no active product to soft-delete')
+    if (!victim) throw new Error('fixture assumption failed: no active CSV product to soft-delete')
 
     await testPrisma.product.update({ where: { id: victim.id }, data: { isActive: false } })
     try {

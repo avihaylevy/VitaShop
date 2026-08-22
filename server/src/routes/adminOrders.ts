@@ -45,7 +45,19 @@ export type AdminOrderRouterDeps = {
 const ADMIN_TARGETS: readonly OrderStatusName[] = ['processing', 'shipped', 'delivered', 'cancelled']
 
 /** One screenful. The admin list is low-traffic and read by a human. */
-const ADMIN_ORDERS_PAGE_SIZE = 25
+/** Exported so the pagination pin in this route's test quotes THE constant,
+ * not a literal that can drift (hundred-seventh-pass review). */
+export const ADMIN_ORDERS_PAGE_SIZE = 25
+
+/**
+ * §4a's frozen convention for THIS route's page size: zero items is zero
+ * pages, never one empty page. A named, exported function so the 0→0 case
+ * is unit-pinned DIRECTLY (the integration sweep can only exercise it when
+ * some live status happens to be empty).
+ */
+export function adminOrdersTotalPages(totalItems: number): number {
+  return Math.ceil(totalItems / ADMIN_ORDERS_PAGE_SIZE)
+}
 
 /**
  * ISSUE-103. Generous — real courier references run 10–35 characters — while
@@ -163,7 +175,7 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
         // items is zero pages, not one empty page.
         page,
         totalItems,
-        totalPages: Math.ceil(totalItems / ADMIN_ORDERS_PAGE_SIZE),
+        totalPages: adminOrdersTotalPages(totalItems),
         orders: orders.map((order) => ({
           id: order.id,
           orderNumber: order.orderNumber,

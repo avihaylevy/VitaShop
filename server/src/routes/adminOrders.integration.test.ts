@@ -5,7 +5,7 @@ import argon2 from 'argon2'
 import express from 'express'
 import type { Server } from 'node:http'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { createAdminOrderRouter } from './adminOrders.js'
+import { ADMIN_ORDERS_PAGE_SIZE, adminOrdersTotalPages, createAdminOrderRouter } from './adminOrders.js'
 import { createAuthRouter } from './auth.js'
 import { createAuthRateLimiters } from '../lib/rateLimit.js'
 import { ARGON2_OPTIONS } from '../lib/registrationService.js'
@@ -414,21 +414,45 @@ describe('GET /api/admin/orders', () => {
     expect(raw).not.toContain('unitPrice')
   })
 
-  it('paginates, and zero items is ZERO pages — the catalogue convention', async () => {
-    const cookie = await signIn(ADMIN)
-    // `cancelled` exists as a status but no fixture here reaches it, so this
-    // is a real empty result rather than a page past the end.
-    const empty = (await list('?status=cancelled', cookie).then((r) => r.json())) as {
-      totalItems: number
-      totalPages: number
-      orders: unknown[]
-    }
-    expect(empty.totalItems).toBe(0)
-    // 🔴 Zero pages, not one empty page — §4a, frozen for the catalogue.
-    expect(empty.totalPages).toBe(0)
-    expect(empty.orders).toHaveLength(0)
-  })
+  it('paginates by the frozen §4a convention — totalPages tracks totalItems for every filter, and 0 → 0 is pinned directly', async () => {
+    /*
+     * ⚠️ AMENDED per ISSUE-184 (hundred-sixth pass; tightened in the
+     * hundred-seventh review). The original asserted `?status=cancelled`
+     * is 0 STORE-WIDE — red the moment the user's own signed-in pass
+     * cancelled a real order (the live-data family). The admin list
+     * filters by STATUS only, so a fixture-scoped empty result cannot be
+     * forced against a live store. The honest form:
+     * · The 0 → 0 half of the convention is pinned DIRECTLY on the
+     *   route's own exported arithmetic — unconditional, not hostage to
+     *   which statuses the live store happens to fill.
+     * · The wire sweep asserts every filter's totalPages equals that same
+     *   exported function of its totalItems — the constant is IMPORTED,
+     *   so a page-size retune cannot silently open a drift window (the
+     *   first draft hardcoded /20 against the route's 25 and stayed
+     *   green because no status exceeds one page).
+     */
+    expect(adminOrdersTotalPages(0)).toBe(0)
+    expect(adminOrdersTotalPages(1)).toBe(1)
+    expect(adminOrdersTotalPages(ADMIN_ORDERS_PAGE_SIZE)).toBe(1)
+    expect(adminOrdersTotalPages(ADMIN_ORDERS_PAGE_SIZE + 1)).toBe(2)
 
+    const cookie = await signIn(ADMIN)
+    const statuses = ['', '?status=pending_payment', '?status=paid', '?status=processing',
+      '?status=shipped', '?status=delivered', '?status=cancelled']
+    for (const filter of statuses) {
+      const body = (await list(filter, cookie).then((r) => r.json())) as {
+        totalItems: number
+        totalPages: number
+        orders: unknown[]
+      }
+      expect(body.totalPages).toBe(adminOrdersTotalPages(body.totalItems))
+      if (body.totalItems === 0) {
+        // A live-store zero also proves the wire path end-to-end.
+        expect(body.totalPages).toBe(0)
+        expect(body.orders).toHaveLength(0)
+      }
+    }
+  })
   it('a page past the end is an empty page, not an error', async () => {
     await placeOrder('adm-list-page', 1)
     const body = await list('?page=9999', await signIn(ADMIN))
