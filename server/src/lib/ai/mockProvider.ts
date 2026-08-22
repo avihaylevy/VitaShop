@@ -20,6 +20,7 @@
 // these tables to ≥1 linked active product.
 
 import type { PublicCatalogProduct } from '../catalogMapper.js'
+import { toAgorot } from '../shipping.js'
 import type { AgentLang } from './notices.js'
 import type {
   AIProvider,
@@ -284,15 +285,18 @@ export class MockProvider implements AIProvider {
     // DEC-104 — a DETERMINISTIC rank so tests can prove the pin actually
     // reorders: the CHEAPEST product (ties → the earliest). "First" would
     // be a vacuous pick — already first, a dropped reorder stays green.
-    let topPickIndex: number | null = null
-    if (products.length >= 2) {
-      topPickIndex = 0
-      for (let index = 1; index < products.length; index++) {
-        if (Number(products[index]!.price) < Number(products[topPickIndex]!.price)) {
-          topPickIndex = index
-        }
-      }
-    }
+    // toAgorot, never Number() (review finding): the mock is the pin
+    // tests' oracle, and float parsing of two-decimal money strings can
+    // rank equal prices unequally — a flaking oracle. Integer agorot
+    // compare exactly, and reduce keeps ties on the earlier index.
+    const topPickIndex =
+      products.length < 2
+        ? null
+        : products.reduce(
+            (best, product, index) =>
+              toAgorot(product.price) < toAgorot(products[best]!.price) ? index : best,
+            0,
+          )
     return { explanations, topPickIndex }
   }
 }

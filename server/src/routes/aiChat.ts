@@ -360,6 +360,13 @@ export function createAiChatRouter(deps: AiChatRouterDeps): Router {
     // pick of one" is noise). Anything else is DROPPED — never clamped,
     // never guessed. A valid pick is pinned to the FRONT with its
     // explanation, so the client's contract is one bit: first card is it.
+    //
+    // 🔴 AND the pick dies with its explanation (review finding): when the
+    // guard blanked the picked product's prose — a smuggled name, a count
+    // mismatch that rejected the whole batch — the SAME provider turn that
+    // produced the rank was judged untrustworthy, and honoring half of a
+    // rejected payload lets an injected turn reorder merchandising and
+    // badge a card it gave no reason for.
     let topPick = false
     const pick = raw?.topPickIndex ?? null
     if (
@@ -367,12 +374,11 @@ export function createAiChatRouter(deps: AiChatRouterDeps): Router {
       Number.isInteger(pick) &&
       pick >= 0 &&
       pick < products.length &&
-      products.length >= 2
+      products.length >= 2 &&
+      explanations[pick] !== ''
     ) {
-      if (pick > 0) {
-        products.unshift(products.splice(pick, 1)[0]!)
-        explanations.unshift(explanations.splice(pick, 1)[0]!)
-      }
+      products = pinFirst(products, pick)
+      explanations = pinFirst(explanations, pick)
       topPick = true
     }
 
@@ -388,6 +394,17 @@ export function createAiChatRouter(deps: AiChatRouterDeps): Router {
   })
 
   return router
+}
+
+/**
+ * The picked element first, order otherwise preserved. ONE helper for every
+ * parallel array so they cannot desynchronise (review finding: two
+ * hand-written unshift/splice lines invited a future third array to copy
+ * one and forget the other — wrong prose beside the wrong product,
+ * downstream of the very guard that prevents it).
+ */
+function pinFirst<T>(items: T[], index: number): T[] {
+  return [items[index]!, ...items.slice(0, index), ...items.slice(index + 1)]
 }
 
 function respondProviderFailure(res: Parameters<RequestHandler>[1], error: unknown): void {

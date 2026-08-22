@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { TextLink } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
 import { requestAdminDashboard } from '../lib/adminDashboardApi'
@@ -70,17 +70,36 @@ export function AdminDashboardPage() {
    */
   const [cache, setCache] = useState<Partial<Record<DashboardRangeDays, AdminDashboardData>>>({})
   const [pending, setPending] = useState(true)
-  const [failure, setFailure] = useState<AdminDashboardFailure | null>(null)
+  /**
+   * 🔴 RANGE-SCOPED, unlike the first draft's global slot (review
+   * finding): a global failure flashed 7d's error banner over healthy
+   * cached 30d figures on toggle, misattributing the failure to a range
+   * that never failed.
+   */
+  const [failureFor, setFailureFor] = useState<{
+    range: DashboardRangeDays
+    failure: AdminDashboardFailure
+  } | null>(null)
 
-  const load = useCallback(async (range: DashboardRangeDays, isStale?: () => boolean) => {
+  /**
+   * 🔴 ONE staleness mechanism for EVERY entry point (review finding: the
+   * first draft guarded only the effect's loads, and an unguarded RETRY
+   * resolving late clobbered another range's state — it could even erase
+   * an access-revocation alert and leave the page rendering nothing).
+   * A load is authoritative only while it is the LATEST request issued.
+   */
+  const requestSeq = useRef(0)
+
+  const load = useCallback(async (range: DashboardRangeDays) => {
+    const seq = ++requestSeq.current
     setPending(true)
     const result = await requestAdminDashboard(range)
-    if (isStale?.()) return
+    if (seq !== requestSeq.current) return
     if (result.ok) {
       setCache((current) => ({ ...current, [range]: result.data }))
-      setFailure(null)
+      setFailureFor(null)
     } else {
-      setFailure(result.failure)
+      setFailureFor({ range, failure: result.failure })
       // 🔴 An access-revoking failure CLEARS the cache: a signed-out or
       // demoted viewer must not keep reading figures behind the alert.
       if (failureRevokesAccess(result.failure)) setCache({})
@@ -89,14 +108,12 @@ export function AdminDashboardPage() {
   }, [])
 
   useEffect(() => {
-    let stale = false
-    void load(days, () => stale)
-    return () => {
-      stale = true
-    }
+    void load(days)
   }, [load, days])
 
   const data = cache[days]
+  /** The failure shown is only ever THIS range's. */
+  const failure = failureFor?.range === days ? failureFor.failure : null
 
   return (
     <main className="mx-auto flex max-w-[1100px] flex-col gap-6 px-4 py-6">
@@ -156,11 +173,24 @@ export function AdminDashboardPage() {
       )}
 
       {/* A failed REVALIDATION over cached data — say so quietly rather
-          than silently showing stale figures (the quiet-lie family). */}
+          than silently showing stale figures (the quiet-lie family).
+          🔴 WITH a retry (review finding): without one this state was a
+          dead end — pressing the already-selected range is a React
+          no-op, so the user was stuck reading stale figures. Same
+          retry-only-where-it-helps rule as the full block. */}
       {data && !pending && failure && (
-        <p role="status" className="text-sm text-state-error">
-          {t('dashboard.refreshFailed')}
-        </p>
+        <div role="status" className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-state-error">{t('dashboard.refreshFailed')}</p>
+          {(failure.kind === 'offline' || failure.kind === 'unavailable') && (
+            <button
+              type="button"
+              onClick={() => void load(days)}
+              className={`${FOCUS_RING} rounded-card border border-border-control px-3 py-1.5 text-sm`}
+            >
+              {t('state.retry')}
+            </button>
+          )}
+        </div>
       )}
 
       {data && <DashboardBody data={data} />}
@@ -333,7 +363,7 @@ function DashboardBody({ data }: { data: AdminDashboardData }) {
                 {data.topProducts.map((product) => (
                   <tr key={product.productId} className="border-b border-border-card last:border-0">
                     <td className="py-2 text-start">
-                      <TextLink to={`/product/${product.slug}`} inline>
+                      <TextLink to={`/product/${product.slug}`} inline tone="ink">
                         {productName(product)}
                       </TextLink>
                     </td>

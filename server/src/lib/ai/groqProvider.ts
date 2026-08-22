@@ -111,11 +111,13 @@ const extractionResponseSchema = z.object({
 
 const explanationResponseSchema = z.object({
   explanations: z.array(z.string()),
-  // DEC-104 — the model's 1-based top pick. Lenient here (any number or
-  // absent parses); the ROUTE owns validation and drops anything not a
-  // usable in-range index — a malformed rank must cost the badge, never
-  // the explanations beside it.
-  topPick: z.number().optional(),
+  // DEC-104 — the model's 1-based top pick. 🔴 z.unknown(), GENUINELY
+  // lenient (review finding: z.number().optional() rejected the common
+  // "topPick": null / "2" drifts, and parseModelJson fails the WHOLE
+  // object — so a malformed rank destroyed every explanation, the exact
+  // outcome this field must never cause). The conversion below and the
+  // route's range gate do all the real validation.
+  topPick: z.unknown().optional(),
 })
 
 export class GroqApiError extends Error {
@@ -342,12 +344,19 @@ export class GroqProvider implements AIProvider {
     )
     const parsed = parseModelJson(raw, explanationResponseSchema)
     // 1-based on the wire (matches the numbered PRODUCTS lines the model
-    // read) → 0-based for the interface; anything unusable becomes null
-    // and the route's validation is the real gate.
-    const topPickIndex =
-      typeof parsed.topPick === 'number' && Number.isInteger(parsed.topPick)
-        ? parsed.topPick - 1
-        : null
+    // read) → 0-based for the interface. Anything unusable becomes null —
+    // including "topPick": 0, which a model reading the list as 0-based
+    // could emit forever: converting it to -1 would be silently dropped
+    // range-side with no signal (review finding), so it is normalised to
+    // null HERE and logged once as the off-by-one it likely is.
+    let topPickIndex: number | null = null
+    if (typeof parsed.topPick === 'number' && Number.isInteger(parsed.topPick)) {
+      if (parsed.topPick >= 1) {
+        topPickIndex = parsed.topPick - 1
+      } else if (parsed.topPick === 0) {
+        console.error('[ai] groq answered topPick: 0 — the prompt is 1-based; dropping the rank')
+      }
+    }
     return { explanations: parsed.explanations, topPickIndex }
   }
 }

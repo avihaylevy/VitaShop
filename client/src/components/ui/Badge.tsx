@@ -1,6 +1,6 @@
 import type { ComponentPropsWithoutRef } from 'react'
 
-type BadgeVariant = 'commerce' | 'error' | 'lowstock' | 'oos'
+type BadgeVariant = 'commerce' | 'error' | 'lowstock' | 'oos' | 'agent'
 type BadgeShape = 'label' | 'count'
 
 /**
@@ -13,6 +13,9 @@ const VARIANT_CLASS: Record<BadgeVariant, string> = {
   error: 'bg-well text-state-error border border-state-error',
   lowstock: 'bg-surface-sunken text-state-lowstock',
   oos: 'bg-surface-sunken text-state-oos',
+  // DEC-104 — the ASSISTANT's own voice (its top-pick badge): the plum
+  // family no other token occupies, so it never reads as commerce/state.
+  agent: 'bg-agent-soft text-agent',
 }
 
 /**
@@ -33,7 +36,7 @@ type BadgeProps = {
   shape?: BadgeShape
 } & ComponentPropsWithoutRef<'span'>
 
-/** Commerce/state signal only — never used to carry category tone (DESIGN_SYSTEM.md §1). */
+/** Commerce/state signal — or the assistant's own voice (agent) — never category tone (DESIGN_SYSTEM.md §1). */
 export function Badge({ variant, shape = 'label', children, className = '', ...rest }: BadgeProps) {
   return (
     <span

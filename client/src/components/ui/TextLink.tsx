@@ -57,8 +57,17 @@ export function TextLink({
   className = '',
   ...rest
 }: TextLinkProps) {
+  // A new-tab link gets noopener automatically (review finding): every
+  // future target="_blank" caller is covered here instead of each one
+  // remembering rel by hand. A caller-supplied rel still wins via rest.
+  const rel = rest.rel ?? (rest.target === '_blank' ? 'noopener noreferrer' : undefined)
   return (
-    <Link to={to} {...rest} className={`${textLinkClass({ inline, block, tone })} ${className}`}>
+    <Link
+      to={to}
+      {...rest}
+      rel={rel}
+      className={`${textLinkClass({ inline, block, tone })} ${className}`}
+    >
       {children}
     </Link>
   )

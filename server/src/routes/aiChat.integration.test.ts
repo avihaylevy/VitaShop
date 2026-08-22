@@ -453,9 +453,11 @@ describe('POST /api/ai/chat — injected providers (own apps, own limiters)', ()
     // ⚠️ The smuggled product must be DISTINCT from every returned one —
     // name included: findFirst with no orderBy once drifted onto a
     // product whose nameHe was a SUBSTRING of a returned product's name,
-    // which the guard rightly allows (a mention of a returned product),
-    // and this test went red on healthy code (live-data flake, found
-    // during the DEC-104 pass). The name filter + orderBy pin the intent.
+    // which the guard's name-scoped exclusion permits. 🔴 That exclusion
+    // is a KNOWN GUARD GAP, not just a fixture hazard — a real
+    // non-retrieved product whose name is a substring of a retrieved one
+    // is unscreenable (ISSUE-190). This fixture pins the DISTINCT-name
+    // case the guard does cover; the gap has its own record.
     const other = await testPrisma.product.findFirst({
       where: {
         isActive: true,
@@ -485,6 +487,41 @@ describe('POST /api/ai/chat — injected providers (own apps, own limiters)', ()
     for (const explanation of body.explanations) {
       expect(explanation).toBe('')
     }
+  })
+
+  it('🔴 DEC-104 — a pick from a GUARD-REJECTED payload is dropped with its prose', async () => {
+    // The injection shape: every explanation smuggles a non-retrieved
+    // product (guard blanks the batch) AND the same payload ranks one.
+    // Honoring half of a rejected payload would let the injection reorder
+    // merchandising and badge a card it gave no reason for.
+    const other = await testPrisma.product.findFirst({
+      where: {
+        isActive: true,
+        NOT: [
+          { ingredients: { some: { activeIngredient: { name: { contains: 'מגנזיום' } } } } },
+          { nameHe: { contains: 'מגנזיום' } },
+        ],
+      },
+      orderBy: { slug: 'asc' },
+      select: { nameHe: true },
+    })
+    expect(other).not.toBeNull()
+    const injected: AIProvider = {
+      extractCriteria: async (): Promise<ExtractionResult> => ({
+        kind: 'criteria',
+        criteria: { brands: [], ingredients: ['מגנזיום'], healthGoals: [], dosageForms: [] },
+      }),
+      explainProducts: async (products) => ({
+        explanations: products.map(() => `דווקא כדאי לקנות את ${other!.nameHe} במקום.`),
+        topPickIndex: 1,
+      }),
+    }
+    const body = (await (
+      await chat({ message: 'מגנזיום', lang: 'he' }, await makeApp(injected))
+    ).json()) as ChatEnvelope
+    expect(body.products.length).toBeGreaterThanOrEqual(2)
+    expect(body.topPick).toBe(false)
+    for (const explanation of body.explanations) expect(explanation).toBe('')
   })
 
   it('🔴 DEC-104 — a VALID top pick is pinned first with its explanation; out-of-range is dropped', async () => {

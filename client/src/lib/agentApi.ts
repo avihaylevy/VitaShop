@@ -58,7 +58,10 @@ function isAgentChatResponseDto(value: unknown): value is AgentChatResponseDto {
     typeof value.medicalStop === 'boolean' &&
     (value.handoff === null || isHandoff(value.handoff)) &&
     typeof value.emptyResult === 'boolean' &&
-    typeof value.topPick === 'boolean'
+    // topPick TOLERATES absence (review finding: a required field made a
+    // client deployed ahead of the server reject EVERY reply — total
+    // widget loss for a cosmetic badge). Absent normalises to false below.
+    (value.topPick === undefined || typeof value.topPick === 'boolean')
   )
 }
 
@@ -86,5 +89,7 @@ export async function sendAgentMessage(
   if (!isAgentChatResponseDto(body)) {
     throw new CatalogApiError('INVALID_RESPONSE_SHAPE', 'The assistant returned a reply with an unexpected shape.')
   }
-  return body
+  // An older server omits topPick — normalised here so consumers keep the
+  // non-optional boolean contract.
+  return { ...body, topPick: body.topPick ?? false }
 }

@@ -152,6 +152,50 @@ describe('the per-range cache', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it('🔴 the refresh-failed notice carries a WORKING retry — the state is not a dead end', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockResponse(200, dashboard()))
+      .mockResolvedValueOnce(mockResponse(200, dashboard()))
+      .mockResolvedValueOnce(mockResponse(503, {}))
+      .mockResolvedValueOnce(mockResponse(200, dashboard()))
+    renderPage()
+    await screen.findByText('Conversion funnel')
+    fireEvent.click(screen.getByRole('button', { name: '7 days' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    fireEvent.click(screen.getByRole('button', { name: '30 days' }))
+    await screen.findByText('The figures shown may be out of date — the last refresh failed.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    await waitFor(() =>
+      expect(
+        screen.queryByText('The figures shown may be out of date — the last refresh failed.'),
+      ).toBeNull(),
+    )
+  })
+
+  it("🔴 a failure is RANGE-SCOPED — another range's cached view never wears it", async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockResponse(200, dashboard()))
+      .mockResolvedValueOnce(mockResponse(503, {}))
+      .mockResolvedValueOnce(mockResponse(200, dashboard()))
+    renderPage()
+    await screen.findByText('Conversion funnel')
+
+    // 7d fails with nothing cached → the full alert.
+    fireEvent.click(screen.getByRole('button', { name: '7 days' }))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+
+    // Back to the healthy cached 30d: 7d's failure must NOT be shown
+    // here — neither as the alert nor as the refresh notice.
+    fireEvent.click(screen.getByRole('button', { name: '30 days' }))
+    await screen.findByText('Conversion funnel')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(
+      screen.queryByText('The figures shown may be out of date — the last refresh failed.'),
+    ).toBeNull()
+  })
+
   it('🔴 an ACCESS-REVOKING failure clears the cache — no stale figures behind the alert', async () => {
     fetchMock
       .mockResolvedValueOnce(mockResponse(200, dashboard()))

@@ -9,6 +9,7 @@ import { StockState } from '../catalog/StockState'
 import { ADD_TO_CART_ATTRIBUTE } from '../catalog/ProductCard'
 import { Button } from '../ui/Button'
 import { Surface } from '../ui/Surface'
+import { Badge } from '../ui/Badge'
 import { FOCUS_RING } from '../ui/focusRing'
 
 /**
@@ -59,10 +60,13 @@ export function AgentProductCard({
       >
         {topPick && (
           /* DEC-104 — the ranked pick, in the agent's own plum accent so
-             it reads as the ASSISTANT's opinion, never a commerce claim. */
-          <span className="self-start rounded-round bg-agent-soft px-2.5 py-0.5 text-xs font-semibold text-agent">
+             it reads as the ASSISTANT's opinion, never a commerce claim.
+             ui/Badge, not a hand-rolled span (review finding: the first
+             draft used rounded-round, the shape Badge's own doc reserves
+             for dots and counts, never text labels). */
+          <Badge variant="agent" className="self-start">
             {t('reply.topPick')}
-          </span>
+          </Badge>
         )}
         {/* ISSUE-164 — a product THUMBNAIL joins the card (the same
             ProductImage pipeline every catalogue surface uses: filename /
