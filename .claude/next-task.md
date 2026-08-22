@@ -35,12 +35,13 @@ Memory system:  C:\Users\aviha\תכנות\זיכרון AI\פרוייקט ECOMMER
                 פרוייקט Ecommerce\VitaShop-Project
 HEAD:           621d2d8 — the thirteenth list + pass-105 review fixes,
                 on top of 6158d1b (DEC-096/097/098 + the twelfth list).
-TREE:           CLEAN at `44a9b15` (hundred-seventh pass): the
-                live-data test reds SETTLED — FULL server suite
-                1085/1085 GREEN, a trustworthy deploy gate. ISSUE-187
-                open (admin edits of seeded rows vs convergence, the
-                user's call). NEXT: pre-deploy step 2 — ISSUE-179
-                password-confirm on email change → deploy planning.
+TREE:           CLEAN at `3f769d6` (hundred-ninth pass): ISSUE-179's
+                password gate (DEC-100, login-strength identityChange
+                limiter) built, reviewed, committed. Suites: server
+                1089 · client 1019 · tsc/build 0. 🔴 NOTHING LEFT
+                BEFORE DEPLOY — plan from technical/DEPLOYMENT.md,
+                present host options WITH a recommendation, the USER
+                decides, then build.
 Suites:         client 1002 green (count DROPPED from 1044 by design —
                 the deleted card suites) · server: ai/account/admin/
                 checkout suites green; the FULL server run carries 6
