@@ -15,6 +15,7 @@
   },
   "item": {
     "packageQuantity": "Package quantity: {{quantity}}",
+    "packageQuantityWithUnit": "Package quantity: {{quantity}} {{unit}}",
     "unitPrice": "Unit price",
     "fullPrice": "Full price",
     "lineTotal": "Line total",

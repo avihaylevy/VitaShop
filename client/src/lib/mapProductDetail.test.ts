@@ -41,6 +41,14 @@ function detailDto(overrides: Partial<ProductDetailDto> = {}): ProductDetailDto 
 }
 
 describe('mapProductDetail', () => {
+  it("the thirteenth list — packageUnit SURVIVES the detail mapping (the spread seam)", () => {
+    // The detail page's unit render depends on mapProductDetail spreading
+    // mapCatalogProduct; an explicit-field refactor would silently drop it
+    // while every other suite stayed green. Pinned here so it cannot.
+    const detail = mapProductDetail(detailDto({ dosageForm: 'DROPS', packageQuantity: 250 }), 'he')
+    expect(detail.packageUnit).toBe('מ"ל')
+  })
+
   it('agrees with mapCatalogProduct on every shared field, in both languages', () => {
     const dto = detailDto()
     for (const language of ['he', 'en'] as const) {

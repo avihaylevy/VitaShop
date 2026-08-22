@@ -411,7 +411,12 @@ export function AdminProductNewPage() {
                 ))}
               </select>
             </FieldRow>
-            <FieldRow id="np-package" label={t('products.form.packageQuantity')} className="min-w-40 flex-1">
+            <FieldRow
+              id="np-package"
+              label={t('products.form.packageQuantity')}
+              hint={t('products.form.packageQuantityHint')}
+              className="min-w-40 flex-1"
+            >
               <input
                 id="np-package"
                 inputMode="numeric"

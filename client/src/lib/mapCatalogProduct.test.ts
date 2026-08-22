@@ -38,6 +38,46 @@ describe('mapCatalogProduct', () => {
     expect(result.dosageForm).toBe('Capsules')
   })
 
+  it("the user's follow-up — SYRUP is volume too, POWDER is weight (גרם / g)", () => {
+    expect(mapCatalogProduct(buildDto({ dosageForm: 'SYRUP' }), 'he').packageUnit).toBe('מ"ל')
+    expect(mapCatalogProduct(buildDto({ dosageForm: 'SYRUP' }), 'en').packageUnit).toBe('ml')
+    expect(mapCatalogProduct(buildDto({ dosageForm: 'POWDER' }), 'he').packageUnit).toBe('גרם')
+    expect(mapCatalogProduct(buildDto({ dosageForm: 'POWDER' }), 'en').packageUnit).toBe('g')
+  })
+
+  it("the thirteenth list — DROPS carry a VOLUME unit (מ״ל / ml)", () => {
+    const he = mapCatalogProduct(buildDto({ dosageForm: 'DROPS', packageQuantity: 250 }), 'he')
+    expect(he.packageUnit).toBe('מ"ל')
+    const en = mapCatalogProduct(buildDto({ dosageForm: 'DROPS', packageQuantity: 250 }), 'en')
+    expect(en.packageUnit).toBe('ml')
+  })
+
+  it('🔴 the unit map covers the WHOLE enum — a new form must be classified on purpose', () => {
+    /*
+     * PACKAGE_UNIT_LABELS is deliberately partial: absence = countable. This
+     * pin enumerates the classification for EVERY dosage form the server
+     * knows, so adding a form (OIL, GEL…) without deciding its unit turns
+     * this red instead of silently rendering "100 שמן" — the exact defect
+     * class the thirteenth list fixed.
+     */
+    const expected: Record<string, string | undefined> = {
+      CAPSULE: undefined,
+      TABLET: undefined,
+      DROPS: 'מ"ל',
+      SYRUP: 'מ"ל',
+      POWDER: 'גרם',
+    }
+    for (const [form, unit] of Object.entries(expected)) {
+      expect(mapCatalogProduct(buildDto({ dosageForm: form as never }), 'he').packageUnit).toBe(unit)
+    }
+  })
+
+  it('⚠️ THE CONTROL — a countable form has NO package unit', () => {
+    // Without this, "drops get a unit" is satisfied by every form getting one.
+    expect(mapCatalogProduct(buildDto(), 'he').packageUnit).toBeUndefined()
+    expect(mapCatalogProduct(buildDto({ dosageForm: 'TABLET' }), 'en').packageUnit).toBeUndefined()
+  })
+
   it('always keeps categoryNameHe as the Hebrew tone key, regardless of display language', () => {
     const result = mapCatalogProduct(buildDto(), 'en')
     expect(result.categoryNameHe).toBe('אומגה ושומנים')

@@ -27,6 +27,13 @@ export type CartLine = {
    */
   brandNameEn: string | null
   packageQuantity: number
+  /**
+   * The raw dosage-form enum key ('DROPS', 'CAPSULE', …) — lets the row show
+   * a VOLUME quantity as "250 מ״ל" like the card and detail page (the
+   * thirteenth list). Optional in the type so older test fixtures stay
+   * valid; the server always sends it.
+   */
+  dosageForm?: string
   imageFile: string | null
   quantity: number
   /** Canonical two-decimal string, live from the product row. Never a number. */

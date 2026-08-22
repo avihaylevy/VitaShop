@@ -31,6 +31,11 @@
     "POWDER": "אבקה",
     "SYRUP": "סירופ"
   },
+  "packageUnit": {
+    "DROPS": "מ\"ל",
+    "SYRUP": "מ\"ל",
+    "POWDER": "גרם"
+  },
   "categoryShelf": {
     "navLabel": "ניווט קטגוריות",
     "allProducts": "כל המוצרים"
@@ -40,10 +45,6 @@
     "tagline": "ויטמינים ותוספי תזונה במקום אחד — קטלוג מסודר לפי קטגוריות ומטרות בריאות.",
     "browseCatalog": "לכל המוצרים",
     "categoriesTitle": "קנייה לפי קטגוריה",
-    "statsLabel": "נתוני החנות",
-    "statsProducts": "מוצרים בקטלוג",
-    "statsBrands": "מותגים",
-    "statsCategories": "קטגוריות",
     "shopByGoalTitle": "קנייה לפי מטרה",
     "loading": "טוען קטגוריות…",
     "error": "לא ניתן לטעון את הקטגוריות כעת.",
@@ -54,7 +55,9 @@
     "newArrivalsEmpty": "אין עדיין מוצרים חדשים להצגה.",
     "newArrivalsCount_one": "מוצר חדש אחד",
     "newArrivalsCount_two": "שני מוצרים חדשים",
-    "newArrivalsCount_other": "{{count}} מוצרים חדשים"
+    "newArrivalsCount_other": "{{count}} מוצרים חדשים",
+    "footerTagline": "VitaShop — ויטמינים ותוספי תזונה",
+    "footerRights": "© {{year}} VitaShop. כל הזכויות שמורות."
   },
   "catalogPage": {
     "loading": "טוען מוצרים…",
@@ -95,7 +98,7 @@
     "brand": "מותג",
     "category": "קטגוריה",
     "dosageForm": "צורת מתן",
-    "packageQuantity": "יחידות באריזה",
+    "packageQuantity": "כמות באריזה",
     "targetAudience": "קהל יעד",
     "createdAt": "תאריך הוספה"
   },

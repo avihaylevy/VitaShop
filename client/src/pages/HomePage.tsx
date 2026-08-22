@@ -21,12 +21,12 @@ import type { SupportedLanguage } from '../i18n'
  * "the home screen doesn't look good; take inspiration from the reference
  * sites"). The reference SHAPE, none of their branding (DESIGN_BRIEF's
  * anti-copy rule): a hero band, category TILES with real product imagery,
- * shop-by-goal, the new-arrivals shelf, and an honest stats strip whose
- * numbers are the server's own (no invented claims — DEC-032's bar).
+ * shop-by-goal, the new-arrivals shelf, and a plain site-signature footer
+ * (the thirteenth list replaced the stats strip with it).
  *
- * 🔴 DATA GATES NOTHING VISUAL: the showcase fetch (imagery + counts) fails
- * SILENTLY to tone-only tiles and no strip; the categories fetch keeps its
- * loud error+retry because the tiles ARE the page's navigation.
+ * 🔴 DATA GATES NOTHING VISUAL: the showcase fetch (imagery) fails SILENTLY
+ * to tone-only tiles; the categories fetch keeps its loud error+retry
+ * because the tiles ARE the page's navigation.
  */
 export function HomePage() {
   const { t, i18n } = useTranslation(['common', 'catalog'])
@@ -39,7 +39,7 @@ export function HomePage() {
   // The visual layer is MINED from the page the shelf already fetched —
   // never a second identical /api/products request (review of this diff).
   const showcase = useMemo(
-    () => (arrivals.status === 'ready' ? buildShowcase(arrivals.items, arrivals.totalItems) : EMPTY_SHOWCASE),
+    () => (arrivals.status === 'ready' ? buildShowcase(arrivals.items) : EMPTY_SHOWCASE),
     [arrivals],
   )
   /*
@@ -149,18 +149,17 @@ export function HomePage() {
 
       <NewArrivals state={arrivals} onAddToCart={handleAddToCart} gridRef={gridRef} />
 
-      {/* STATS STRIP — the server's own numbers, nothing invented. Hidden
-          entirely until all three counts exist. */}
-      {showcase.totalItems !== null && facets.brands.length > 0 && categories.length > 0 && (
-        <section
-          aria-label={t('home.statsLabel', { ns: 'catalog' })}
-          className="mt-12 flex flex-wrap items-center justify-center gap-x-12 gap-y-4 border-y border-border-hairline py-6"
-        >
-          <HomeStat value={showcase.totalItems} label={t('home.statsProducts', { ns: 'catalog' })} />
-          <HomeStat value={facets.brands.length} label={t('home.statsBrands', { ns: 'catalog' })} />
-          <HomeStat value={categories.length} label={t('home.statsCategories', { ns: 'catalog' })} />
-        </section>
-      )}
+      {/* The thirteenth list (2026-08-21) replaced the stats strip (product/
+          brand/category counts) with a plain site signature — "צריך להיות
+          פשוט איזה חתימה של האתר למטה וזהו". */}
+      <footer className="mt-12 border-t border-border-hairline py-6 text-center">
+        <p className="text-sm font-semibold text-text-ink">
+          {t('home.footerTagline', { ns: 'catalog' })}
+        </p>
+        <p className="mt-1 text-xs text-text-muted">
+          {t('home.footerRights', { ns: 'catalog', year: new Date().getFullYear() })}
+        </p>
+      </footer>
 
       {/* One drawer + one toast, page-owned — the same contract as every
           other add surface. suppress: the drawer IS the confirmation on the
@@ -168,17 +167,6 @@ export function HomePage() {
       <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
       <AddedToCartToast message={addedToCartMessage} announceKey={announced} suppress={drawerOpen} />
     </div>
-  )
-}
-
-function HomeStat({ value, label }: { value: number; label: string }) {
-  return (
-    <p className="text-center">
-      <span dir="ltr" className="block font-display text-2xl font-semibold text-text-ink" style={{ unicodeBidi: 'isolate' }}>
-        {value}
-      </span>
-      <span className="mt-0.5 block text-sm text-text-muted">{label}</span>
-    </p>
   )
 }
 

@@ -92,6 +92,7 @@ export function ProductCard({
   brandName,
   dosageForm,
   packageQuantity,
+  packageUnit,
   imageFile,
   onAddToCart,
   headingLevel = 'h3',
@@ -186,9 +187,23 @@ export function ProductCard({
 
       {(dosageForm || packageQuantity) && (
         <p className="text-[13px] text-text-muted">
-          {packageQuantity && dosageForm
-            ? `${packageQuantity} ${dosageForm}`
-            : (packageQuantity ?? dosageForm)}
+          {/* The thirteenth list — a volume-measured form pairs the quantity
+              with its UNIT ("250 מ״ל"), never with the form label
+              ("250 טיפות"); countable forms keep quantity+form. A defined
+              packageUnit implies a defined dosageForm (same key, same locale
+              file), so the old gate keeps its shape. The NUMERAL is
+              LTR-isolated like the detail page's — the digits must not
+              reorder inside the RTL paragraph. */}
+          {packageQuantity && dosageForm ? (
+            <>
+              <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
+                {packageQuantity}
+              </span>{' '}
+              {packageUnit ?? dosageForm}
+            </>
+          ) : (
+            (packageQuantity ?? dosageForm)
+          )}
         </p>
       )}
 

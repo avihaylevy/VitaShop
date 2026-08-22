@@ -20,6 +20,9 @@ type RawFixture = {
   price: string
   stockQuantity: number
   lowStockThreshold: number
+  // ⚠️ These fixtures BYPASS mapCatalogProduct, so they carry no packageUnit.
+  // Add a drops/syrup/powder fixture only through the real mapper, or it will
+  // render the banned "250 טיפות" form.
   dosageFormHe: string
   dosageFormEn: string
   packageQuantity: number

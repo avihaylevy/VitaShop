@@ -217,6 +217,10 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
                     <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
                       {product.packageQuantity}
                     </span>
+                    {/* The thirteenth list — volume forms carry their unit
+                        ("250 מ״ל"); countable forms stay a bare count under
+                        the neutral "כמות באריזה" label. */}
+                    {product.packageUnit && <> {product.packageUnit}</>}
                   </dd>
                 </>
               )}

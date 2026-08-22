@@ -5,14 +5,11 @@ export type HomeShowcase = {
   categoryImages: ReadonlyMap<string, string | null>
   /** Up to three product images with a non-null file — the hero composition. */
   heroImages: readonly string[]
-  /** The server's real catalogue size — the stats strip's product count. */
-  totalItems: number | null
 }
 
 export const EMPTY_SHOWCASE: HomeShowcase = {
   categoryImages: new Map(),
   heroImages: [],
-  totalItems: null,
 }
 
 /**
@@ -21,8 +18,11 @@ export const EMPTY_SHOWCASE: HomeShowcase = {
  * first version fetched the identical /api/products page a second time).
  * Pure — runs outside any try/catch, so a mapping bug surfaces as a bug,
  * never as a silent "the server was slow" (the useNewArrivals rule).
+ *
+ * ⚠️ `totalItems` left this shape with the stats strip (the thirteenth
+ * list): the count's only consumer was the deleted strip.
  */
-export function buildShowcase(items: readonly CatalogProductDto[], totalItems: number): HomeShowcase {
+export function buildShowcase(items: readonly CatalogProductDto[]): HomeShowcase {
   const categoryImages = new Map<string, string | null>()
   const heroImages: string[] = []
   for (const item of items) {
@@ -33,5 +33,5 @@ export function buildShowcase(items: readonly CatalogProductDto[], totalItems: n
       heroImages.push(item.imageFile)
     }
   }
-  return { categoryImages, heroImages, totalItems }
+  return { categoryImages, heroImages }
 }

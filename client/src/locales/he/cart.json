@@ -16,6 +16,7 @@
   },
   "item": {
     "packageQuantity": "כמות באריזה: {{quantity}}",
+    "packageQuantityWithUnit": "כמות באריזה: {{quantity}} {{unit}}",
     "unitPrice": "מחיר ליחידה",
     "fullPrice": "מחיר מלא",
     "lineTotal": "סה\"כ לשורה",

@@ -6,7 +6,7 @@ import { FOCUS_RING } from '../components/ui/focusRing'
  * 🔴 ISSUE-066 — the catch-all. Added 2026-08-12.
  *
  * Before this, an unknown URL matched no route and `AppShell` rendered its
- * header and footer around NOTHING. A blank page is indistinguishable from a
+ * chrome (header; no site-wide footer exists) around NOTHING. A blank page is indistinguishable from a
  * page that failed to load, so a shopper who mistypes a URL — or follows a
  * stale link — cannot tell a wrong address from a broken store.
  *

@@ -52,6 +52,23 @@ beforeEach(async () => {
 
 afterEach(cleanup)
 
+describe("the thirteenth list — the row's package quantity carries the unit", () => {
+  it('a DROPS line reads as volume, not a count', () => {
+    renderRow({ dosageForm: 'DROPS', packageQuantity: 250 })
+    expect(screen.getByText('Package quantity: 250 ml')).toBeTruthy()
+  })
+
+  it('⚠️ THE CONTROL — a countable line keeps the unit-less string', () => {
+    renderRow({ dosageForm: 'CAPSULE', packageQuantity: 60 })
+    expect(screen.getByText('Package quantity: 60')).toBeTruthy()
+  })
+
+  it('a line WITHOUT dosageForm (older fixture shape) still renders', () => {
+    renderRow()
+    expect(screen.getByText('Package quantity: 60')).toBeTruthy()
+  })
+})
+
 describe('a SHORT-STOCK row — the case that said nothing at all', () => {
   it('names the action and the number, not just the state', () => {
     renderRow(SHORT_STOCK)

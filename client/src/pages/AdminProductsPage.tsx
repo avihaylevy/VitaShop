@@ -681,6 +681,12 @@ export function AdminProductsPage() {
                                 className={`${FOCUS_RING} h-10 w-32 rounded-card border border-border-control bg-well px-3`}
                                 dir="ltr"
                               />
+                              {/* The same ml/g cue the CREATE form carries — an
+                                  admin editing an existing drops product must
+                                  know the 250 is millilitres, not a count. */}
+                              <span className="text-xs text-text-muted">
+                                {t('products.form.packageQuantityHint')}
+                              </span>
                             </label>
                             <fieldset className="flex flex-wrap gap-3 text-sm">
                               <legend className="mb-1 text-text-ink">

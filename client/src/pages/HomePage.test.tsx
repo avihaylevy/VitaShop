@@ -20,6 +20,21 @@ vi.mock('../state/FavouritesContext', () => ({
   useFavourites: () => ({ count: 0, isFavourite: () => false, toggle: async () => 'added' as const }),
 }))
 
+/*
+ * Non-empty brands ON PURPOSE: the deleted stats strip was gated on
+ * `facets.brands.length > 0`, and the footer test's "no strip" control is
+ * only evidence if every input the strip needed is present (the
+ * all-reject-family rule). healthGoals stays empty so ShopByGoal hides.
+ */
+vi.mock('../hooks/useCatalogFacets', () => ({
+  useCatalogFacets: () => ({
+    loading: false,
+    facets: { brands: [{ id: 'b1', name: 'Brand', nameEn: 'Brand' }], healthGoals: [], dosageForms: [], dietary: [] },
+    error: null,
+    retry: () => {},
+  }),
+}))
+
 function product(index: number) {
   return {
     slug: `product-${index}`,
@@ -103,6 +118,38 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
+})
+
+describe("the thirteenth list — the footer signature", () => {
+  it("renders the site signature and NO stats strip — with the strip's inputs SATISFIED", async () => {
+    /*
+     * 🔴 The control feeds every input the deleted strip was gated on
+     * (a ready products page with a DISTINCTIVE totalItems, non-empty
+     * brands via the module mock, stubbed categories). A reintroduced
+     * strip would render 4242 somewhere; an unstubbed-fetch version of
+     * this test could never fail — the all-reject family.
+     */
+    routed(async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [product(1)],
+          page: 1,
+          pageSize: 24,
+          totalItems: 4242,
+          totalPages: 177,
+          fallback: null,
+        }),
+      }) as unknown as Response)
+    renderHome()
+
+    expect(await screen.findByText(/VitaShop — vitamins/i)).toBeTruthy()
+    expect(screen.getByText(/all rights reserved/i)).toBeTruthy()
+    // Wait for the shelf so the page is fully settled before the negative.
+    await screen.findByText('Product 1')
+    expect(screen.queryByText('4242')).toBeNull()
+  })
 })
 
 describe('the New Arrivals shelf', () => {

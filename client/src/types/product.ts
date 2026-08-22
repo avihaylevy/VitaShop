@@ -22,6 +22,13 @@ export type ProductCardModel = {
   brandName?: string
   dosageForm?: string
   packageQuantity?: number
+  /**
+   * The thirteenth list — the unit the QUANTITY is measured in, when it is
+   * not a count: drops are volume ("250 מ״ל"), never "250 טיפות". Localised
+   * at mapping time; undefined for countable forms, where the quantity
+   * segment keeps pairing with the dosage-form label.
+   */
+  packageUnit?: string
   imageFile: string | null
 }
 

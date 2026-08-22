@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { CartLineDisplay } from '../../lib/cartDisplay'
+import { packageUnitLabel } from '../../lib/mapCatalogProduct'
+import type { SupportedLanguage } from '../../i18n'
 import { VisuallyHidden } from '../ui/VisuallyHidden'
 import { ProductImage } from '../catalog/ProductImage'
 import { PriceBlock } from '../catalog/PriceBlock'
@@ -51,7 +53,10 @@ type CartItemRowProps = {
  * the divider lives on the `<li>` in `CartPage` with `last:border-b-0`.
  */
 export function CartItemRow({ line, busy, onIncrement, onDecrement, onRemove }: CartItemRowProps) {
-  const { t } = useTranslation('cart')
+  const { t, i18n } = useTranslation('cart')
+  // The thirteenth list — a volume form's quantity carries its unit
+  // ("250 מ״ל"), through the SAME lookup the card and detail page use.
+  const packageUnit = packageUnitLabel(line.dosageForm, i18n.language as SupportedLanguage)
 
   return (
     <div
@@ -76,7 +81,9 @@ export function CartItemRow({ line, busy, onIncrement, onDecrement, onRemove }: 
         {line.brandName && <p className="text-xs text-text-muted">{line.brandName}</p>}
 
         <p className="text-xs text-text-muted">
-          {t('item.packageQuantity', { quantity: line.packageQuantity })}
+          {packageUnit
+            ? t('item.packageQuantityWithUnit', { quantity: line.packageQuantity, unit: packageUnit })
+            : t('item.packageQuantity', { quantity: line.packageQuantity })}
         </p>
 
         {/*

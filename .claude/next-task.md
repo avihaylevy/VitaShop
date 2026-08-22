@@ -33,20 +33,16 @@
 Repository:     C:\Users\aviha\תכנות\VitaShop
 Memory system:  C:\Users\aviha\תכנות\זיכרון AI\פרוייקט ECOMMERCE\
                 פרוייקט Ecommerce\VitaShop-Project
-HEAD:           275fc3b — lists 8-11 + the hundredth-pass review fixes
-                (56 files), on top of 513f763 (DEC-094 Groq).
-🔴 UNCOMMITTED: TWO stacked verified sets awaiting one commit word:
-                (a) the hundred-first pass's DEC-096/097/098 build —
-                drawer trim · club consent/leave dialogs + member badge
-                · card-form removal (cardValidation DELETED);
-                (b) the hundred-second pass's TWELFTH LIST (ISSUE-180..
-                183) — 10-day shopper-cancel window (server rule
-                CANCEL_WINDOW_PASSED + client stops offering) ·
-                cancelled orders LEAVE the history + success Modal ·
-                search-button tint unclipped (inner size-9 span) ·
-                ₪ BEFORE the number (reverses ISSUE-167). Verified
-                (client 1004 · targeted server 65 green · tsc/build 0 ·
-                playwright he+en × 8 widths clean).
+HEAD:           6158d1b — DEC-096/097/098 + the twelfth list
+                (ISSUE-180..183) + the hundred-third-pass review fixes,
+                on top of 275fc3b (lists 8-11).
+🔴 UNCOMMITTED: the hundred-fourth pass's THIRTEENTH LIST
+                (ISSUE-185..186) — home stats strip replaced by a
+                site-signature footer · drops show מ"ל (PACKAGE_UNIT_
+                LABELS in mapCatalogProduct + packageUnit on the card
+                model + neutral details label; NO schema change).
+                Verified (client 1008 · tsc/build 0 · playwright he+en
+                × 8 widths). Earlier sets COMMITTED at `6158d1b`.
 Suites:         client 1002 green (count DROPPED from 1044 by design —
                 the deleted card suites) · server: ai/account/admin/
                 checkout suites green; the FULL server run carries 6

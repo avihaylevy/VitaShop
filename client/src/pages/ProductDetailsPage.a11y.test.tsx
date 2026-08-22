@@ -195,6 +195,19 @@ describe('ProductDetailsPage — the four §7 states', () => {
 })
 
 describe('ProductDetailsPage — §7a/§7b field surface', () => {
+  it("the thirteenth list — a DROPS product shows its quantity as VOLUME (250 מ״ל)", async () => {
+    setDetail({
+      product: product({ dosageForm: 'טיפות', packageQuantity: 250, packageUnit: 'מ"ל' }),
+    })
+    const html = await renderPage()
+    expect(html).toContain('250')
+    // The quote in מ"ל arrives HTML-escaped in renderToString output.
+    expect(html).toContain('מ&quot;ל')
+    // The neutral label — never "יחידות באריזה" beside a volume.
+    expect(html).toContain('כמות באריזה')
+    expect(html).not.toContain('יחידות באריזה')
+  })
+
   it('renders every field the DTO carries that has a place on the page', async () => {
     setDetail({ product: product({ targetAudience: 'מבוגרים' }) })
     const html = await renderPage()
@@ -330,7 +343,7 @@ describe('ProductDetailsPage — §7c i18n', () => {
     expect(html).not.toContain('productDetails.')
     expect(html).not.toContain('catalog:')
     // מספר סידורי left the list with the display (ISSUE-123).
-    for (const label of ['מותג', 'קטגוריה', 'צורת מתן', 'יחידות באריזה', 'תאריך הוספה']) {
+    for (const label of ['מותג', 'קטגוריה', 'צורת מתן', 'כמות באריזה', 'תאריך הוספה']) {
       expect(html).toContain(label)
     }
   })

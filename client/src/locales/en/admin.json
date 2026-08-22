@@ -92,6 +92,7 @@
       "brandNewNameEnHint": "The manufacturer's official Latin form, when one exists. Empty = no Latin form",
       "dosageForm": "Dosage form",
       "packageQuantity": "Package quantity",
+      "packageQuantityHint": "Unit count — or volume in ml (drops, syrup) / weight in g (powder)",
       "price": "Price",
       "priceHint": "In shekels. A whole number works — 190 is saved as 190.00",
       "stock": "Initial stock",

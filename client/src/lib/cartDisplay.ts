@@ -62,6 +62,8 @@ export type CartLineDisplay = {
   name: string
   brandName: string
   packageQuantity: number
+  /** Raw dosage-form key — feeds packageUnitLabel for volume forms. */
+  dosageForm?: string
   imageFile: string | null
   /** Canonical two-decimal strings, both server-computed. */
   unitPrice: string
@@ -108,6 +110,7 @@ export function toCartLineDisplay(line: CartLine, language: SupportedLanguage): 
     // per-line fallback to the stored name.
     brandName: line.brandNameEn ?? line.brandName,
     packageQuantity: line.packageQuantity,
+    dosageForm: line.dosageForm,
     imageFile: line.imageFile,
     unitPrice: line.unitPrice,
     baseUnitPrice: line.baseUnitPrice,

@@ -14,8 +14,7 @@
  * 🔴 ISSUE-066, fixed 2026-08-12: `sales`, `about` and `contact` were REMOVED.
  *
  * All three declared a route the router does not, and there was no catch-all,
- * so clicking any of them rendered an EMPTY page — header, footer, nothing
- * between — in both languages and in both the desktop header and the mobile
+ * so clicking any of them rendered an EMPTY page — the app chrome around nothing — in both languages and in both the desktop header and the mobile
  * menu.
  *
  * 🔴 THE FIX IS DELETION, NOT THREE NEW PAGES. The specification was checked

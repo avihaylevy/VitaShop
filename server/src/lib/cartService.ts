@@ -53,6 +53,13 @@ export type CartLineDto = {
    * Nullable exactly as the catalogue DTO's: no sourced Latin form means none.
    */
   brandNameEn: string | null
+  /**
+   * The thirteenth list's unit rule — the raw dosage-form enum key, so the
+   * client can render a VOLUME quantity as "250 מ"ל" in the cart exactly as
+   * the card and detail page do. Raw key, never a label: localisation is the
+   * client's (the DOSAGE_FORM_LABELS / PACKAGE_UNIT_LABELS pattern).
+   */
+  dosageForm: string
   /** For the row's "package quantity" line. */
   packageQuantity: number
   imageFile: string | null
@@ -151,6 +158,7 @@ function toDto(
   items: { id: string; quantity: number; product: {
     id: string; slug: string; nameHe: string; nameEn: string; isActive: boolean
     stockQuantity: number; lowStockThreshold: number; packageQuantity: number
+    dosageForm: string
     price: { toFixed: (d: number) => string }
     brand: { name: string; nameEn: string | null }
     images: { url: string }[]
@@ -172,6 +180,7 @@ function toDto(
       brandName: item.product.brand.name,
       brandNameEn: item.product.brand.nameEn ?? null,
       packageQuantity: item.product.packageQuantity,
+      dosageForm: item.product.dosageForm,
       // DEC-089b — the catalogue's ONE image-ref rule: a basename for the
       // build-time assets, an absolute URL passed through for admin-added
       // products (an inline split('/').pop() here mangled URLs to their
@@ -271,6 +280,7 @@ const LINE_SELECT = {
     select: {
       id: true, slug: true, nameHe: true, nameEn: true, isActive: true,
       stockQuantity: true, lowStockThreshold: true, packageQuantity: true, price: true,
+      dosageForm: true,
       brand: { select: { name: true, nameEn: true } },
       images: { select: { url: true }, orderBy: { sortOrder: 'asc' as const }, take: 1 },
     },
