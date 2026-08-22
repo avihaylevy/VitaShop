@@ -1,10 +1,11 @@
-# SESSION HANDOFF — LISTS 8-11 SHIPPED · FOUR DECISIONS LANDED · DEPLOY IS THE LAST MILESTONE
+# SESSION HANDOFF — EVERYTHING PRE-DEPLOY IS DONE · DEPLOY IS ON HOLD FOR THE LECTURER · THE SUBMISSION DOCUMENT EXISTS
 
-> Rewritten 2026-08-21, closing the session that built the user's EIGHTH
-> THROUGH ELEVENTH defect lists (ISSUE-144..178), ran an 8-angle review
-> (9 findings fixed, committed `275fc3b`), and then landed the user's
-> four decisions (DEC-096/097/098 built; two items deferred by them).
-> SESSION_LOG passes 95-101.
+> Rewritten 2026-08-22, closing the session that ran passes 110–119:
+> the analytics milestone (DEC-101/102), the ISSUE-189 visitor-identity
+> fix (DEC-103), the decisions batch (DEC-095/100 Accepted), the
+> TextLink and LinkButton primitives, the dashboard per-range cache,
+> the agent's top pick (DEC-104), the Hebrew submission document, and
+> four full review-fix-commit cycles. SESSION_LOG passes 110–119.
 >
 > ⚠️ **The memory system is authoritative** — everything here is also in
 > `operations/` and `technical/`. This file is orientation, not state.
@@ -19,10 +20,14 @@
 ❌ silence is not acceptance · a general "go ahead" is not acceptance
    of a SPECIFIC host/key/dependency · never obtain or configure a key
 ✅ present options WITH a recommendation, wait, record the answer as a DEC
-🔴 Commit-gating: build and verify, then WAIT for the user's commit word.
+🔴 Commit-gating by default: build and verify, then WAIT for the user's
+   commit word — unless their instruction for the task already said
+   "then commit" (this session's pattern).
 🔴 Never read server/.env. Tests pin AI_PROVIDER=mock (vitest.setup) —
-   the user's dev server may run the REAL Groq provider; do not send it
-   chat messages from browser verification (it happened twice; own it).
+   the user's dev server may run the REAL Groq provider; NEVER send it
+   chat messages from browser verification. To verify the agent live,
+   start your OWN server with AI_PROVIDER=mock forced in the process
+   env (precedent: pass 118).
 ```
 
 ---
@@ -33,122 +38,106 @@
 Repository:     C:\Users\aviha\תכנות\VitaShop
 Memory system:  C:\Users\aviha\תכנות\זיכרון AI\פרוייקט ECOMMERCE\
                 פרוייקט Ecommerce\VitaShop-Project
-HEAD:           621d2d8 — the thirteenth list + pass-105 review fixes,
-                on top of 6158d1b (DEC-096/097/098 + the twelfth list).
-TREE:           CLEAN at `3f769d6` (hundred-ninth pass): ISSUE-179's
-                password gate (DEC-100, login-strength identityChange
-                limiter) built, reviewed, committed. Suites: server
-                1089 · client 1019 · tsc/build 0. 🔴 NOTHING LEFT
-                BEFORE DEPLOY — plan from technical/DEPLOYMENT.md,
-                present host options WITH a recommendation, the USER
-                decides, then build.
-Suites:         client 1002 green (count DROPPED from 1044 by design —
-                the deleted card suites) · server: ai/account/admin/
-                checkout suites green; the FULL server run carries 6
-                reds = ISSUE-154's live-data artifacts (see below).
-Running:        the user usually keeps dev servers up (:3000/:5173,
-                localhost default). Check ports before starting any.
+HEAD:           c878c7b (hundred-nineteenth pass) — tree CLEAN.
+Suites:         server 1132/1132 · client 1037/1037 · tsc/builds 0.
+Running:        the user usually keeps the CLIENT dev server up (:5173).
+                Start the API server yourself when needed; stop it by
+                exact PID; port 3000 was left free.
 ```
 
-Read in order: `CLAUDE.md` → `00_INDEX.md` → `operations/LOCK.md` →
-`operations/STATUS.md` → `operations/CURRENT_TASK.md` →
+Read in order: `CLAUDE.md` → memory `00_INDEX.md` → `operations/LOCK.md`
+→ `operations/STATUS.md` → `operations/CURRENT_TASK.md` →
 `.claude/rules/browser-verification.md`.
 
 ---
 
-## What works NOW (tested, not just written)
+## What this session shipped (all committed, all reviewed)
 
-- **The agent, third generation**: plum accent family (DEC-095 tokens,
-  still *Proposed*), round FAB "צריך עזרה?", floating ChatCard (Modal
-  a11y intact), greeting by first name, suggestion chips through the
-  one send path, typing indicator, product thumbnails on cards,
-  **product-NAME search** (productQuery → the catalogue's own q engine;
-  zero-match q is stripped from handoffs, gibberish still clarifies),
-  recommendation posture in the Groq prompts (fixed notice + server
-  medical gate untouched). Proven live once: "בריאמיל" → the product,
-  with image and a real recommendation sentence.
-- **Admin**: outcome messages beside the submit button (event-driven
-  scroll), whole-shekel price input, per-row FULL editor (names,
-  descriptions, usage, warnings, package, dietary, dosage form),
-  chrome-styled filters. The user CREATED a real product with it
-  (vitamin-c-liposomal, external image URL) — which is what turned
-  ISSUE-154's six tests red.
-- **Shop**: single-frame search focus everywhere, ₪ BEFORE the number since
-  the twelfth list (both languages, NBSP-joined, full-string pins), balanced hero,
-  ticket-style receipt, softened delivery estimates, cart CLEARS
-  client-side after checkout (ISSUE-178).
-- **Account**: reorder from order history; profile email editing
-  (DEC-090 O2 amended; EMAIL_TAKEN named refusal) — ⚠️ ISSUE-179: no
-  re-auth/verification on email rotation, recorded for a decision.
-- **Uncommitted but verified**: drawer = quick glance (no removal);
-  club joins via consent dialog / leaves via confirm, member badge in
-  the menu; checkout has NO card fields (payload pinned card-free).
+- **The analytics milestone** (DEC-101/102, `0598572`): §4.7.5 funnel
+  events at four seams · §4.7.4 `/admin/dashboard` + GET
+  /api/admin/dashboard (7/30/90 UTC-calendar days) · §1.6's four KPIs ·
+  §4.7.2 per-product low-stock threshold + panel. NO migration — the
+  schema pieces existed since DEC-024.
+- **DEC-103** (`01d91c7`): the funnel keys on a durable `vs_vid` visitor
+  cookie (survives login regeneration and anonymous non-persistence).
+  ISSUE-189's identity half closed.
+- **The decisions batch** (`bea8662`): DEC-095 + DEC-100 Accepted ·
+  ISSUE-188 option A · funnel_events indexes REDESIGNED to two
+  superseding secondaries (the original `(event_type, created_at)` was
+  dropped as a strict prefix) · ui/Textarea · Field as a discriminated
+  union · LinkButton rest-spread/min-h/ghost/block · modified-click
+  close-declines everywhere.
+- **ui/TextLink** (`1b9901d`): ~30 hand-rolled quiet links across 19
+  files became one primitive — and 11 auth links had referenced the
+  NONEXISTENT `text-brand-primary` token (colourless until now).
+- **The dashboard per-range cache** (`b43fdcc` + hardening in
+  `c878c7b`): instant toggles, ONE sequence-number staleness guard for
+  every load entry point, range-scoped failures, a retry on the
+  refresh-failed notice.
+- **The agent's top pick** (DEC-104, `ed1b511` + hardening in
+  `c878c7b`): Stage 3 returns explanations + a ranked pick INTO the
+  retrieved list; the route validates AND drops a pick whose
+  explanation the guard blanked (an injected turn cannot reorder
+  merchandising); pinned first; ui/Badge `agent` variant. Groq's
+  schema is genuinely lenient (`z.unknown()`); "topPick": 0 logs as
+  the off-by-one it is. ISSUE-161 closed.
+- **The Hebrew submission document** (pass 113, NOT in the repo):
+  `מסמך הגשה סופי - VitaShop.docx` in the course OneDrive folder,
+  5-section lecturer template, 13 pages, built on the PRD, updated to
+  the implementation, 5 diagrams + 6 live screenshots + the recorded
+  deviations table. The user will want refinements when the project
+  finishes (their words) — section 4 carries a placeholder for the
+  live link.
 
 ---
 
 ## 🔴 THE NEXT SESSION'S ORDERED QUEUE
 
-### 0 — The user's commit word for DEC-096/097/098 + the twelfth list (tree is dirty)
+### 1 — DEPLOY (the last milestone) — ⏸ ON HOLD
+The user awaits LECTURER CLARIFICATIONS before deciding. Four decisions
+were presented with recommendations and are QUEUED, not answered:
+```
+· Host: Render (server web service + client static) + Neon Postgres
+  (free DB that does not expire) — RECOMMENDED; alternatives all-in
+  Render (free DB expires in 30 days) / Railway / no public deploy.
+· Tier: free with ~1min cold start after 15min idle — RECOMMENDED —
+  vs ~$7/mo always-on.
+· AI on host: AI_PROVIDER=mock — RECOMMENDED (user can flip to groq
+  by setting the env trio themselves) — vs groq from day one.
+· Uploads: accept the ephemeral filesystem (re-upload after deploys,
+  prefer external URLs) — RECOMMENDED — vs disabling uploads in prod.
+```
+Execution notes when it resumes: technical/DEPLOYMENT.md is the
+contract. Traps recorded there: exact CLIENT_ORIGIN (never *) ·
+`trust proxy` to the REAL depth (cookie + IP limiter both depend on
+it) · in-memory limiter store (multi-instance multiplies ceilings) ·
+§8b UPLOADS_DIR cwd anchor · TWO pg pools ≈20 connections vs free-tier
+caps · the Groq env trio is set by the USER personally · the funnel
+index migration wants CONCURRENTLY on a populated table (note inside
+the migration file). The USER creates the hosting accounts (never the
+agent). After deploy: the live link goes into section 4 of the
+submission document + README.
 
-### 1 — Small open items needing the user
+### 2 — Post-deploy items already recorded
 ```
-· DEC-095 (agent tokens · r-full beyond §3 · 16px bubbles) — accept or
-  amend; then DESIGN_SYSTEM.md §1/§3 get amended to match.
-· ISSUE-154 — the imageFile basename test vs DEC-089b external URLs:
-  amend the test (recommended) or forbid external image URLs. Also
-  covers the 4 seedConvergence reds (admin-created row not in CSV —
-  ISSUE-142's documented signal) + the search-shape red.
-· ISSUE-179 — email change without re-auth: add a password-confirm /
-  verification loop, or accept for the course project.
-```
-
-### 2 — DEPLOY (the last milestone; plan first → the user → build)
-```
-technical/DEPLOYMENT.md. The recorded traps:
-· CLIENT_ORIGIN (CORS — exact origin, never *)
-· the in-memory rate-limiter store (multi-instance multiplies ceilings)
-· §8b UPLOADS_DIR (cwd-anchored; PaaS filesystems are EPHEMERAL — and
-  the user's real product now depends on an uploaded/external image)
-· GROQ_API_KEY + AI_PROVIDER + GROQ_MODEL reach the host env — the
-  user sets them PERSONALLY; missing key = loud mock fallback
-· trust proxy (index.ts's comment) becomes LOAD-BEARING behind a proxy
-```
-
-### Deferred BY THE USER to after deployment (do not build before)
-```
-· ISSUE-160 — hard delete (options A/B/C in SESSION_LOG pass 98)
-· ISSUE-163 — Google OAuth sign-up (their credentials; redirect URIs
-  want the deployed origin; likely schema change)
-· the save-card option (DEC-098 explicitly defers it; schema+privacy)
-```
-
-### Smaller owed items (fold into natural moments, don't block)
-```
-· Recorded-skipped cleanups (ISSUES.md pass-100 section): ChatCard/
-  Drawer presence dedup · plum-recipe const · chrome-const share ·
-  mock tokenizer unification · AgentGreeting subscription split ·
-  productQuery 80-char silent drop
-· ISSUE-161's full concept: a RANKED "top pick" from the provider
-  (validated against retrieved rows only) — plan as its own checkpoint
-· NER-grade redaction · withTimeout unification · ISSUE-051 data half ·
-  ISSUE-024's Open-table/closed-index contradiction (re-derive from its
-  status block) · Phase-1 spec questions (002/003/005/009/010)
+· ISSUE-190 — product-scoped explanation-guard screening (substring-
+  named products are unscreenable today; the rank-follows-prose gate
+  shipped as mitigation).
+· ISSUE-189's tail — buffered funnel inserts.
+· Deferred BY THE USER to after deployment: ISSUE-160 hard delete ·
+  ISSUE-163 Google OAuth · the save-card option (DEC-098).
+· The submission document's final refinements + live link.
 ```
 
----
-
-## The user's own queue (no agent can do these)
-
+### The user's own queue (no agent can do these)
 ```
-🔴 THE SIGNED-IN BROWSER PASS — now also covers: the club consent/leave
-   dialogs + menu badge · the admin full editor + dosage fix · reorder ·
-   profile email change · the card-less payment + ticket receipt · the
-   agent against the REAL Groq provider (they run AI_PROVIDER=groq).
-   Seeded accounts: npm run seed:accounts → admin@/shopper@vitashop.local.
-🔴 DEPLOY DECISIONS — host/platform is theirs; present options with a
-   recommendation first.
-🔴 ISSUE-018's remainder (SVG logo + Hebrew wordmark) · ISSUE-020's
-   real-device pass (LAN-IP recipe: SESSION_LOG pass 82).
+🔴 LECTURER CLARIFICATIONS → the four deploy answers above.
+🔴 THE SIGNED-IN BROWSER PASS — formally closes M-008/009/010/011/012;
+   now ALSO covers /admin/dashboard (KPIs, funnel, low-stock panel,
+   range toggles) and the agent's top-pick badge against real Groq.
+   Seeded accounts: npm run seed:accounts.
+🔴 Read the submission document (course OneDrive folder).
+🔴 ISSUE-018 (SVG logo + Hebrew wordmark) · ISSUE-020 (real-device pass).
 ```
 
 ---
@@ -156,28 +145,29 @@ technical/DEPLOYMENT.md. The recorded traps:
 ## 🔴 Rules that BIT this session — read before writing code
 
 ```
-🔴 THE PIPE TRAP STRUCK AGAIN (browser-verification.md's own rule):
-   `tsc -b 2>&1 | head; echo $?` printed 0 over a FAILING tsc — $? was
-   head's. Run compilers bare or capture to a file and read $? first.
-🔴 THE EFFECT-ON-VALUE SCROLL/FETCH FAMILY: two instances — an outcome
-   scrollIntoView keyed on [failureText, created] scrolled to a STALE
-   success; a load effect keyed on sessionEmail refetched and CLOBBERED
-   the form. Side effects fire from the EVENT, not from watching state.
-🔴 ONE IN-FLIGHT FLAG PER SEND PATH: the composer's local inFlight
-   couldn't see the chips' turn — two concurrent sends forked the chat
-   history. The panel's single `awaiting` gates BOTH now.
-🔴 A PARAM-COUNT PROXY IS NOT A DECISION: `handoffParams.length === 1`
-   for "only q" broke the moment q rode with one more criterion; decide
-   on the resolved struct itself.
-🔴 jsdom lacks matchMedia AND scrollIntoView — usePresence's CLOSE path
-   calls matchMedia, so the first test to close a presence dialog needs
-   the stub (pattern: useAddToCart.test.tsx).
-🔴 Tolerant hooks (useOptionalSession / useCartRefresh /
-   useOptionalCartClubMember) exist so provider-less test harnesses
-   don't throw — ONE optional hook per context; no per-field wrappers.
-🔴 i18next locale JSONs are rewritten via python json (2-indent,
-   ensure_ascii=False) — keep diffs 2-line minimal; key SYMMETRY he/en
-   is pinned by the integrity suites.
+🔴 A "lenient" zod field inside a safeParse'd OBJECT is not lenient:
+   z.number().optional() on topPick failed the WHOLE parse for
+   "topPick": null and destroyed the good explanations beside it.
+   Leniency means z.unknown() + validation at the consumer.
+🔴 HALF-TRUSTING A REJECTED PAYLOAD: when the guard blanks a provider's
+   prose, every OTHER field derived from that same turn (the rank) must
+   fall with it — or an injected turn steers through the surviving half.
+🔴 ONE STALENESS MECHANISM PER RESOURCE, covering EVERY entry point:
+   the effect-scoped closure guard missed the retry button; a
+   sequence-number ref covers both. And per-key resources need
+   per-key failure state — a global failure slot misattributes.
+🔴 findFirst WITHOUT orderBy is a live-data flake: Postgres row order
+   drifts after inserts. Fixture selection always orders.
+🔴 A required field added to a client response validator breaks
+   client-ahead-of-server deploys — tolerate absence, normalise.
+🔴 The graphify hook demands `graphify query` before grep/read —
+   run one query per work area first; include the rule in subagent
+   prompts. Run `graphify update .` after code changes.
+🔴 Multi-cookie Set-Cookie: headers.get('set-cookie') is a JOINED
+   string; use headers.getSetCookie() and a real jar (two cart suites
+   broke when the visitor cookie became the second cookie).
+🔴 The PIPE TRAP stands: run compilers bare or capture to a file and
+   read $? — never `cmd | head; echo $?`.
 ```
 
 ---
@@ -185,8 +175,8 @@ technical/DEPLOYMENT.md. The recorded traps:
 ## Measured at handoff
 
 ```
-HEAD 275fc3b · working tree DIRTY with exactly the DEC-096/097/098 set
-(the user's commit word pending) · client 1002 · targeted server suites
-green · full-server 6 reds = ISSUE-154 (recorded, user's call) · tsc 0
-both · builds 0 both · lock FREE · deploy is the last milestone.
+HEAD c878c7b · tree CLEAN · server 1132/1132 · client 1037/1037 ·
+tsc 0 both · builds 0 both · lock FREE · ports 3000 free, 5173 the
+user's · dev DB has ISSUE-188-class funnel residue (accepted, option A)
+· DEPLOY is the only milestone left and it waits on the user.
 ```
