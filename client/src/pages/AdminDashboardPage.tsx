@@ -26,12 +26,14 @@ import type {
  * daily sales, the way the project's own icons are hand-written SVG.
  */
 
-type LoadState =
-  | { status: 'loading' }
-  | { status: 'ready'; data: AdminDashboardData }
-  | { status: 'failed'; failure: AdminDashboardFailure }
-
 const RANGES: DashboardRangeDays[] = [7, 30, 90]
+
+/** A failure that means THIS VIEWER may no longer read the dashboard —
+ *  stale figures must not stay on screen behind it. Transient transport
+ *  failures, by contrast, keep the cached view (analytics, not money). */
+function failureRevokesAccess(failure: AdminDashboardFailure): boolean {
+  return failure.kind === 'unauthenticated' || failure.kind === 'notAdmin'
+}
 
 /** The failure vocabulary — a lookup, not a branch chain, so a new
  *  AdminListFailure kind is a compile-visible hole here. */
@@ -57,16 +59,33 @@ function turnoverMinor(value: string): number {
 
 export function AdminDashboardPage() {
   const { t } = useTranslation('admin')
-  const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [days, setDays] = useState<DashboardRangeDays>(30)
+  /**
+   * The per-range cache (the analytics review's follow-up): toggling
+   * 7 → 30 → 7 used to blank the screen and re-run the full 8-query
+   * build each time. A cached range now renders INSTANTLY while the
+   * fetch revalidates in the background and replaces it on arrival —
+   * the range-independent arms (low stock, all-time repeat rate) stop
+   * being recomputed just to redraw unchanged numbers.
+   */
+  const [cache, setCache] = useState<Partial<Record<DashboardRangeDays, AdminDashboardData>>>({})
+  const [pending, setPending] = useState(true)
+  const [failure, setFailure] = useState<AdminDashboardFailure | null>(null)
 
   const load = useCallback(async (range: DashboardRangeDays, isStale?: () => boolean) => {
-    setState({ status: 'loading' })
+    setPending(true)
     const result = await requestAdminDashboard(range)
     if (isStale?.()) return
-    setState(
-      result.ok ? { status: 'ready', data: result.data } : { status: 'failed', failure: result.failure },
-    )
+    if (result.ok) {
+      setCache((current) => ({ ...current, [range]: result.data }))
+      setFailure(null)
+    } else {
+      setFailure(result.failure)
+      // 🔴 An access-revoking failure CLEARS the cache: a signed-out or
+      // demoted viewer must not keep reading figures behind the alert.
+      if (failureRevokesAccess(result.failure)) setCache({})
+    }
+    setPending(false)
   }, [])
 
   useEffect(() => {
@@ -76,6 +95,8 @@ export function AdminDashboardPage() {
       stale = true
     }
   }, [load, days])
+
+  const data = cache[days]
 
   return (
     <main className="mx-auto flex max-w-[1100px] flex-col gap-6 px-4 py-6">
@@ -101,16 +122,20 @@ export function AdminDashboardPage() {
         </div>
       </div>
 
-      {state.status === 'loading' && (
+      {/* Nothing cached for this range yet: a real loading line. */}
+      {!data && pending && (
         <p role="status" className="text-sm text-text-muted">
           {t('dashboard.loading')}
         </p>
       )}
 
-      {state.status === 'failed' && (
+      {/* The FULL failure block only when there is nothing to show —
+          a transient failure over a cached view degrades to the quiet
+          refresh notice below instead of blanking real figures. */}
+      {!data && !pending && failure && (
         <div role="alert" className="flex flex-col items-start gap-2">
-          <p className="text-sm text-state-error">{t(FAILURE_TEXT_KEY[state.failure.kind])}</p>
-          {state.failure.kind === 'unauthenticated' && (
+          <p className="text-sm text-state-error">{t(FAILURE_TEXT_KEY[failure.kind])}</p>
+          {failure.kind === 'unauthenticated' && (
             <TextLink to="/login">
               {t('state.signIn')}
             </TextLink>
@@ -118,7 +143,7 @@ export function AdminDashboardPage() {
           {/* Retry only where retrying can help — ListFailureNotice's rule:
               pressing again cannot make an account an administrator, and
               the fix for a rate limit is waiting, not hammering it. */}
-          {(state.failure.kind === 'offline' || state.failure.kind === 'unavailable') && (
+          {(failure.kind === 'offline' || failure.kind === 'unavailable') && (
             <button
               type="button"
               onClick={() => void load(days)}
@@ -130,7 +155,15 @@ export function AdminDashboardPage() {
         </div>
       )}
 
-      {state.status === 'ready' && <DashboardBody data={state.data} />}
+      {/* A failed REVALIDATION over cached data — say so quietly rather
+          than silently showing stale figures (the quiet-lie family). */}
+      {data && !pending && failure && (
+        <p role="status" className="text-sm text-state-error">
+          {t('dashboard.refreshFailed')}
+        </p>
+      )}
+
+      {data && <DashboardBody data={data} />}
     </main>
   )
 }

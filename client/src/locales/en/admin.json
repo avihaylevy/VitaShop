@@ -200,6 +200,7 @@
     "title": "Dashboard",
     "loading": "Loading the dashboard",
     "unavailable": "The dashboard could not be loaded.",
+    "refreshFailed": "The figures shown may be out of date — the last refresh failed.",
     "rangeLabel": "Report range",
     "rangeDays": "{{count}} days",
     "noData": "No data",

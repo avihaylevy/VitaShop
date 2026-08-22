@@ -112,6 +112,59 @@ describe('the load and the range picker', () => {
   })
 })
 
+describe('the per-range cache', () => {
+  it('🔴 a cached range renders INSTANTLY on toggle-back — no loading blank — while a revalidation fires', async () => {
+    fetchMock.mockResolvedValue(mockResponse(200, dashboard()))
+    renderPage()
+    await screen.findByText('Conversion funnel')
+
+    fireEvent.click(screen.getByRole('button', { name: '7 days' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await screen.findByText('Conversion funnel')
+
+    // Toggle back to the cached 30 — the body must stay on screen with
+    // NO loading line, and a background revalidation still goes out.
+    fireEvent.click(screen.getByRole('button', { name: '30 days' }))
+    expect(screen.getByText('Conversion funnel')).toBeTruthy()
+    expect(screen.queryByText('Loading the dashboard')).toBeNull()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `${BASE_URL}/api/admin/dashboard?days=30`,
+      expect.objectContaining({ credentials: 'include' }),
+    )
+  })
+
+  it('🔴 a TRANSIENT failure over cached data keeps the figures and says the refresh failed', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockResponse(200, dashboard()))
+      .mockResolvedValueOnce(mockResponse(200, dashboard()))
+      .mockResolvedValueOnce(mockResponse(503, {}))
+    renderPage()
+    await screen.findByText('Conversion funnel')
+    fireEvent.click(screen.getByRole('button', { name: '7 days' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+
+    // Back to 30: the revalidation 503s — the cached body STAYS, the
+    // failure degrades to a quiet status line, never a blanking alert.
+    fireEvent.click(screen.getByRole('button', { name: '30 days' }))
+    await screen.findByText('The figures shown may be out of date — the last refresh failed.')
+    expect(screen.getByText('Conversion funnel')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('🔴 an ACCESS-REVOKING failure clears the cache — no stale figures behind the alert', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockResponse(200, dashboard()))
+      .mockResolvedValueOnce(mockResponse(403, {}))
+    renderPage()
+    await screen.findByText('Conversion funnel')
+
+    fireEvent.click(screen.getByRole('button', { name: '7 days' }))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.queryByText('Conversion funnel')).toBeNull()
+  })
+})
+
 describe('the KPI cards', () => {
   it('🔴 a null rate renders "No data", never 0%', async () => {
     fetchMock.mockResolvedValue(mockResponse(200, dashboard()))
