@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { TextLink } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
@@ -626,9 +626,9 @@ function ListFailureNotice({
     return (
       <div role="alert" className="flex flex-col items-start gap-2">
         <p className="text-sm text-state-error">{t('state.unauthenticated')}</p>
-        <Link to="/login" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+        <TextLink to="/login">
           {t('state.signIn')}
-        </Link>
+        </TextLink>
       </div>
     )
   }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { TextLink } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 import { requestClubAction, requestClubStatus } from '../lib/accountApi'
 import { useCartRefresh } from '../state/CartContext'
 import type { ClubStatus } from '../types/account'
@@ -191,13 +191,9 @@ export function ClubPage() {
             <span>{t('joinDialog.consent')}</span>
           </label>
           <p className="text-xs text-text-muted">
-            <Link
-              to="/terms"
-              target="_blank"
-              className={`${FOCUS_RING} rounded-compact text-brand-teal underline`}
-            >
+            <TextLink to="/terms" target="_blank" inline>
               {t('joinDialog.termsLink')}
-            </Link>
+            </TextLink>
           </p>
           <div className="flex flex-wrap gap-2">
             <Button

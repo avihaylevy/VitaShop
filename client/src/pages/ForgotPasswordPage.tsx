@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
+import { TextLink } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 import { AuthCard, Field, FormError } from '../components/auth/AuthLayout'
 import { Button } from '../components/ui/Button'
 import { requestPasswordReset, type AuthFailure } from '../lib/authApi'
@@ -46,9 +46,9 @@ export function ForgotPasswordPage() {
       <AuthCard titleId="forgot-sent-title" title={t('forgotPassword.sent.title')}>
         <p className="mt-3 text-sm text-text-muted">{t('forgotPassword.sent.body')}</p>
         <p className="mt-6 text-sm">
-          <Link to="/login" className="text-brand-primary underline">
+          <TextLink to="/login">
             {t('forgotPassword.backToLogin')}
-          </Link>
+          </TextLink>
         </p>
       </AuthCard>
     )
@@ -90,9 +90,9 @@ export function ForgotPasswordPage() {
       </form>
 
       <p className="mt-6 text-sm">
-        <Link to="/login" className="text-brand-primary underline">
+        <TextLink to="/login">
           {t('forgotPassword.backToLogin')}
-        </Link>
+        </TextLink>
       </p>
     </AuthCard>
   )

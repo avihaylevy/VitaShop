@@ -1,11 +1,11 @@
 import { useCallback, type RefObject } from 'react'
+import { textLinkClass } from '../ui/TextLink'
 import { useTranslation } from 'react-i18next'
 import { useCart } from '../../state/CartContext'
 import { toCartLineDisplay, type CartLineDisplay } from '../../lib/cartDisplay'
 import type { SupportedLanguage } from '../../i18n'
 import { PriceBlock } from '../catalog/PriceBlock'
 import { CenterDialog } from '../ui/CenterDialog'
-import { FOCUS_RING } from '../ui/focusRing'
 import { LinkButton } from '../ui/LinkButton'
 import { CartItemRow } from './CartItemRow'
 import { useCartOutcomeMessage } from './CartOutcomeNotice'
@@ -202,7 +202,7 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
         <button
           type="button"
           onClick={onClose}
-          className={`${FOCUS_RING} flex min-h-11 items-center justify-center rounded-compact text-sm font-medium text-brand-teal underline transition-colors duration-150 ease-standard hover:text-brand-teal-strong hover:decoration-2`}
+          className={textLinkClass({ block: true })}
         >
           {t('drawer.continue')}
         </button>

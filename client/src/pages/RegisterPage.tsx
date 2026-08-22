@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { TextLink, textLinkClass } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { AuthCard, Field, FormError } from '../components/auth/AuthLayout'
@@ -67,9 +68,9 @@ export function RegisterPage() {
       <AuthCard titleId="register-received-title" title={t('register.received.title')}>
         <p className="mt-3 text-sm text-text-muted">{t('register.received.body')}</p>
         <p className="mt-6 text-sm">
-          <Link to="/login" className="text-brand-primary underline">
+          <TextLink to="/login">
             {t('register.loginLink')}
-          </Link>
+          </TextLink>
         </p>
       </AuthCard>
     )
@@ -177,7 +178,7 @@ export function RegisterPage() {
             to="/terms"
             target="_blank"
             rel="noreferrer"
-            className={`${FOCUS_RING} rounded-compact text-brand-teal underline`}
+            className={textLinkClass({ inline: true })}
           >
             {t('register.termsReadLink')}
           </Link>
@@ -192,9 +193,9 @@ export function RegisterPage() {
 
       <p className="mt-6 text-sm text-text-muted">
         {t('register.hasAccount')}{' '}
-        <Link to="/login" className="text-brand-primary underline">
+        <TextLink to="/login" inline>
           {t('register.loginLink')}
-        </Link>
+        </TextLink>
       </p>
     </AuthCard>
   )

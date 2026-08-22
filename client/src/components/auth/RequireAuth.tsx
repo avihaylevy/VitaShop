@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
+import { TextLink } from '../ui/TextLink'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 import { useSession } from '../../state/SessionContext'
 
 /**
@@ -44,12 +44,9 @@ export function RequireAuth({ children }: { children: ReactNode }) {
           {t('gate.title')}
         </h1>
         <p className="mt-2 text-sm text-text-muted">{t('gate.body')}</p>
-        <Link
-          to="/login"
-          className="mt-6 inline-block text-sm font-medium text-brand-primary underline"
-        >
+        <TextLink to="/login" className="mt-6">
           {t('gate.loginLink')}
-        </Link>
+        </TextLink>
       </section>
     )
   }

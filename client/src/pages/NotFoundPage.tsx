@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
-import { FOCUS_RING } from '../components/ui/focusRing'
+import { TextLink } from '../components/ui/TextLink'
 import { LinkButton } from '../components/ui/LinkButton'
 
 /**
@@ -40,12 +39,9 @@ export function NotFoundPage() {
             draws Button's own VARIANT_CLASS) — this was a hand-copied,
             already-drifted class string (the recorded cousin cleanup). */}
         <LinkButton to="/catalog">{t('notFound.toCatalog')}</LinkButton>
-        <Link
-          to="/"
-          className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline`}
-        >
+        <TextLink to="/">
           {t('notFound.toHome')}
-        </Link>
+        </TextLink>
       </div>
     </div>
   )

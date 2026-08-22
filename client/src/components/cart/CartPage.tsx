@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { TextLink } from '../ui/TextLink'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 import { useCart } from '../../state/CartContext'
 import { getCartLines, type CartLineDisplay } from '../../lib/cartDisplay'
 import { PriceBlock } from '../catalog/PriceBlock'
 import { formatPrice } from '../../lib/formatPrice'
 import { Button } from '../ui/Button'
 import { LinkButton } from '../ui/LinkButton'
-import { FOCUS_RING } from '../ui/focusRing'
 import type { SupportedLanguage } from '../../i18n'
 import { CartItemRow, CART_ROW_ATTRIBUTE } from './CartItemRow'
 import { CartOutcomeNotice } from './CartOutcomeNotice'
@@ -251,9 +250,9 @@ export function CartPage() {
                   ) : (
                     <>
                       {t('hint.cartJoin', { ns: 'club' })}{' '}
-                      <Link to="/account/club" className="text-brand-teal underline">
+                      <TextLink to="/account/club" inline>
                         {t('hint.cartJoinLink', { ns: 'club' })}
-                      </Link>
+                      </TextLink>
                     </>
                   )}
                 </p>
@@ -373,12 +372,9 @@ export function CartPage() {
 
               {/* Quiet link, never styled to compete (DESIGN_SYSTEM.md §8). */}
               <p className="mt-6">
-                <Link
-                  to="/catalog"
-                  className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline transition-colors duration-150 ease-standard hover:text-brand-teal-strong hover:decoration-2`}
-                >
+                <TextLink to="/catalog">
                   {t('page.backToCatalog')}
-                </Link>
+                </TextLink>
               </p>
             </>
           )}

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
+import { TextLink } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 import { AuthCard, Field, FormError } from '../components/auth/AuthLayout'
 import { Button } from '../components/ui/Button'
 import { completePasswordReset, type AuthFailure } from '../lib/authApi'
@@ -59,9 +59,9 @@ export function ResetPasswordPage() {
             again" is a statement of fact rather than a suggestion. */}
         <p className="mt-3 text-sm text-text-muted">{t('resetPassword.done.body')}</p>
         <p className="mt-6 text-sm">
-          <Link to="/login" className="text-brand-primary underline">
+          <TextLink to="/login">
             {t('resetPassword.done.loginLink')}
-          </Link>
+          </TextLink>
         </p>
       </AuthCard>
     )
@@ -126,9 +126,9 @@ function InvalidLink() {
     <AuthCard titleId="reset-invalid-title" title={t('resetPassword.invalid.title')}>
       <p className="mt-3 text-sm text-text-muted">{t('resetPassword.invalid.body')}</p>
       <p className="mt-6 text-sm">
-        <Link to="/forgot-password" className="text-brand-primary underline">
+        <TextLink to="/forgot-password">
           {t('resetPassword.invalid.requestNew')}
-        </Link>
+        </TextLink>
       </p>
     </AuthCard>
   )

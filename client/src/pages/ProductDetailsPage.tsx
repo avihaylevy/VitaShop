@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { textLinkClass } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
 import { useProductDetail } from '../hooks/useProductDetail'
@@ -14,7 +15,6 @@ import { getStockState } from '../lib/stockState'
 import { Button } from '../components/ui/Button'
 import { FavouriteButton } from '../components/catalog/FavouriteButton'
 import { AddQuantityStepper } from '../components/catalog/AddQuantityStepper'
-import { FOCUS_RING } from '../components/ui/focusRing'
 import type { ProductDetailModel } from '../types/product'
 import type { SupportedLanguage } from '../i18n/index'
 
@@ -106,7 +106,7 @@ export function ProductDetailsPage() {
           <button
             type="button"
             onClick={goToCatalog}
-            className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline`}
+            className={textLinkClass()}
           >
             {t('productDetails.backToCatalog')}
           </button>
@@ -387,7 +387,7 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
       <button
         type="button"
         onClick={onBack}
-        className={`${FOCUS_RING} mt-10 inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline`}
+        className={`${textLinkClass()} mt-10`}
       >
         {t('productDetails.backToCatalog')}
       </button>

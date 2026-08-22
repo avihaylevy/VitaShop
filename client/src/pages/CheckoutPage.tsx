@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { TextLink } from '../components/ui/TextLink'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
@@ -397,12 +397,12 @@ export function CheckoutPage() {
             </p>
           )}
           <div className="mt-1 flex flex-wrap items-center justify-center gap-4">
-            <Link to="/account/orders" className={`${FOCUS_RING} rounded-card text-sm font-medium text-brand-teal underline transition-colors duration-150 ease-standard hover:text-brand-teal-strong hover:decoration-2`}>
+            <TextLink to="/account/orders">
               {t('done.viewOrders')}
-            </Link>
-            <Link to="/catalog" className={`${FOCUS_RING} rounded-card text-sm font-medium text-brand-teal underline transition-colors duration-150 ease-standard hover:text-brand-teal-strong hover:decoration-2`}>
+            </TextLink>
+            <TextLink to="/catalog">
               {t('done.backToCatalog')}
-            </Link>
+            </TextLink>
           </div>
         </div>
       </main>
@@ -737,9 +737,9 @@ export function CheckoutPage() {
         </fieldset>
       )}
 
-      <Link to="/cart" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+      <TextLink to="/cart">
         {t('page.backToCart')}
-      </Link>
+      </TextLink>
     </main>
   )
 }
@@ -776,9 +776,9 @@ function FailureNotice({
     return (
       <div className="flex flex-col items-start gap-2">
         <p className="text-sm text-text-ink">{t('state.unauthenticated')}</p>
-        <Link to="/login" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+        <TextLink to="/login">
           {t('state.signIn')}
-        </Link>
+        </TextLink>
       </div>
     )
   }
@@ -838,9 +838,9 @@ function BlockedLinesNotice({ lines }: { lines: readonly CheckoutBlockedLine[] }
           </li>
         ))}
       </ul>
-      <Link to="/cart" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+      <TextLink to="/cart">
         {t('page.backToCart')}
-      </Link>
+      </TextLink>
     </section>
   )
 }
@@ -880,9 +880,9 @@ function PayFailureNotice({ failure }: { failure: PaymentFailure }) {
     return (
       <div role="alert" className="mb-3 flex flex-col items-start gap-2">
         <p className="text-sm text-state-error">{t('state.unauthenticated')}</p>
-        <Link to="/login" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+        <TextLink to="/login">
           {t('state.signIn')}
-        </Link>
+        </TextLink>
       </div>
     )
   }

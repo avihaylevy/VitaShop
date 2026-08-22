@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { TextLink } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 import { AuthCard } from '../components/auth/AuthLayout'
 import { verifyEmail } from '../lib/authApi'
 import { useUrlToken } from '../lib/useUrlToken'
@@ -57,9 +57,9 @@ export function VerifyEmailPage() {
       <AuthCard titleId="verify-success-title" title={t('verifyEmail.success.title')}>
         <p className="mt-3 text-sm text-text-muted">{t('verifyEmail.success.body')}</p>
         <p className="mt-6 text-sm">
-          <Link to="/login" className="text-brand-primary underline">
+          <TextLink to="/login">
             {t('verifyEmail.success.loginLink')}
-          </Link>
+          </TextLink>
         </p>
       </AuthCard>
     )

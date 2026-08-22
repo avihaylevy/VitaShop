@@ -1,4 +1,4 @@
-import { FOCUS_RING } from '../ui/focusRing'
+import { textLinkClass } from '../ui/TextLink'
 
 interface CatalogEmptyStateAction {
   label: string
@@ -30,7 +30,7 @@ export function CatalogEmptyState({ heading, message, action }: CatalogEmptyStat
         <button
           type="button"
           onClick={action.onClick}
-          className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-compact text-sm font-medium text-brand-teal underline`}
+          className={textLinkClass()}
         >
           {action.label}
         </button>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { TextLink } from '../components/ui/TextLink'
+import { useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
-import { FOCUS_RING } from '../components/ui/focusRing'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import { requestOrder } from '../lib/ordersApi'
 import { addCartItem } from '../lib/cartApi'
@@ -79,9 +79,9 @@ export function OrderDetailPage() {
 
   return (
     <div className="px-7 py-8">
-      <Link to="/account/orders" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+      <TextLink to="/account/orders">
         {t('detail.back')}
-      </Link>
+      </TextLink>
 
       <p role="status" className="mt-4 text-sm text-text-muted">
         {state.status === 'loading' ? t('detail.loading') : ''}
@@ -121,12 +121,9 @@ export function OrderDetailPage() {
       {state.status === 'done' &&
         !state.result.ok &&
         state.result.failure.kind === 'unauthenticated' && (
-          <Link
-            to="/login"
-            className={`${FOCUS_RING} mt-3 inline-block rounded-card text-sm text-brand-teal underline`}
-          >
+          <TextLink to="/login" className="mt-3">
             {t('history.signIn')}
-          </Link>
+          </TextLink>
         )}
 
       {state.status === 'done' && state.result.ok && (
@@ -200,9 +197,9 @@ function OrderBody({ order, language }: { order: OrderDetail; language: Supporte
       <ul className="mt-4 flex flex-col gap-2">
         {order.items.map((item) => (
           <li key={item.productId} className="flex flex-wrap items-baseline gap-2 text-sm">
-            <Link to={`/product/${item.slug}`} className={`${FOCUS_RING} rounded-card text-text-ink underline`}>
+            <TextLink to={`/product/${item.slug}`} inline tone="ink">
               {language === 'he' ? item.nameHe : item.nameEn}
-            </Link>
+            </TextLink>
             <span className="text-text-muted">{t('history.quantity', { count: item.quantity })}</span>
             <PriceBlock price={item.unitPrice} />
           </li>

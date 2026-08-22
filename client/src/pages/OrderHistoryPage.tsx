@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { TextLink } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { CenterDialog } from '../components/ui/CenterDialog'
-import { FOCUS_RING } from '../components/ui/focusRing'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import { cancelOrder, requestOrderHistory } from '../lib/ordersApi'
 import { orderStatusLabelKey } from '../lib/orderStatus'
@@ -233,20 +232,17 @@ export function OrderHistoryPage() {
       )}
 
       {state.status === 'failed' && state.failure.kind === 'unauthenticated' && (
-        <Link
-          to="/login"
-          className={`${FOCUS_RING} mt-3 inline-block rounded-card text-sm text-brand-teal underline`}
-        >
+        <TextLink to="/login" className="mt-3">
           {t('history.signIn')}
-        </Link>
+        </TextLink>
       )}
 
       {state.status === 'ready' && state.orders.length === 0 && (
         <div className="mt-6 flex flex-col items-start gap-3">
           <p className="text-sm text-text-muted">{t('history.empty')}</p>
-          <Link to="/catalog" className={`${FOCUS_RING} rounded-card text-sm text-brand-teal underline`}>
+          <TextLink to="/catalog">
             {t('history.emptyCta')}
-          </Link>
+          </TextLink>
         </div>
       )}
 
@@ -262,12 +258,9 @@ export function OrderHistoryPage() {
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h2 className="text-base font-semibold text-text-ink">
-                    <Link
-                      to={`/account/orders/${order.id}`}
-                      className={`${FOCUS_RING} rounded-card underline`}
-                    >
+                    <TextLink to={`/account/orders/${order.id}`} inline tone="ink">
                       {order.orderNumber}
-                    </Link>
+                    </TextLink>
                   </h2>
                   {/*
                     🔴 THE LABEL COMES FROM `orderStatusLabelKey`, the one place
@@ -293,15 +286,12 @@ export function OrderHistoryPage() {
                 <ul className="mt-3 flex flex-col gap-1 border-t border-border-hairline pt-3">
                   {order.items.map((item) => (
                     <li key={item.productId} className="flex flex-wrap items-baseline gap-2 text-sm">
-                      <Link
-                        to={`/product/${item.slug}`}
-                        className={`${FOCUS_RING} rounded-card text-text-ink underline`}
-                      >
+                      <TextLink to={`/product/${item.slug}`} inline tone="ink">
                         {/* The FROZEN name — what was agreed, not what the
                             catalogue calls it today. Resolved per render, so a
                             language toggle costs no request. */}
                         {language === 'he' ? item.nameHe : item.nameEn}
-                      </Link>
+                      </TextLink>
                       <span className="text-text-muted">{t('history.quantity', { count: item.quantity })}</span>
                       <PriceBlock price={item.unitPrice} />
                     </li>

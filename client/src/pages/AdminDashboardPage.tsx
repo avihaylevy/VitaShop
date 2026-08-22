@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { TextLink } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 import { requestAdminDashboard } from '../lib/adminDashboardApi'
 import { formatPrice } from '../lib/formatPrice'
 import { parsePriceToMinor } from '../lib/money'
@@ -111,9 +111,9 @@ export function AdminDashboardPage() {
         <div role="alert" className="flex flex-col items-start gap-2">
           <p className="text-sm text-state-error">{t(FAILURE_TEXT_KEY[state.failure.kind])}</p>
           {state.failure.kind === 'unauthenticated' && (
-            <Link to="/login" className={`${FOCUS_RING} text-sm underline`}>
+            <TextLink to="/login">
               {t('state.signIn')}
-            </Link>
+            </TextLink>
           )}
           {/* Retry only where retrying can help — ListFailureNotice's rule:
               pressing again cannot make an account an administrator, and
@@ -300,9 +300,9 @@ function DashboardBody({ data }: { data: AdminDashboardData }) {
                 {data.topProducts.map((product) => (
                   <tr key={product.productId} className="border-b border-border-card last:border-0">
                     <td className="py-2 text-start">
-                      <Link to={`/product/${product.slug}`} className={`${FOCUS_RING} underline`}>
+                      <TextLink to={`/product/${product.slug}`} inline>
                         {productName(product)}
-                      </Link>
+                      </TextLink>
                     </td>
                     <td dir="ltr" className="py-2 text-start">{product.quantity}</td>
                     <td dir="ltr" className="py-2 text-start">{money(product.turnover)}</td>

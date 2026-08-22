@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
+import { TextLink } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { AuthCard, Field, FormError } from '../components/auth/AuthLayout'
 import { Button } from '../components/ui/Button'
 import { login, type AuthFailure } from '../lib/authApi'
@@ -147,9 +148,9 @@ export function LoginPage() {
           {tCart('drawer.goToCart')}
         </Button>
         <p className="mt-2 text-sm">
-          <Link to="/catalog" className="text-brand-primary underline">
+          <TextLink to="/catalog">
             {tCart('page.backToCatalog')}
-          </Link>
+          </TextLink>
         </p>
       </AuthCard>
     )
@@ -185,15 +186,15 @@ export function LoginPage() {
       </form>
 
       <p className="mt-6 text-sm">
-        <Link to="/forgot-password" className="text-brand-primary underline">
+        <TextLink to="/forgot-password">
           {t('login.forgotPassword')}
-        </Link>
+        </TextLink>
       </p>
       <p className="mt-2 text-sm text-text-muted">
         {t('login.noAccount')}{' '}
-        <Link to="/register" className="text-brand-primary underline">
+        <TextLink to="/register" inline>
           {t('login.registerLink')}
-        </Link>
+        </TextLink>
       </p>
     </AuthCard>
   )

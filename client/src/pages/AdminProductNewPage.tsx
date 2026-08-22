@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { TextLink } from '../components/ui/TextLink'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
@@ -762,9 +762,9 @@ export function AdminProductNewPage() {
       </div>
 
       <p className="mt-6 text-sm">
-        <Link to="/admin/products" className={`${FOCUS_RING} rounded-compact text-brand-teal underline`}>
+        <TextLink to="/admin/products">
           {t('products.backToList')}
-        </Link>
+        </TextLink>
       </p>
     </main>
   )
