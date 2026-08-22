@@ -61,6 +61,8 @@ type DetailDraft = {
   usageInstructions: string
   warningsAllergens: string
   packageQuantity: string
+  /** DEC-102 / §4.7.2 — the per-product low-stock alert threshold. */
+  lowStockThreshold: string
   isKosher: '' | 'true' | 'false'
   isGlutenFree: '' | 'true' | 'false'
   isVegan: '' | 'true' | 'false'
@@ -195,6 +197,7 @@ export function AdminProductsPage() {
       usageInstructions: row.usageInstructions,
       warningsAllergens: row.warningsAllergens,
       packageQuantity: String(row.packageQuantity),
+      lowStockThreshold: String(row.lowStockThreshold),
       isKosher: claimValue(row.isKosher),
       isGlutenFree: claimValue(row.isGlutenFree),
       isVegan: claimValue(row.isVegan),
@@ -233,6 +236,10 @@ export function AdminProductsPage() {
       // NAME (the create form's asNumber reasoning, verbatim).
       body.packageQuantity =
         draft.packageQuantity.trim() === '' ? Number.NaN : Number(draft.packageQuantity)
+    }
+    if (draft.lowStockThreshold !== base.lowStockThreshold) {
+      body.lowStockThreshold =
+        draft.lowStockThreshold.trim() === '' ? Number.NaN : Number(draft.lowStockThreshold)
     }
     for (const key of DETAIL_DIETARY_KEYS) {
       if (draft[key] !== base[key]) body[key] = draft[key] === '' ? null : draft[key] === 'true'
@@ -686,6 +693,23 @@ export function AdminProductsPage() {
                                   know the 250 is millilitres, not a count. */}
                               <span className="text-xs text-text-muted">
                                 {t('products.form.packageQuantityHint')}
+                              </span>
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">
+                                {t('products.form.lowStockThreshold')}
+                              </span>
+                              <input
+                                inputMode="numeric"
+                                value={detailDraft!.lowStockThreshold}
+                                onChange={(e) =>
+                                  setDetailDraft(row, { lowStockThreshold: e.target.value })
+                                }
+                                className={`${FOCUS_RING} h-10 w-32 rounded-card border border-border-control bg-well px-3`}
+                                dir="ltr"
+                              />
+                              <span className="text-xs text-text-muted">
+                                {t('products.form.lowStockThresholdHint')}
                               </span>
                             </label>
                             <fieldset className="flex flex-wrap gap-3 text-sm">

@@ -124,7 +124,9 @@
       "goalNewHint": "מטרה חדשה דורשת שם בעברית וגם באנגלית. שם שכבר קיים יצורף למטרה הקיימת",
       "goalRemove": "הסרת המטרה {{name}}",
       "submit": "יצירת המוצר",
-      "submitting": "יוצר…"
+      "submitting": "יוצר…",
+      "lowStockThreshold": "סף התראת מלאי",
+      "lowStockThresholdHint": "ברירת המחדל 5 — התראה תוצג בלוח הבקרה כשהמלאי מגיע לסף או יורד מתחתיו"
     },
     "duplicate": {
       "message": "מוצר בשם דומה כבר קיים תחת המותג הזה: \"{{name}}\" ({{slug}}).",
@@ -165,7 +167,8 @@
       "VEGAN_INVALID": "סימון הטבעונות אינו תקין.",
       "HEALTH_GOAL_IDS_INVALID": "בחירת מטרות הבריאות אינה תקינה.",
       "NEW_HEALTH_GOAL_INVALID": "מטרה חדשה דורשת שם בעברית ובאנגלית.",
-      "HEALTH_GOAL_NOT_FOUND": "אחת ממטרות הבריאות שנבחרו אינה קיימת."
+      "HEALTH_GOAL_NOT_FOUND": "אחת ממטרות הבריאות שנבחרו אינה קיימת.",
+      "LOW_STOCK_THRESHOLD_INVALID": "סף התראת המלאי חייב להיות מספר שלם אי-שלילי"
     },
     "failure": {
       "server": "העדכון נכשל. המוצר לא השתנה.",
@@ -195,6 +198,59 @@
       "remaining_one": "הזמנה אחת עדיין תקועה.",
       "remaining_other": "{{count}} הזמנות עדיין תקועות.",
       "remaining_two": "שתי הזמנות עדיין תקועות."
+    }
+  },
+  "dashboard": {
+    "title": "לוח בקרה",
+    "loading": "טוען את לוח הבקרה",
+    "unavailable": "לא ניתן היה לטעון את לוח הבקרה.",
+    "rangeLabel": "טווח הדוח",
+    "rangeDays": "{{count}} ימים",
+    "noData": "אין נתונים",
+    "kpis": {
+      "title": "מדדים",
+      "conversionRate": "שיעור המרה",
+      "averageOrderValue": "ערך הזמנה ממוצע",
+      "abandonmentRate": "שיעור נטישת רכישה",
+      "repeatPurchaseRate": "שיעור רכישות חוזרות"
+    },
+    "sales": {
+      "title": "מכירות",
+      "orders": "הזמנות",
+      "turnover": "מחזור מכירות",
+      "byDayCaption": "מכירות לפי יום",
+      "day": "יום",
+      "barLabel": "ייצוג גרפי"
+    },
+    "funnel": {
+      "title": "משפך ההמרה",
+      "productView": "צפייה בכרטיס מוצר",
+      "addToCart": "הוספה לעגלה",
+      "checkoutStarted": "התחלת רכישה",
+      "purchaseCompleted": "השלמת רכישה",
+      "ofPrevious": "מהשלב הקודם"
+    },
+    "top": {
+      "title": "מוצרים מובילים",
+      "empty": "אין מכירות בטווח שנבחר.",
+      "caption": "מוצרים מובילים לפי יחידות שנמכרו",
+      "product": "מוצר",
+      "units": "יחידות",
+      "turnover": "מחזור"
+    },
+    "lowStock": {
+      "title": "התראת מלאי נמוך",
+      "empty": "אין מוצרים מתחת לסף המלאי.",
+      "count_one": "מוצר אחד בסף המלאי או מתחתיו.",
+      "count_two": "שני מוצרים בסף המלאי או מתחתיו.",
+      "count_other": "{{count}} מוצרים בסף המלאי או מתחתיו.",
+      "caption": "מוצרים במלאי נמוך",
+      "truncated_one": "מוצג מוצר אחד בלבד; היתר בטבלת ניהול המוצרים.",
+      "truncated_two": "מוצגים שני מוצרים בלבד; היתר בטבלת ניהול המוצרים.",
+      "truncated_other": "מוצגים {{count}} המוצרים הראשונים בלבד; היתר בטבלת ניהול המוצרים.",
+      "product": "מוצר",
+      "stock": "מלאי",
+      "threshold": "סף התראה"
     }
   }
 }

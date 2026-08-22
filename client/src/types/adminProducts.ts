@@ -94,6 +94,8 @@ export type AdminProductCreatePayload = {
   usageInstructions: string
   price: string
   stockQuantity: number
+  /** DEC-102 — optional per-product alert threshold; omitted = the column default (5). */
+  lowStockThreshold?: number
   descriptionHe: string
   descriptionEn: string
   warningsAllergens: string

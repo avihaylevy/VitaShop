@@ -218,6 +218,15 @@ export function AccountMenu() {
               */}
               {isAdmin ? (
                 <>
+                  {/* DEC-101 — the dashboard heads the admin's toolbox. */}
+                  <Link
+                    role="menuitem"
+                    to="/admin/dashboard"
+                    onClick={() => setOpen(false)}
+                    className={`${FOCUS_RING} block rounded-compact px-3 py-2 text-sm text-text-ink hover:bg-surface-sunken`}
+                  >
+                    {t('account.adminDashboard')}
+                  </Link>
                   <Link
                     role="menuitem"
                     to="/admin/orders"

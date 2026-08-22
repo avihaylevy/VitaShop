@@ -49,6 +49,8 @@ const EMPTY_FORM = {
   usageInstructions: '',
   price: '',
   stockQuantity: '',
+  // DEC-102 — optional; blank rides the column's default of 5.
+  lowStockThreshold: '',
   descriptionHe: '',
   descriptionEn: '',
   warningsAllergens: '',
@@ -199,6 +201,11 @@ export function AdminProductNewPage() {
       usageInstructions: form.usageInstructions,
       price: normalizePriceInput(form.price),
       stockQuantity: asNumber(form.stockQuantity),
+      // DEC-102 — blank is OMITTED so the server default (5) applies; a
+      // typed value travels as a number and is refused BY NAME if invalid.
+      ...(form.lowStockThreshold.trim() === ''
+        ? {}
+        : { lowStockThreshold: asNumber(form.lowStockThreshold) }),
       descriptionHe: form.descriptionHe,
       descriptionEn: form.descriptionEn,
       warningsAllergens: form.warningsAllergens,
@@ -445,6 +452,21 @@ export function AdminProductNewPage() {
                 inputMode="numeric"
                 value={form.stockQuantity}
                 onChange={(e) => set('stockQuantity', e.target.value)}
+                className={inputClass}
+                dir="ltr"
+              />
+            </FieldRow>
+            <FieldRow
+              id="np-low-stock"
+              label={t('products.form.lowStockThreshold')}
+              hint={t('products.form.lowStockThresholdHint')}
+              className="min-w-40 flex-1"
+            >
+              <input
+                id="np-low-stock"
+                inputMode="numeric"
+                value={form.lowStockThreshold}
+                onChange={(e) => set('lowStockThreshold', e.target.value)}
                 className={inputClass}
                 dir="ltr"
               />

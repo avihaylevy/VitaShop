@@ -33,7 +33,8 @@
     "profile": "הפרופיל שלי",
     "adminOrders": "ניהול הזמנות",
     "adminProducts": "ניהול מוצרים",
-    "clubMemberBadge": "חבר מועדון"
+    "clubMemberBadge": "חבר מועדון",
+    "adminDashboard": "לוח בקרה"
   },
   "welcome": {
     "message": "ברוך הבא, {{name}}"

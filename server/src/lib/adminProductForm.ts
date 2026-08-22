@@ -55,6 +55,17 @@ const packageQuantitySchema = z
   .max(MAX_PACKAGE_QUANTITY, 'PACKAGE_QUANTITY_INVALID')
 
 /**
+ * DEC-102 / §4.7.2 — the per-product low-stock threshold. Zero is a VALUE
+ * ("never alert for this product"), so min(0) like stock, and the same
+ * ceiling: a threshold above any possible stock is a typo, not a policy.
+ */
+const lowStockThresholdSchema = z
+  .number({ message: 'LOW_STOCK_THRESHOLD_INVALID' })
+  .int('LOW_STOCK_THRESHOLD_INVALID')
+  .min(0, 'LOW_STOCK_THRESHOLD_INVALID')
+  .max(MAX_STOCK, 'LOW_STOCK_THRESHOLD_INVALID')
+
+/**
  * DEC-083 AMENDED (user decision 2026-08-17): the admin IS a legitimate
  * writer of the dietary claims now — a tri-state per flag, exactly the
  * column's shape: null = no claim (the default), true/false = the admin's
@@ -82,6 +93,7 @@ const FIELD_SCHEMAS = {
   warningsAllergens: z.string({ message: 'WARNINGS_INVALID' }),
   price: priceSchema,
   stockQuantity: stockSchema,
+  lowStockThreshold: lowStockThresholdSchema,
   packageQuantity: packageQuantitySchema,
   isKosher: dietarySchema('KOSHER_INVALID'),
   isGlutenFree: dietarySchema('GLUTEN_FREE_INVALID'),
@@ -165,6 +177,8 @@ export const productCreateSchema = z.strictObject({
   usageInstructions: FIELD_SCHEMAS.usageInstructions,
   price: priceSchema,
   stockQuantity: stockSchema,
+  // DEC-102 — optional at create: absent rides the column's default(5).
+  lowStockThreshold: lowStockThresholdSchema.optional(),
   descriptionHe: FIELD_SCHEMAS.descriptionHe,
   descriptionEn: FIELD_SCHEMAS.descriptionEn,
   warningsAllergens: FIELD_SCHEMAS.warningsAllergens.default(''),

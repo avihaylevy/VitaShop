@@ -33,7 +33,8 @@
     "profile": "My profile",
     "adminOrders": "Manage orders",
     "adminProducts": "Manage products",
-    "clubMemberBadge": "Member"
+    "clubMemberBadge": "Member",
+    "adminDashboard": "Dashboard"
   },
   "welcome": {
     "message": "Welcome, {{name}}"

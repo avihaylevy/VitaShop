@@ -123,7 +123,9 @@
       "goalNewHint": "A new goal needs both a Hebrew and an English name. A name that already exists attaches to the existing goal",
       "goalRemove": "Remove the goal {{name}}",
       "submit": "Create product",
-      "submitting": "Creating…"
+      "submitting": "Creating…",
+      "lowStockThreshold": "Low-stock alert threshold",
+      "lowStockThresholdHint": "Default 5 — the dashboard alerts when stock reaches or falls under it"
     },
     "duplicate": {
       "message": "A similarly named product already exists under this brand: \"{{name}}\" ({{slug}}).",
@@ -164,7 +166,8 @@
       "VEGAN_INVALID": "The vegan claim is invalid.",
       "HEALTH_GOAL_IDS_INVALID": "The health-goal selection is invalid.",
       "NEW_HEALTH_GOAL_INVALID": "A new goal needs both a Hebrew and an English name.",
-      "HEALTH_GOAL_NOT_FOUND": "One of the chosen health goals does not exist."
+      "HEALTH_GOAL_NOT_FOUND": "One of the chosen health goals does not exist.",
+      "LOW_STOCK_THRESHOLD_INVALID": "The low-stock threshold must be a non-negative whole number"
     },
     "failure": {
       "server": "The update failed. The product was not changed.",
@@ -191,6 +194,57 @@
       "unavailable": "The repair could not be run just now. Try again shortly.",
       "remaining_one": "1 order is still stuck.",
       "remaining_other": "{{count}} orders are still stuck."
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "loading": "Loading the dashboard",
+    "unavailable": "The dashboard could not be loaded.",
+    "rangeLabel": "Report range",
+    "rangeDays": "{{count}} days",
+    "noData": "No data",
+    "kpis": {
+      "title": "Key metrics",
+      "conversionRate": "Conversion rate",
+      "averageOrderValue": "Average order value",
+      "abandonmentRate": "Checkout abandonment",
+      "repeatPurchaseRate": "Repeat purchase rate"
+    },
+    "sales": {
+      "title": "Sales",
+      "orders": "Orders",
+      "turnover": "Sales turnover",
+      "byDayCaption": "Sales by day",
+      "day": "Day",
+      "barLabel": "Bar representation"
+    },
+    "funnel": {
+      "title": "Conversion funnel",
+      "productView": "Product view",
+      "addToCart": "Added to cart",
+      "checkoutStarted": "Checkout started",
+      "purchaseCompleted": "Purchase completed",
+      "ofPrevious": "of previous step"
+    },
+    "top": {
+      "title": "Top products",
+      "empty": "No sales in the selected range.",
+      "caption": "Top products by units sold",
+      "product": "Product",
+      "units": "Units",
+      "turnover": "Turnover"
+    },
+    "lowStock": {
+      "title": "Low-stock alert",
+      "empty": "No products at or under their stock threshold.",
+      "count_one": "One product at or under its threshold.",
+      "count_other": "{{count}} products at or under their threshold.",
+      "caption": "Low-stock products",
+      "truncated_one": "Showing only the first product; the rest are in the products table.",
+      "truncated_other": "Showing only the first {{count}} products; the rest are in the products table.",
+      "product": "Product",
+      "stock": "In stock",
+      "threshold": "Alert threshold"
     }
   }
 }

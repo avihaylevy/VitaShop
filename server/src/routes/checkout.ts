@@ -11,6 +11,7 @@ import type { DeliveryMethodName } from '../lib/shipping.js'
 import { requireShopper } from './requireShopper.js'
 import { createRequireVerifiedShopper } from './requireActiveShopper.js'
 import { saveShopperAddress } from '../lib/saveShopperAddress.js'
+import { recordCheckoutStarted, recordFunnelEvent } from '../lib/funnelEvents.js'
 
 /**
  * MILESTONE-008 Checkpoint D2 — `POST /api/checkout/validate` and
@@ -97,8 +98,12 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
   const requireVerifiedShopper = createRequireVerifiedShopper(deps.prisma)
 
   /**
-   * REQ-F-042's re-check, as a READ. It creates nothing: a shopper may call it
-   * as often as the screen needs.
+   * REQ-F-042's re-check. A read for CHECKOUT STATE — it creates no order,
+   * no cart change, no reservation, and a shopper may call it as often as
+   * the screen needs. ⚠️ Since DEC-101 it does write ONE analytics row per
+   * session per 30 minutes (the deduped checkout_started funnel event), so
+   * "creates nothing" is no longer literally true — never cache or replay
+   * this handler on the strength of the old comment.
    */
   router.post('/validate', limiters.validate, requireShopper, requireVerifiedShopper, async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>
@@ -117,6 +122,16 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
       res.status(status).json({ error: { code: result.reason, ...detailOf(result) } })
       return
     }
+
+    // DEC-101 / §4.7.5 — checkout_started, recorded only when the quote is
+    // servable (a malformed method or an empty cart never started a
+    // checkout). Deduplicated inside the lib: /validate is a read the
+    // screen repeats, and one checkout must count once. `void` — analytics
+    // never blocks the response.
+    void recordCheckoutStarted(prisma, {
+      sessionId: req.sessionID ?? '',
+      userId: req.session!.userId!,
+    })
 
     res.json(result.quote)
   })
@@ -387,6 +402,20 @@ export function createCheckoutRouter(deps: CheckoutRouterDeps): ReturnType<typeo
     // unreachable replay told. A status that lags is a support problem; a
     // phantom failure is a lost order.
     await settleAsPaid(deps, order.orderId, order.orderNumber)
+
+    // DEC-101 / §4.7.5 — purchase_completed, the primary conversion (§1.6).
+    // 🔴 NOT on a replay: `createOrder` answers `replayed: true` when two
+    // /pay calls race on one key, and counting that would double-count one
+    // order — the exact defect respondWithOrder's 200-vs-201 note records.
+    // Step 0's sequential replay path records none either; the two agree.
+    if (!order.replayed) {
+      void recordFunnelEvent(prisma, {
+        eventType: 'purchase_completed',
+        sessionId: req.sessionID ?? '',
+        userId,
+        orderId: order.orderId,
+      })
+    }
 
     // ── 5b. ISSUE-093 — THE ADDRESS, SAVED ONLY IF THE SHOPPER ASKED ────────
     // 🔴 AFTER THE COMMIT, AWAITED BUT NEVER ABLE TO FAIL THE REQUEST. The

@@ -18,6 +18,8 @@ import { resolveCatalogFacets } from '../lib/catalogFacets.js'
 import { resolvePopularityScores, sortByPopularity } from '../lib/catalogPopularity.js'
 import { resolveCatalogFallback, type CatalogFallback } from '../lib/catalogFallback.js'
 import { CATALOG_RELATIONS_INCLUDE, findActiveProductBySlug } from '../lib/catalogProductLookup.js'
+import { recordFunnelEvent } from '../lib/funnelEvents.js'
+import { createCatalogRateLimiters } from '../lib/rateLimit.js'
 
 export const catalogRouter = Router()
 
@@ -179,7 +181,12 @@ catalogRouter.get('/products', async (req, res) => {
 // by this parameterised one. Express matches in declaration order, and
 // `/products` has no trailing segment, so the two cannot collide — but the
 // ordering is deliberate rather than incidental.
-catalogRouter.get('/products/:slug', async (req, res) => {
+// DEC-101 review — the detail route now records a funnel event, so this is
+// the one public route whose every hit writes. The limiter caps what a
+// crawler can insert; a human browsing session never approaches it.
+const catalogLimiters = createCatalogRateLimiters()
+
+catalogRouter.get('/products/:slug', catalogLimiters.detail, async (req, res) => {
   const offendingParams = Object.keys(req.query)
   if (offendingParams.length > 0) {
     res.status(400).json({
@@ -197,7 +204,11 @@ catalogRouter.get('/products/:slug', async (req, res) => {
   // that never existed take the identical path to the identical 404 below —
   // same status, same code, same message — so existence cannot be probed.
   // The `where` shape itself is asserted in catalogProductLookup.test.ts.
-  const product = await findActiveProductBySlug(prisma, req.params.slug)
+  // The middleware-bearing overload widens req.params values to
+  // string | string[] | undefined; a non-string here can only mean a
+  // malformed path, which takes the same 404 as an unknown slug.
+  const slug = typeof req.params.slug === 'string' ? req.params.slug : ''
+  const product = await findActiveProductBySlug(prisma, slug)
 
   if (!product) {
     res.status(404).json({
@@ -227,6 +238,16 @@ catalogRouter.get('/products/:slug', async (req, res) => {
     }
     throw error
   }
+
+  // DEC-101 / §4.7.5 — the product_view funnel event. `void`, not awaited:
+  // the response owes analytics nothing, and recordFunnelEvent catches its
+  // own failures so this can never surface as an unhandled rejection.
+  void recordFunnelEvent(prisma, {
+    eventType: 'product_view',
+    sessionId: req.sessionID ?? '',
+    userId: req.session?.userId ?? null,
+    productId: product.id,
+  })
 
   res.json(detail)
 })

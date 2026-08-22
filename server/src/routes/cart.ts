@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { addItem, deleteLine, getCart, updateLine, type CartIdentity } from '../lib/cartService.js'
 import { ensureGuestCartId, peekGuestCartId } from '../lib/guestSession.js'
+import { recordFunnelEvent } from '../lib/funnelEvents.js'
 
 /**
  * MILESTONE-007 Checkpoint C — `GET` and `POST /api/cart`.
@@ -58,6 +59,21 @@ cartRouter.post('/items', async (req, res) => {
       result.reason === 'PRODUCT_NOT_FOUND' ? 404 : result.reason === 'INVALID_STOCK' ? 500 : 400
     res.status(status).json({ error: { code: result.reason, message: 'The item could not be added.' } })
     return
+  }
+
+  // DEC-101 / §4.7.5 — the add_to_cart funnel event. `void`, not awaited
+  // (the lib swallows its own failures); the product id comes off the DTO
+  // line the service just wrote rather than a second lookup.
+  // 🔴 NOT on a no-op: `alreadyAtMaximum` means nothing was added — five
+  // taps at the cap would record five conversions for zero units, letting
+  // addToCart exceed productView while the clamped step rate hides it.
+  if (!result.alreadyAtMaximum) {
+    void recordFunnelEvent(prisma, {
+      eventType: 'add_to_cart',
+      sessionId: req.sessionID ?? '',
+      userId: req.session?.userId ?? null,
+      productId: result.cart.items.find((line) => line.slug === body.slug)?.productId ?? null,
+    })
   }
 
   res.status(200).json({

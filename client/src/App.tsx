@@ -9,6 +9,7 @@ import { CheckoutPage } from './pages/CheckoutPage'
 import { AdminOrdersPage } from './pages/AdminOrdersPage'
 import { AdminProductsPage } from './pages/AdminProductsPage'
 import { AdminProductNewPage } from './pages/AdminProductNewPage'
+import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import { OrderHistoryPage } from './pages/OrderHistoryPage'
 import { OrderDetailPage } from './pages/OrderDetailPage'
 import { RequireAuth } from './components/auth/RequireAuth'
@@ -95,6 +96,19 @@ function App() {
           element={
             <RequireAuth>
               <AdminProductNewPage />
+            </RequireAuth>
+          }
+        />
+        {/*
+          DEC-101 — §4.7.4's dashboard/reports + §1.6's KPIs, linked from
+          the admin's menu the day it ships (the ISSUE-097/102/104 family).
+          RequireAuth is UX; the route 403s per request (DEC-065).
+        */}
+        <Route
+          path="/admin/dashboard"
+          element={
+            <RequireAuth>
+              <AdminDashboardPage />
             </RequireAuth>
           }
         />

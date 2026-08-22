@@ -452,6 +452,46 @@ export function createAdminProductRateLimiters(): AdminProductRateLimiters {
 }
 
 /**
+ * DEC-101 — the product-detail read gained a funnel-event INSERT, which
+ * made it the ONE public unauthenticated route that writes on every hit.
+ * A limiter it never needed as a pure read becomes due the moment a
+ * crawler can drive unbounded inserts through it: 600/15min is far above
+ * any human browsing pattern (a shopper opening 40 detail pages a minute
+ * sustained) and IP-keyed like every guest-facing limiter.
+ */
+export const CATALOG_RATE_LIMITS = {
+  detail: { windowMs: 15 * MINUTE, limit: 600 },
+} as const
+
+export interface CatalogRateLimiters {
+  detail: RequestHandler
+}
+
+export function createCatalogRateLimiters(): CatalogRateLimiters {
+  return {
+    detail: rateLimit({ ...SHARED, ...CATALOG_RATE_LIMITS.detail, keyGenerator: ipKey }),
+  }
+}
+
+/**
+ * DEC-101 — the admin dashboard. One READ an admin refreshes while
+ * watching the store; the product list's ceiling fits it exactly.
+ */
+export const ADMIN_DASHBOARD_RATE_LIMITS = {
+  read: { windowMs: 15 * MINUTE, limit: 240 },
+} as const
+
+export interface AdminDashboardRateLimiters {
+  read: RequestHandler
+}
+
+export function createAdminDashboardRateLimiters(): AdminDashboardRateLimiters {
+  return {
+    read: rateLimit({ ...SHARED, ...ADMIN_DASHBOARD_RATE_LIMITS.read, keyGenerator: shopperKey }),
+  }
+}
+
+/**
  * MILESTONE-011 / DEC-091 O3 — the AI chat route, strict from day one.
  *
  * 🔴 THE FIRST PER-REQUEST COST OBJECT ON THIS SERVER. MockProvider is free,

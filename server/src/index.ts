@@ -13,6 +13,7 @@ import { createCheckoutRouter } from './routes/checkout.js'
 import { createOrderRouter } from './routes/orders.js'
 import { createAdminOrderRouter } from './routes/adminOrders.js'
 import { createAdminProductRouter } from './routes/adminProducts.js'
+import { createAdminDashboardRouter } from './routes/adminDashboard.js'
 import { PRODUCTS_UPLOAD_DIR } from './lib/uploadPaths.js'
 import { createAccountRouter } from './routes/account.js'
 import { createAiChatRouter } from './routes/aiChat.js'
@@ -92,6 +93,10 @@ app.use('/api/admin/orders', createAdminOrderRouter({ prisma }))
 // stock, price, the INV-03 activation toggle, create. Same per-request
 // role read; the seed remains the dev catalogue's reset (DEC-088 O1).
 app.use('/api/admin/products', createAdminProductRouter({ prisma }))
+
+// DEC-101 — §4.7.4's dashboard/reports + §1.6's KPIs. Read-only; the same
+// per-request role read as every admin router (DEC-065).
+app.use('/api/admin/dashboard', createAdminDashboardRouter({ prisma }))
 
 // DEC-089c — admin-uploaded product images, served statically. WRITING is
 // admin-gated (the upload route); reading is public exactly like the
