@@ -58,7 +58,15 @@ beforeEach(async () => {
   await i18n.changeLanguage('en')
   vi.stubEnv('VITE_API_BASE_URL', BASE_URL)
   fetchMock = vi.fn()
-  vi.stubGlobal('fetch', fetchMock)
+  // The /options fetch (the round-2 brand filter's list) answers OUTSIDE
+  // the once-queue below — otherwise it would silently eat the response a
+  // test staged for its PATCH, and every call-count assertion would drift
+  // by one for a request no test is about.
+  vi.stubGlobal('fetch', (url: RequestInfo | URL, init?: RequestInit) =>
+    String(url).includes('/api/admin/products/options')
+      ? Promise.resolve(mockResponse(200, { categories: [], brands: [], healthGoals: [] }))
+      : (fetchMock as unknown as typeof fetch)(url, init),
+  )
 })
 
 afterEach(() => {

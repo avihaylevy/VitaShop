@@ -60,7 +60,10 @@ describe('orderStatusLabelKey — every status resolves in BOTH locales', () => 
     // confused for each other.
     const spec: Partial<Record<OrderStatusName, string>> = {
       paid: 'התקבלה',
-      processing: 'בליקוט',
+      // ⚠️ The specification's literal is 'בליקוט'; the user read it as a
+      // typo and set 'ליקוט' (the lecturer-fixes list, 2026-08-23) — a
+      // recorded deviation, same class as DEC-107's pageSize.
+      processing: 'ליקוט',
       shipped: 'נשלחה',
       delivered: 'סופקה',
       cancelled: 'בוטלה',

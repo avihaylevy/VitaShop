@@ -55,6 +55,9 @@ type ProductCardProps = ProductCardModel &
     headingLevel?: 'h2' | 'h3' | 'h4'
     /** Defaults to true — unchanged from the Checkpoint B contract. ProductGrid passes this through. */
     showCategoryEyebrow?: boolean
+    /** The lecturer-fixes list (2026-08-23): the home shelf hides the
+     *  quantity/dosage-form line; the catalogue keeps it. Default true. */
+    showPackageMeta?: boolean
     /**
      * The heart's settled-toggle event, forwarded from FavouriteButton. The
      * favourites page uses it to announce a removal and repair focus when
@@ -97,6 +100,7 @@ export function ProductCard({
   onAddToCart,
   headingLevel = 'h3',
   showCategoryEyebrow = true,
+  showPackageMeta = true,
   onFavouriteToggled,
 }: ProductCardProps) {
   const { t, i18n } = useTranslation('catalog')
@@ -195,7 +199,9 @@ export function ProductCard({
         {brandName && <p className="text-[13px] font-semibold text-text-muted">{brandName}</p>}
       </div>
 
-      {(dosageForm || packageQuantity) && (
+      {/* showPackageMeta — the lecturer-fixes list (2026-08-23): the home
+          page drops the quantity/form line; the catalogue keeps it. */}
+      {showPackageMeta && (dosageForm || packageQuantity) && (
         <p className="text-[13px] text-text-muted">
           {/* The thirteenth list — a volume-measured form pairs the quantity
               with its UNIT ("250 מ״ל"), never with the form label

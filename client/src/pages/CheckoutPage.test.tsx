@@ -239,6 +239,19 @@ describe('F2b — the address form and the REQ-F-041 pre-fill', () => {
     expect(screen.queryByLabelText(/street and number/i)).toBeNull()
   })
 
+  it('PICKUP POINT replaces the address form with a labelled point picker (the lecturer-fixes list)', async () => {
+    withProfile(SAVED)
+    renderPage()
+    const pickupPoint = await screen.findByRole('radio', { name: /pickup point/i })
+    pickupPoint.click()
+    // The picker appears; the home-address fields are GONE — a shopper
+    // collecting from a point has no delivery address to type.
+    const picker = await screen.findByLabelText(/^pickup point$/i)
+    expect(picker.tagName).toBe('SELECT')
+    expect((picker as HTMLSelectElement).options.length).toBeGreaterThanOrEqual(6)
+    expect(screen.queryByLabelText(/street and number/i)).toBeNull()
+  })
+
   it('flags a blank required field on BLUR, and only after it is left', async () => {
     withProfile({ ...SAVED, defaultAddress: null })
     renderPage()
@@ -422,13 +435,50 @@ describe('F2c — confirming and paying', () => {
     estimate: { kind: 'delivered_between', minBusinessDays: 3, maxBusinessDays: 5 },
   }
 
+  /** Valid card details — the 2026-08-23 gate; Luhn-valid test number. */
+  function fillCard() {
+    fireEvent.change(screen.getByLabelText(/card number/i), { target: { value: '4111 1111 1111 1111' } })
+    fireEvent.change(screen.getByLabelText(/expiry/i), { target: { value: '12/29' } })
+    fireEvent.change(screen.getByLabelText(/cvv/i), { target: { value: '123' } })
+    fireEvent.change(screen.getByLabelText(/cardholder name/i), { target: { value: 'Israel Israeli' } })
+  }
+
   async function fillAndPay() {
     const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
     fireEvent.change(line1, { target: { value: 'רחוב 1' } })
     fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
+    fillCard()
     const button = await screen.findByRole('button', { name: /confirm and pay/i })
     fireEvent.click(button)
   }
+
+  it('🔴 INVALID CARD DETAILS never leave the page — the gate blocks and says why (both controls: the valid path above pays)', async () => {
+    const calls = payRoute(201, ORDER)
+    renderPage()
+    const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
+    fireEvent.change(line1, { target: { value: 'רחוב 1' } })
+    fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
+    // Luhn-INVALID number; everything else valid.
+    fireEvent.change(screen.getByLabelText(/card number/i), { target: { value: '4111 1111 1111 1112' } })
+    fireEvent.change(screen.getByLabelText(/expiry/i), { target: { value: '12/29' } })
+    fireEvent.change(screen.getByLabelText(/cvv/i), { target: { value: '123' } })
+    fireEvent.change(screen.getByLabelText(/cardholder name/i), { target: { value: 'Israel Israeli' } })
+    fireEvent.click(await screen.findByRole('button', { name: /confirm and pay/i }))
+    expect(await screen.findByText(/card number is not valid/i)).toBeTruthy()
+    expect(calls).toHaveLength(0)
+  })
+
+  it('🔴 THE CARD NEVER TRAVELS — a successful pay request carries no card field', async () => {
+    const calls = payRoute(201, ORDER)
+    renderPage()
+    await fillAndPay()
+    await waitFor(() => expect(calls).toHaveLength(1))
+    const body = JSON.parse(String(calls[0]!.body)) as Record<string, unknown>
+    const flat = JSON.stringify(body)
+    expect(Object.keys(body)).not.toContain('card')
+    expect(flat).not.toContain('4111')
+    expect(flat).not.toContain('123')
+  })
 
   it('sends the fingerprint the shopper was SHOWN', async () => {
     const calls = payRoute(201, ORDER)
@@ -651,16 +701,16 @@ describe('F2c — confirming and paying', () => {
     expect(await screen.findByText(/order status/i)).toBeTruthy()
   })
 
-  it('🔴 DEC-098: NO card field exists, and the pay payload carries nothing card-shaped', async () => {
-    // The user's decision on the eleventh list, item 14: no card details at
-    // payment at all (save-card is a later decision). The old demo form and
-    // its validation are deleted; this pin keeps them from creeping back.
+  it('🔴 the card FIELDS exist (2026-08-23, reversing DEC-098) but the pay payload stays card-free', async () => {
+    // DEC-098 removed the fields; the lecturer-fixes list brought them back
+    // WITH validation. What survives from DEC-098 unbroken: the payload —
+    // the exact-key pin below still proves nothing card-shaped travels.
     const calls = payRoute(201, ORDER)
     renderPage()
     await screen.findByRole('button', { name: /pay/i })
-    expect(screen.queryByLabelText(/card number/i)).toBeNull()
-    expect(screen.queryByLabelText(/security code|cvv/i)).toBeNull()
-    expect(screen.queryByLabelText(/expiry/i)).toBeNull()
+    expect(await screen.findByLabelText(/card number/i)).toBeTruthy()
+    expect(screen.getByLabelText(/cvv/i)).toBeTruthy()
+    expect(screen.getByLabelText(/expiry/i)).toBeTruthy()
 
     await fillAndPay()
     await waitFor(() => expect(calls).toHaveLength(1))

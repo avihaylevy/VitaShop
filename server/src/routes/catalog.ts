@@ -5,6 +5,7 @@ import {
   CatalogIntegrityError,
   mapProductToPublicCatalog,
   mapProductToPublicDetail,
+  toImageRef,
   type ProductWithCatalogRelations,
   type PublicCatalogProduct,
   type PublicProductDetail,
@@ -30,9 +31,40 @@ export const catalogRouter = Router()
 
 // GET /api/categories — the six REQ-F-001 canonical categories, fixed order,
 // no product counts. Category tone stays client-owned (getCategoryTone).
-catalogRouter.get('/categories', (_req, res) => {
+//
+// 🔴 `imageFile` added by the lecturer-fixes list (2026-08-23): the home
+// page's tiles used to MINE their imagery from the newest-products page,
+// which covers only the categories that page happens to hold — at DEC-107's
+// pageSize 12 that was three of six, and the gap read as a "language
+// toggle" bug. The endpoint now answers a representative image per
+// category: the NEWEST active product with an image, deterministically
+// ordered (createdAt desc, id desc — fixture selection always orders). A
+// category with no imaged product answers null and the client keeps its
+// reserved-height fallback. Tolerant on the client (absence = null), so
+// a client ahead of the server never breaks.
+catalogRouter.get('/categories', async (_req, res) => {
+  const imaged = await prisma.product.findMany({
+    where: { isActive: true, images: { some: {} } },
+    select: {
+      category: { select: { nameHe: true } },
+      images: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], take: 1, select: { url: true } },
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  })
+  const imageByCategory = new Map<string, string>()
+  for (const product of imaged) {
+    const first = product.images[0]
+    if (first && !imageByCategory.has(product.category.nameHe)) {
+      imageByCategory.set(product.category.nameHe, toImageRef(first.url))
+    }
+  }
   res.json({
-    items: CANONICAL_CATEGORIES.map(({ nameHe, nameEn, slug }) => ({ slug, nameHe, nameEn })),
+    items: CANONICAL_CATEGORIES.map(({ nameHe, nameEn, slug }) => ({
+      slug,
+      nameHe,
+      nameEn,
+      imageFile: imageByCategory.get(nameHe) ?? null,
+    })),
   })
 })
 

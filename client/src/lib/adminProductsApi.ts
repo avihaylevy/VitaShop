@@ -114,12 +114,24 @@ function listFailure(status: number): AdminProductsFailure {
 }
 
 export async function requestAdminProducts(
-  options: { page?: number; q?: string; status?: 'active' | 'inactive' } = {},
+  options: {
+    page?: number
+    q?: string
+    status?: 'active' | 'inactive'
+    /** The lecturer-fixes list (2026-08-23): category = the stored nameHe. */
+    category?: string
+    /** Round 2: brand = the Brand.id /options hands out. */
+    brand?: string
+    sort?: 'name' | 'price_asc' | 'price_desc' | 'stock_asc'
+  } = {},
 ): Promise<AdminProductsResult> {
   const params = new URLSearchParams()
   params.set('page', String(options.page ?? 1))
   if (options.q) params.set('q', options.q)
   if (options.status) params.set('status', options.status)
+  if (options.category) params.set('category', options.category)
+  if (options.brand) params.set('brand', options.brand)
+  if (options.sort) params.set('sort', options.sort)
 
   const raw = await call(`/api/admin/products?${params.toString()}`)
   if (raw === null) return { ok: false, failure: { kind: 'offline' } }

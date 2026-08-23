@@ -163,6 +163,11 @@ export interface CatalogCategoryDto {
   slug: string
   nameHe: string
   nameEn: string
+  /** A representative product image per category (lecturer-fixes list,
+   *  2026-08-23). OPTIONAL and tolerant: an older server omits it, and the
+   *  tiles keep their reserved-height fallback — client-ahead-of-server
+   *  never breaks (the DEC-104 lesson). */
+  imageFile?: string | null
 }
 
 export interface CatalogCategoriesEnvelope {

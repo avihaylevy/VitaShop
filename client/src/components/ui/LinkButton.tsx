@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef, MouseEvent, ReactNode } from 'react'
 import { Link, type LinkProps } from 'react-router'
 import { FOCUS_RING } from './focusRing'
+import { ArrowForwardIcon } from '../icons'
 import { VARIANT_CLASS } from './Button'
 
 type LinkButtonProps = {
@@ -70,10 +71,27 @@ export function LinkButton({
       className={`${FOCUS_RING} ${
         block ? 'flex w-full' : 'inline-flex'
       } items-center justify-center rounded-card font-medium transition-colors duration-150 ease-standard ${
-        size === 'hero' ? 'min-h-12 px-6 text-base' : 'min-h-11 px-4 text-sm'
+        /* The lecturer-fixes list (2026-08-23, second round — the first
+           lift+shadow pass read as "hasn't changed"): the hero CTA is now
+           unmistakably its own control. A teal GRADIENT (both stops are
+           the existing brand tokens — no new colour), semibold, wider, a
+           brand shadow, a built-in forward ARROW that slides on hover, and
+           a motion-safe lift; reduced motion keeps colour/shadow only. */
+        size === 'hero'
+          ? 'group min-h-12 gap-2.5 bg-gradient-to-r from-brand-teal to-brand-teal-strong px-8 text-base font-semibold shadow-[0_3px_14px_rgba(21,112,106,0.35)] transition-[box-shadow,filter] hover:brightness-110 hover:shadow-[0_8px_24px_rgba(21,112,106,0.45)] motion-safe:transition-[box-shadow,filter,transform] motion-safe:hover:-translate-y-1 motion-safe:active:translate-y-0 motion-safe:active:scale-[0.97]'
+          : 'min-h-11 px-4 text-sm'
       } ${VARIANT_CLASS[variant]} ${className}`}
     >
       {children}
+      {size === 'hero' && (
+        <span
+          aria-hidden="true"
+          // Points "onward" in both directions; slides further on hover.
+          className="inline-flex rtl:-scale-x-100 motion-safe:transition-transform motion-safe:duration-200 motion-safe:group-hover:translate-x-1 motion-safe:group-hover:rtl:-translate-x-1"
+        >
+          <ArrowForwardIcon width={18} height={18} />
+        </span>
+      )}
     </Link>
   )
 }

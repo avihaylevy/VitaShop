@@ -52,14 +52,33 @@
     "cityRequired": "Enter a city.",
     "deliveringTo": "Ordering as {{name}}",
     "contactPhone": "Contact phone: {{phone}}",
-    "unavailable": "We could not load your saved details. You can enter them here."
+    "unavailable": "We could not load your saved details. You can enter them here.",
+    "pickupLegend": "Pickup point",
+    "pickupNote": "Your parcel will wait at the point you picked; we'll email when it's ready."
   },
   "pay": {
     "legend": "Payment",
     "simulated": "Simulated payment — nothing is charged and no card details are collected.",
     "saveAddress": "Save this address for next time",
     "submit": "Confirm and pay",
-    "submitting": "Placing your order…"
+    "submitting": "Placing your order…",
+    "card": {
+      "number": "Card number",
+      "expiry": "Expiry",
+      "cvv": "CVV",
+      "holder": "Cardholder name",
+      "notStored": "Card details are checked for validity only — they are never sent or stored anywhere.",
+      "errors": {
+        "CARD_NUMBER_REQUIRED": "Required",
+        "CARD_NUMBER_INVALID": "Card number is not valid",
+        "EXPIRY_REQUIRED": "Required",
+        "EXPIRY_INVALID": "Invalid expiry (MM/YY)",
+        "EXPIRY_PAST": "The card has expired",
+        "CVV_REQUIRED": "Required",
+        "CVV_INVALID": "Invalid CVV",
+        "HOLDER_REQUIRED": "Required"
+      }
+    }
   },
   "done": {
     "heading": "Order received",

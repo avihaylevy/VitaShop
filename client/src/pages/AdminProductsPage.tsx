@@ -3,16 +3,19 @@ import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
+import { SearchIcon } from '../components/icons'
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning'
 import { Pager } from '../components/ui/Pager'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import {
   patchAdminProduct,
+  requestAdminProductOptions,
   requestAdminProducts,
   setAdminProductActive,
 } from '../lib/adminProductsApi'
 import { normalizePriceInput } from '../lib/adminPrice'
 import { DOSAGE_FORM_KEYS } from '../lib/catalogApi'
+import { CATEGORY_TONE } from '../lib/categoryTone'
 import type {
   AdminProductRow,
   AdminProductsFailure,
@@ -87,6 +90,14 @@ export function AdminProductsPage() {
    */
   const [submittedQuery, setSubmittedQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  // The lecturer-fixes list (2026-08-23): category filter + sort. The
+  // category value is the stored nameHe (the key CATEGORY_TONE also uses).
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [brandFilter, setBrandFilter] = useState('')
+  /** Round 2 — the brand list from /options; a failed load hides the
+   *  select (a convenience must not block the screen). */
+  const [brandOptions, setBrandOptions] = useState<{ id: string; name: string; nameEn: string | null }[]>([])
+  const [sort, setSort] = useState<'newest' | 'name' | 'price_asc' | 'price_desc' | 'stock_asc'>('newest')
   /** Per-row edit drafts. Absent = untouched, so the row shows the server value. */
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   /** ISSUE-153 — which row's full editor is open, and its drafts. */
@@ -106,13 +117,23 @@ export function AdminProductsPage() {
   const requestId = useRef(0)
 
   const load = useCallback(
-    async (page: number, q: string, status: 'all' | 'active' | 'inactive') => {
+    async (
+      page: number,
+      q: string,
+      status: 'all' | 'active' | 'inactive',
+      category: string,
+      brand: string,
+      sortValue: 'newest' | 'name' | 'price_asc' | 'price_desc' | 'stock_asc',
+    ) => {
       const id = ++requestId.current
       setState({ status: 'loading' })
       const result = await requestAdminProducts({
         page,
         ...(q.trim() === '' ? {} : { q: q.trim() }),
         ...(status === 'all' ? {} : { status }),
+        ...(category === '' ? {} : { category }),
+        ...(brand === '' ? {} : { brand }),
+        ...(sortValue === 'newest' ? {} : { sort: sortValue }),
       })
       if (id !== requestId.current) return
       if (result.ok) {
@@ -132,8 +153,18 @@ export function AdminProductsPage() {
     // One effect, one fetch: submit batches setSubmittedQuery+setPageNumber
     // into a single re-run (review finding: the submit handler ALSO called
     // load directly, double-fetching when searching from page 2+).
-    void load(pageNumber, submittedQuery, statusFilter)
-  }, [load, pageNumber, submittedQuery, statusFilter])
+    void load(pageNumber, submittedQuery, statusFilter, categoryFilter, brandFilter, sort)
+  }, [load, pageNumber, submittedQuery, statusFilter, categoryFilter, brandFilter, sort])
+
+  useEffect(() => {
+    let cancelled = false
+    void requestAdminProductOptions().then((result) => {
+      if (!cancelled && result.ok) setBrandOptions(result.options.brands)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function onSearch(event: FormEvent) {
     event.preventDefault()
@@ -379,8 +410,6 @@ export function AdminProductsPage() {
         </Link>
       </div>
 
-      {/* DEC-088 O1, said where the editing happens rather than in a doc. */}
-      <p className="mt-2 text-xs text-text-muted">{t('products.seedNote')}</p>
 
       <form onSubmit={onSearch} className="mt-4 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1 text-sm">
@@ -415,7 +444,77 @@ export function AdminProductsPage() {
             <option value="inactive">{t('products.statusInactive')}</option>
           </select>
         </div>
-        <Button type="submit" variant="secondary">
+
+        <div className="flex flex-col gap-1 text-sm">
+          <label htmlFor="admin-products-category" className="text-text-ink">
+            {t('products.categoryLabel')}
+          </label>
+          <select
+            id="admin-products-category"
+            value={categoryFilter}
+            onChange={(event) => {
+              setPageNumber(1)
+              setCategoryFilter(event.target.value)
+            }}
+            className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
+          >
+            <option value="">{t('products.categoryAll')}</option>
+            {Object.keys(CATEGORY_TONE).map((nameHe) => (
+              <option key={nameHe} value={nameHe}>
+                {nameHe}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {brandOptions.length > 0 && (
+          <div className="flex flex-col gap-1 text-sm">
+            <label htmlFor="admin-products-brand" className="text-text-ink">
+              {t('products.brandLabel')}
+            </label>
+            <select
+              id="admin-products-brand"
+              value={brandFilter}
+              onChange={(event) => {
+                setPageNumber(1)
+                setBrandFilter(event.target.value)
+              }}
+              className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
+            >
+              <option value="">{t('products.brandAll')}</option>
+              {brandOptions.map((brand) => (
+                <option key={brand.id} value={brand.id}>
+                  {i18n.language === 'he' ? brand.name : (brand.nameEn ?? brand.name)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1 text-sm">
+          <label htmlFor="admin-products-sort" className="text-text-ink">
+            {t('products.sortLabel')}
+          </label>
+          <select
+            id="admin-products-sort"
+            value={sort}
+            onChange={(event) => {
+              setPageNumber(1)
+              setSort(event.target.value as typeof sort)
+            }}
+            className={`${FOCUS_RING} h-11 rounded-card border border-border-control bg-well px-3`}
+          >
+            <option value="newest">{t('products.sortNewest')}</option>
+            <option value="name">{t('products.sortName')}</option>
+            <option value="price_asc">{t('products.sortPriceAsc')}</option>
+            <option value="price_desc">{t('products.sortPriceDesc')}</option>
+            <option value="stock_asc">{t('products.sortStockAsc')}</option>
+          </select>
+        </div>
+        {/* The lecturer-fixes list (2026-08-23): the plain secondary read
+            wrong beside the fields — primary + the magnifier icon names the
+            action visually as well as textually. */}
+        <Button type="submit" variant="primary" icon={<SearchIcon />}>
           {t('products.searchSubmit')}
         </Button>
       </form>
@@ -451,7 +550,7 @@ export function AdminProductsPage() {
               type="button"
               variant="secondary"
               className="mt-3"
-              onClick={() => void load(pageNumber, query, statusFilter)}
+              onClick={() => void load(pageNumber, query, statusFilter, categoryFilter, brandFilter, sort)}
             >
               {t('state.retry')}
             </Button>

@@ -241,3 +241,57 @@ describe('🔴 mutations are serialized, so a slow response cannot overwrite a n
     expect(screen.getByTestId('total').textContent).toBe('2')
   })
 })
+
+/**
+ * The lecturer-fixes list (2026-08-23) — the cart tracks the SESSION's
+ * identity. What is pinned: an auth transition (guest → authenticated,
+ * or a sign-out) refetches the cart AND clears the previous identity's
+ * lines synchronously, so user B never reads user A's cart; and outside
+ * a SessionProvider the identity defaults to a settled guest (the
+ * ISSUE-178 tolerant idiom), so every bare-mount test above still loads.
+ */
+describe('the session identity wiring', () => {
+  it('an identity change refetches, and the OLD cart is cleared before the new answer lands', async () => {
+    const { SessionContext } = await import('./SessionContext')
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/cart')) return mockResponse(200, cartWith(2))
+      return mockResponse(200, {})
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const identity = (status: 'guest' | 'authenticated', email: string | null) =>
+      ({
+        status,
+        role: null,
+        firstName: null,
+        email,
+        refresh: async () => {},
+        signOut: async () => {},
+        welcomeName: null,
+        dismissWelcome: () => {},
+        isSignedIn: status === 'authenticated',
+        isAdmin: false,
+      }) as never
+
+    const { rerender } = render(
+      <SessionContext.Provider value={identity('authenticated', 'a@a.com')}>
+        <CartProvider>
+          <Probe />
+        </CartProvider>
+      </SessionContext.Provider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('total').textContent).toBe('2'))
+    const callsAfterFirst = fetchMock.mock.calls.length
+
+    // Sign out: the identity flips — the display must not keep A's lines.
+    rerender(
+      <SessionContext.Provider value={identity('guest', null)}>
+        <CartProvider>
+          <Probe />
+        </CartProvider>
+      </SessionContext.Provider>,
+    )
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsAfterFirst))
+  })
+})

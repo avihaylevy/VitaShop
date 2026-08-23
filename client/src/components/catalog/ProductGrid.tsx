@@ -18,6 +18,7 @@ type GridAction =
 type ProductGridProps = GridAction & {
   products: readonly ProductCardModel[]
   showCategoryEyebrow?: boolean
+  showPackageMeta?: boolean
   emptyState?: ReactNode
   /** Forwarded to every card's heart — see ProductCard.onFavouriteToggled. */
   onFavouriteToggled?: (result: FavouriteToggleResult, slug: string) => void
@@ -36,6 +37,7 @@ type ProductGridProps = GridAction & {
 export function ProductGrid({
   products,
   showCategoryEyebrow,
+  showPackageMeta,
   emptyState,
   onFavouriteToggled,
   ...action
@@ -52,6 +54,7 @@ export function ProductGrid({
             {...product}
             {...(action.navigational ? { navigational: true as const } : { onAddToCart: action.onAddToCart! })}
             showCategoryEyebrow={showCategoryEyebrow}
+            showPackageMeta={showPackageMeta}
             onFavouriteToggled={onFavouriteToggled}
           />
         </li>

@@ -2,7 +2,7 @@
   "status": {
     "pendingPayment": "ממתינה לתשלום",
     "paid": "התקבלה",
-    "processing": "בליקוט",
+    "processing": "ליקוט",
     "shipped": "נשלחה",
     "delivered": "סופקה",
     "cancelled": "בוטלה"

@@ -52,14 +52,33 @@
     "cityRequired": "יש למלא עיר.",
     "deliveringTo": "ההזמנה על שם {{name}}",
     "contactPhone": "טלפון ליצירת קשר: {{phone}}",
-    "unavailable": "לא הצלחנו לטעון את הפרטים השמורים בחשבון. אפשר למלא אותם כאן."
+    "unavailable": "לא הצלחנו לטעון את הפרטים השמורים בחשבון. אפשר למלא אותם כאן.",
+    "pickupLegend": "נקודת חלוקה לאיסוף",
+    "pickupNote": "החבילה תמתין בנקודה שבחרתם; נעדכן במייל כשהיא מוכנה לאיסוף."
   },
   "pay": {
     "legend": "תשלום",
     "simulated": "תשלום מדומה — לא מבוצע חיוב אמיתי ולא נאספים פרטי אשראי.",
     "saveAddress": "שמירת הכתובת לפעם הבאה",
     "submit": "אישור ותשלום",
-    "submitting": "מבצעים את ההזמנה…"
+    "submitting": "מבצעים את ההזמנה…",
+    "card": {
+      "number": "מספר כרטיס",
+      "expiry": "תוקף",
+      "cvv": "CVV",
+      "holder": "שם בעל הכרטיס",
+      "notStored": "פרטי הכרטיס משמשים לבדיקת תקינות בלבד — הם לא נשלחים ולא נשמרים בשום מקום.",
+      "errors": {
+        "CARD_NUMBER_REQUIRED": "שדה חובה",
+        "CARD_NUMBER_INVALID": "מספר הכרטיס אינו תקין",
+        "EXPIRY_REQUIRED": "שדה חובה",
+        "EXPIRY_INVALID": "תוקף לא תקין (MM/YY)",
+        "EXPIRY_PAST": "תוקף הכרטיס פג",
+        "CVV_REQUIRED": "שדה חובה",
+        "CVV_INVALID": "CVV לא תקין",
+        "HOLDER_REQUIRED": "שדה חובה"
+      }
+    }
   },
   "done": {
     "heading": "ההזמנה התקבלה",

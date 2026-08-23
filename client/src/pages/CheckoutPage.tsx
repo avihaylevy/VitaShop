@@ -9,6 +9,8 @@ import { payForCheckout, requestCheckoutQuote } from '../lib/checkoutApi'
 import { newIdempotencyKey } from '../lib/idempotencyKey'
 import { useCartRefresh } from '../state/CartContext'
 import { orderStatusLabelKey } from '../lib/orderStatus'
+import { PICKUP_POINTS, pickupPointAddress } from '../lib/pickupPoints'
+import { cardNumberProblem, cvvProblem, expiryProblem, holderProblem } from '../lib/cardValidation'
 import { requestAddressBook, requestShopperProfile } from '../lib/accountApi'
 import type { ManagedAddress, ShopperProfile } from '../types/account'
 import {
@@ -106,6 +108,10 @@ export function CheckoutPage() {
     { status: 'loading' } | { status: 'ready'; profile: ShopperProfile } | { status: 'unavailable' }
   >({ status: 'loading' })
   const [address, setAddress] = useState({ line1: '', city: '', zipCode: '' })
+  // The lecturer-fixes list (2026-08-23) — pickup_point picks a POINT, not
+  // a typed address. Always a valid selection (default first), so the
+  // method can never fail ADDRESS_REQUIRED.
+  const [pickupPointId, setPickupPointId] = useState(PICKUP_POINTS[0].id)
   /**
    * M-009 / DEC-090 O3 — REQ-F-051: "at order time the user picks a saved
    * address or enters a new one." `null` until the book loads (or when it
@@ -137,6 +143,15 @@ export function CheckoutPage() {
    * of the user's; nothing here stores or asks for card data.
    */
 
+  /**
+   * The lecturer-fixes list (2026-08-23) — the card form returns,
+   * REVERSING DEC-098 at the user's explicit instruction, with one hard
+   * rule kept from it: THE DETAILS GO NOWHERE. They live in this
+   * component's state for validation only — payForCheckout takes no card
+   * argument, nothing is stored, and the payment stays simulated.
+   */
+  const [card, setCard] = useState({ number: '', expiry: '', cvv: '', holder: '' })
+  const [cardTouched, setCardTouched] = useState(false)
   const [saveAddress, setSaveAddress] = useState(false)
   const [payState, setPayState] = useState<
     | { status: 'idle' }
@@ -270,7 +285,25 @@ export function CheckoutPage() {
     if (payState.status === 'done') confirmationHeading.current?.focus()
   }, [payState.status])
 
+  const cardProblems = {
+    number: cardNumberProblem(card.number),
+    expiry: expiryProblem(card.expiry),
+    cvv: cvvProblem(card.cvv),
+    holder: holderProblem(card.holder),
+  }
+  const cardValid =
+    cardProblems.number === null &&
+    cardProblems.expiry === null &&
+    cardProblems.cvv === null &&
+    cardProblems.holder === null
+
   async function confirmAndPay(quote: CheckoutQuote) {
+    // The card gate: invalid details surface their errors and the request
+    // never leaves. Display-only — the server neither sees nor wants them.
+    if (!cardValid) {
+      setCardTouched(true)
+      return
+    }
     /*
      * 🔴 THE SAME TOKEN THE QUOTE LOADER USES. `CHECKOUT_CHANGED` writes a new
      * quote into `state`, and that write was the ONE writer bypassing the
@@ -286,7 +319,14 @@ export function CheckoutPage() {
       // compares it against one re-derived from live data.
       fingerprint: quote.fingerprint,
       deliveryMethod: quote.deliveryMethod,
-      address: quote.deliveryMethod === 'self_pickup' ? null : { ...address, zipCode: address.zipCode || null },
+      address:
+        quote.deliveryMethod === 'self_pickup'
+          ? null
+          : quote.deliveryMethod === 'pickup_point'
+            ? pickupPointAddress(
+                PICKUP_POINTS.find((point) => point.id === pickupPointId) ?? PICKUP_POINTS[0],
+              )
+            : { ...address, zipCode: address.zipCode || null },
       idempotencyKey: idempotencyKey.current,
       // ISSUE-174 (the eleventh list, the user's own spec deviation from
       // REQ-F-043's selector): the outcome control is gone from the UI —
@@ -294,7 +334,7 @@ export function CheckoutPage() {
       // fully supported server-side (and still renders here on a 402).
       simulatedOutcome: 'success',
       // Belt to the checkbox gate: consent is only meaningful for 'new'.
-      saveAddress: saveAddress && pickedAddressId === 'new',
+      saveAddress: saveAddress && pickedAddressId === 'new' && quote.deliveryMethod === 'courier',
     })
 
     /*
@@ -483,6 +523,30 @@ export function CheckoutPage() {
       */}
       {method === 'self_pickup' ? (
         <p className="text-sm text-text-muted">{t('address.notNeeded')}</p>
+      ) : method === 'pickup_point' ? (
+        /* The point picker — a labelled native select (CatalogSortSelect's
+           §10 reasoning), replacing the home-address fields the lecturer-
+           fixes list called out as wrong for this method. */
+        <div className="min-w-0">
+          <label htmlFor="checkout-pickup-point" className="block text-sm font-semibold text-text-ink">
+            {t('address.pickupLegend')}
+          </label>
+          <select
+            id="checkout-pickup-point"
+            value={pickupPointId}
+            onChange={(event) => setPickupPointId(event.target.value)}
+            className={`${FOCUS_RING} mt-2 h-11 w-full cursor-pointer rounded-card border border-border-control bg-well px-3 text-base text-text-ink`}
+          >
+            {PICKUP_POINTS.map((point) => (
+              <option key={point.id} value={point.id}>
+                {i18n.language === 'he'
+                  ? `${point.nameHe} — ${point.cityHe}`
+                  : `${point.nameEn} — ${point.cityEn}`}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-xs text-text-muted">{t('address.pickupNote')}</p>
+        </div>
       ) : (
         <fieldset className="min-w-0 border-0 p-0">
           <legend className="mb-2 text-sm font-semibold text-text-ink">{t('address.legend')}</legend>
@@ -712,12 +776,92 @@ export function CheckoutPage() {
           <legend className="mb-2 text-sm font-semibold text-text-ink">{t('pay.legend')}</legend>
 
           {/*
-            🔴 REQ-F-043 — SAID PLAINLY, NOT IMPLIED. No provider, no card
-            fields, nothing that resembles a card number. An honest named
-            control is the requirement; a fake card form would look like the
-            real thing and invite someone to type a real number into it.
+            REQ-F-043's posture as amended by the user (2026-08-23,
+            reversing DEC-098): card FIELDS with real validation, and the
+            simulated-payment sentence stays so nobody believes a charge
+            happens. The honesty line under the fields says the details are
+            never sent or kept.
           */}
           <p className="mb-2 text-xs text-text-muted">{t('pay.simulated')}</p>
+
+          <div className="mb-1 grid gap-x-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label htmlFor="pay-card-number" className="block text-sm font-medium text-text-ink">
+                {t('pay.card.number')}
+              </label>
+              <input
+                id="pay-card-number"
+                inputMode="numeric"
+                autoComplete="cc-number"
+                dir="ltr"
+                value={card.number}
+                onChange={(event) => setCard((c) => ({ ...c, number: event.target.value }))}
+                aria-invalid={cardTouched && cardProblems.number !== null}
+                aria-describedby={cardTouched && cardProblems.number ? 'pay-card-number-error' : undefined}
+                className={`${FOCUS_RING} mt-1 h-11 w-full rounded-card border bg-well px-3 text-base ${cardTouched && cardProblems.number ? 'border-state-error' : 'border-border-control'}`}
+              />
+              <p id="pay-card-number-error" className="mt-1 min-h-4 text-xs text-state-error">
+                {cardTouched && cardProblems.number ? t(`pay.card.errors.${cardProblems.number}`) : ''}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="pay-card-expiry" className="block text-sm font-medium text-text-ink">
+                {t('pay.card.expiry')}
+              </label>
+              <input
+                id="pay-card-expiry"
+                inputMode="numeric"
+                autoComplete="cc-exp"
+                dir="ltr"
+                placeholder="MM/YY"
+                value={card.expiry}
+                onChange={(event) => setCard((c) => ({ ...c, expiry: event.target.value }))}
+                aria-invalid={cardTouched && cardProblems.expiry !== null}
+                aria-describedby={cardTouched && cardProblems.expiry ? 'pay-card-expiry-error' : undefined}
+                className={`${FOCUS_RING} mt-1 h-11 w-full rounded-card border bg-well px-3 text-base ${cardTouched && cardProblems.expiry ? 'border-state-error' : 'border-border-control'}`}
+              />
+              <p id="pay-card-expiry-error" className="mt-1 min-h-4 text-xs text-state-error">
+                {cardTouched && cardProblems.expiry ? t(`pay.card.errors.${cardProblems.expiry}`) : ''}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="pay-card-cvv" className="block text-sm font-medium text-text-ink">
+                {t('pay.card.cvv')}
+              </label>
+              <input
+                id="pay-card-cvv"
+                inputMode="numeric"
+                autoComplete="cc-csc"
+                dir="ltr"
+                value={card.cvv}
+                onChange={(event) => setCard((c) => ({ ...c, cvv: event.target.value }))}
+                aria-invalid={cardTouched && cardProblems.cvv !== null}
+                aria-describedby={cardTouched && cardProblems.cvv ? 'pay-card-cvv-error' : undefined}
+                className={`${FOCUS_RING} mt-1 h-11 w-full rounded-card border bg-well px-3 text-base ${cardTouched && cardProblems.cvv ? 'border-state-error' : 'border-border-control'}`}
+              />
+              <p id="pay-card-cvv-error" className="mt-1 min-h-4 text-xs text-state-error">
+                {cardTouched && cardProblems.cvv ? t(`pay.card.errors.${cardProblems.cvv}`) : ''}
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <label htmlFor="pay-card-holder" className="block text-sm font-medium text-text-ink">
+                {t('pay.card.holder')}
+              </label>
+              <input
+                id="pay-card-holder"
+                autoComplete="cc-name"
+                value={card.holder}
+                onChange={(event) => setCard((c) => ({ ...c, holder: event.target.value }))}
+                aria-invalid={cardTouched && cardProblems.holder !== null}
+                aria-describedby={cardTouched && cardProblems.holder ? 'pay-card-holder-error' : undefined}
+                className={`${FOCUS_RING} mt-1 h-11 w-full rounded-card border bg-well px-3 text-base ${cardTouched && cardProblems.holder ? 'border-state-error' : 'border-border-control'}`}
+              />
+              <p id="pay-card-holder-error" className="mt-1 min-h-4 text-xs text-state-error">
+                {cardTouched && cardProblems.holder ? t(`pay.card.errors.${cardProblems.holder}`) : ''}
+              </p>
+            </div>
+          </div>
+          <p className="mb-3 text-xs text-text-muted">{t('pay.card.notStored')}</p>
 
           {/* ISSUE-093 — opt-in, default off; M-009: offered only for a NEW
               address (saving an already-saved row would duplicate it, and

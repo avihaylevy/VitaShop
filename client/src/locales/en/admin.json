@@ -50,8 +50,7 @@
     "newCta": "New product",
     "newTitle": "New product",
     "newIntro": "The product's URL (slug) is derived from its English name, and it will show without an image until one is defined in the catalogue.",
-    "seedNote": "Changes here reach the store immediately. Running the seed resets the catalogue to the CSV's values — edits revert and products created here are hidden — a deliberate dev-environment reset.",
-    "searchLabel": "Search by name or slug",
+    "searchLabel": "Search by product name or address",
     "searchSubmit": "Search",
     "statusLabel": "Status",
     "statusAll": "All",
@@ -174,7 +173,17 @@
       "gone": "The product was not found. The list may be out of date.",
       "listUnavailable": "The products could not be loaded.",
       "optionsUnavailable": "The category and brand lists could not be loaded."
-    }
+    },
+    "categoryLabel": "Category",
+    "categoryAll": "All categories",
+    "sortLabel": "Sort",
+    "sortNewest": "Newest",
+    "sortName": "By name",
+    "sortPriceAsc": "Price: low to high",
+    "sortPriceDesc": "Price: high to low",
+    "sortStockAsc": "Stock: low to high",
+    "brandLabel": "Brand",
+    "brandAll": "All brands"
   },
   "reconcile": {
     "title": "Stuck orders",

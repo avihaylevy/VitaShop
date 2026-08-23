@@ -180,6 +180,17 @@ export function FilterIcon(props: IconSvgProps) {
   )
 }
 
+export function ArrowForwardIcon(props: IconSvgProps) {
+  // Drawn pointing RIGHT (LTR forward); callers flip it in RTL with
+  // rtl:-scale-x-100 so it always points "onward".
+  return (
+    <svg {...BASE} {...props}>
+      <line x1="4" y1="12" x2="19" y2="12" />
+      <path d="m13 6 6 6-6 6" />
+    </svg>
+  )
+}
+
 export function EyeIcon(props: IconSvgProps) {
   return (
     <svg {...BASE} {...props}>

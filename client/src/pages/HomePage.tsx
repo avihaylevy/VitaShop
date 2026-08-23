@@ -82,7 +82,11 @@ export function HomePage() {
           <div>
             {/* text-balance — ISSUE-151: the headline stranded one word on
                 its own line; balanced wrapping equalizes the lines. */}
-            <h1 className="heading-page max-w-xl text-balance">{t('home.heroTitle', { ns: 'catalog' })}</h1>
+            {/* The lecturer-fixes list (2026-08-23): the headline must not
+                break mid-sentence — one line from md up (nowrap; measured
+                fitting un-clipped at 768–1440 with the composition beside
+                it). Small screens still wrap, balanced. */}
+            <h1 className="heading-page max-w-xl text-balance md:max-w-none md:whitespace-nowrap">{t('home.heroTitle', { ns: 'catalog' })}</h1>
             <p className="mt-3 max-w-xl text-base text-text-muted">
               {t('home.tagline', { ns: 'catalog' })}
             </p>
@@ -183,8 +187,15 @@ export function HomePage() {
                       this diff); a category with no page-1 image keeps the
                       reserved height so the row stays level. */}
                   <div className="mx-auto w-24" aria-hidden="true">
-                    {showcase.categoryImages.get(category.slug) ? (
-                      <ProductImage imageFile={showcase.categoryImages.get(category.slug)!} alt="" />
+                    {/* The endpoint's per-category image first (it covers ALL
+                        categories — the mined showcase covered only the ones
+                        the newest page held); the mined image is the tolerant
+                        fallback for an older server. */}
+                    {(category.imageFile ?? showcase.categoryImages.get(category.slug)) ? (
+                      <ProductImage
+                        imageFile={(category.imageFile ?? showcase.categoryImages.get(category.slug))!}
+                        alt=""
+                      />
                     ) : (
                       <div className="aspect-[4/3] w-full" />
                     )}
@@ -253,9 +264,15 @@ function ShopByGoal({ healthGoals }: { healthGoals: readonly { id: string; label
       <ul className="mt-4 flex flex-wrap gap-2">
         {healthGoals.map((goal) => (
           <li key={goal.id}>
+            {/* The lecturer-fixes list (2026-08-23, round 2 — with the
+                screenshot): the goal chips were the "plain, boring buttons".
+                Now round pills with a soft shadow that FILL brand-teal on
+                hover and lift (motion-safe); reduced motion keeps the
+                colour swap alone. Teal is the brand accent, not a category
+                tone — the tone rule stays untouched. */}
             <Link
               to={`/catalog?healthGoal=${encodeURIComponent(goal.id)}`}
-              className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-card border border-border-control bg-well px-4 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:bg-surface-sunken md:min-h-9 md:px-3`}
+              className={`${FOCUS_RING} inline-flex min-h-11 items-center rounded-round border border-border-control bg-well px-5 text-sm font-medium text-text-ink shadow-[0_1px_4px_rgba(31,37,46,0.06)] transition-[background-color,border-color,color,box-shadow] duration-150 ease-standard hover:border-brand-teal hover:bg-brand-teal hover:text-white hover:shadow-[0_4px_12px_rgba(21,112,106,0.3)] motion-safe:transition-[background-color,border-color,color,box-shadow,transform] motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 motion-safe:active:scale-95 md:min-h-9 md:px-4`}
             >
               {language === 'he' ? goal.labelHe : goal.labelEn}
             </Link>
@@ -467,7 +484,8 @@ function NewArrivals({
             ⚠️ NO `emptyState` — it lives in the live region above, so the empty
             sentence is ANNOUNCED and not merely drawn.
           */}
-          <ProductGrid products={state.products} onAddToCart={onAddToCart} />
+          {/* showPackageMeta=false — the lecturer-fixes list: no quantity line on home. */}
+          <ProductGrid products={state.products} onAddToCart={onAddToCart} showPackageMeta={false} />
         </div>
       )}
 

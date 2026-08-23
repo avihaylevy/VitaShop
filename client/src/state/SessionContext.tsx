@@ -63,7 +63,10 @@ type SessionContextValue = {
   dismissWelcome: () => void
 }
 
-const SessionContext = createContext<SessionContextValue | null>(null)
+// Exported for tests that need to hand CartProvider a controlled identity
+// (CartContext.test.tsx's identity-wiring pin); app code goes through the
+// hooks below, never the raw context.
+export const SessionContext = createContext<SessionContextValue | null>(null)
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionStatus>('loading')
@@ -154,6 +157,19 @@ export function useSession(): SessionContextValue {
     throw new Error('useSession must be used within a SessionProvider')
   }
   return context
+}
+
+/**
+ * The identity signal alone, TOLERANT of a missing provider — the
+ * ISSUE-178 idiom (useCartRefresh): CartProvider consumes this so the cart
+ * can track auth transitions, while every existing test that mounts
+ * CartProvider bare keeps working as an anonymous session. Outside a
+ * provider the identity is a settled guest — never 'loading', or a bare
+ * mount would wait forever for a session that is not coming.
+ */
+export function useSessionIdentity(): { status: SessionStatus; email: string | null } {
+  const context = useContext(SessionContext)
+  return context ? { status: context.status, email: context.email } : { status: 'guest', email: null }
 }
 
 /**

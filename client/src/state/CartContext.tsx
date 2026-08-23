@@ -11,6 +11,7 @@ import {
 import type { Cart, CartFailure, CartMutationOutcome, CartResult } from '../types/cart'
 import { EMPTY_CART } from '../types/cart'
 import { addCartItem, fetchCart, removeCartLine, setCartLineQuantity } from '../lib/cartApi'
+import { useSessionIdentity } from './SessionContext'
 
 /**
  * The cart — MILESTONE-007 Checkpoint G.
@@ -71,6 +72,13 @@ type MutationResult = { cart: Cart; outcome: CartMutationOutcome }
 const CartContext = createContext<CartContextValue | null>(null)
 
 export function CartProvider({ children }: { children: ReactNode }) {
+  // The lecturer-fixes list (2026-08-23, items 1+3): the cart display must
+  // track the SESSION's identity. It was fetched once on mount, so signing
+  // out left the previous shopper's lines on screen, and the next sign-in
+  // kept showing them until a hard reload — a leak between users of one
+  // browser. `status` + `email` together are the identity signal: guest →
+  // authenticated, authenticated → guest, and user A → user B all change it.
+  const { status: sessionStatus, email: sessionEmail } = useSessionIdentity()
   const [status, setStatus] = useState<CartStatus>('loading')
   const [cart, setCart] = useState<Cart>(EMPTY_CART)
   const [failure, setFailure] = useState<CartFailure | null>(null)
@@ -118,8 +126,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [runExclusive])
 
   useEffect(() => {
+    // 🔴 Keyed on the session identity, not mount: every auth transition
+    // refetches, and the stale display is REPLACED synchronously below
+    // before the fetch settles.
+    if (sessionStatus === 'loading') return
+    // The previous identity's lines must not be legible while the new
+    // identity's cart loads — clear first, then fetch.
+    setCart(EMPTY_CART)
+    setStatus('loading')
     void refresh()
-  }, [refresh])
+  }, [refresh, sessionStatus, sessionEmail])
 
   /** One shape for all three mutations: run, replace the cart, record what changed. */
   const applyMutation = useCallback(

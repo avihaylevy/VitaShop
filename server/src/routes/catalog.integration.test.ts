@@ -156,10 +156,37 @@ describe('GET /api/categories', () => {
     const res = await fetch(`${baseUrl}/api/categories`)
     expect(res.status).toBe(200)
     const body = (await res.json()) as CategoriesEnvelope
-    expect(body.items).toEqual(CANONICAL_CATEGORIES.map(({ nameHe, nameEn, slug }) => ({ slug, nameHe, nameEn })))
+    // The lecturer-fixes list (2026-08-23): each row now ALSO carries a
+    // representative imageFile — string or null, asserted separately below
+    // so the identity fields stay pinned exactly.
+    expect(body.items.map(({ slug, nameHe, nameEn }) => ({ slug, nameHe, nameEn }))).toEqual(
+      CANONICAL_CATEGORIES.map(({ nameHe, nameEn, slug }) => ({ slug, nameHe, nameEn })),
+    )
     for (const item of body.items) {
       expect(item).not.toHaveProperty('productCount')
       expect(item).not.toHaveProperty('count')
+    }
+  })
+
+  it('every category with an imaged active product answers a representative imageFile; a control category with none answers null', async () => {
+    const res = await fetch(`${baseUrl}/api/categories`)
+    const body = (await res.json()) as CategoriesEnvelope & {
+      items: { slug: string; nameHe: string; imageFile: string | null }[]
+    }
+    // The property the home tiles depend on: coverage is derived from the
+    // WHOLE catalogue, never from one page of it (the defect this endpoint
+    // change fixes — the newest-12 page covered three of six categories).
+    for (const item of body.items) {
+      const hasImagedProduct =
+        (await testPrisma.product.count({
+          where: { isActive: true, category: { nameHe: item.nameHe }, images: { some: {} } },
+        })) > 0
+      if (hasImagedProduct) {
+        expect(item.imageFile, `${item.slug} should carry an image`).toEqual(expect.any(String))
+      } else {
+        // The control: absence answers null, never undefined or a phantom.
+        expect(item.imageFile, `${item.slug} should be null`).toBeNull()
+      }
     }
   })
 })

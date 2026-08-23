@@ -64,7 +64,7 @@ type CartDrawerProps = {
 export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
   const { t, i18n } = useTranslation('cart')
   const language = i18n.language as SupportedLanguage
-  const { cart, outcome, failure, pending, setLineQuantity } = useCart()
+  const { cart, outcome, failure, pending, setLineQuantity, removeLine } = useCart()
 
   /** Close only on the plain left-click that navigates THIS tab — a
    *  modified click opens a new tab and must not yank the drawer. */
@@ -106,6 +106,16 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
     },
     [setLineQuantity],
   )
+  // The lecturer-fixes list (2026-08-23) REVERSES DEC-096's "no removal in
+  // the quick glance": the user wants a line deletable before moving on.
+  // Same handler shape the cart page uses; CartItemRow's own remove button
+  // (icon + visible word, per DESIGN_SYSTEM.md §8 — never an icon alone).
+  const handleRemove = useCallback(
+    (line: CartLineDisplay) => {
+      void removeLine(line.id, line.name)
+    },
+    [removeLine],
+  )
 
   return (
     // The user's call (2026-08-16): a centered compact dialog, not the
@@ -124,7 +134,7 @@ export function CartDrawer({ open, onClose, returnFocusRef }: CartDrawerProps) {
                 busy={pending}
                 onIncrement={handleIncrement}
                 onDecrement={handleDecrement}
-                // DEC-096: no removal in the quick glance — the page owns it.
+                onRemove={handleRemove}
               />
             ))}
           </div>

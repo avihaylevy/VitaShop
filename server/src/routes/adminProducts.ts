@@ -231,17 +231,41 @@ export function createAdminProductRouter(deps: AdminProductRouterDeps): ReturnTy
             ],
           }
 
-    const where = { ...activeFilter, ...search }
+    // The lecturer-fixes list (2026-08-23): the admin asked for real sort
+    // and a category filter. Same bookmark rule as status: an unknown
+    // value filters/sorts as the default rather than erroring — an admin's
+    // stale bookmark keeps working.
+    const rawCategory = typeof req.query.category === 'string' ? req.query.category : ''
+    const categoryFilter = rawCategory === '' ? {} : { category: { nameHe: rawCategory } }
+
+    // Brand filter (the lecturer-fixes list, round 2) — by id, the value
+    // /options already hands the client; an unknown id matches nothing,
+    // which reads as an honest empty list rather than an error.
+    const rawBrand = typeof req.query.brand === 'string' ? req.query.brand : ''
+    const brandFilter = rawBrand === '' ? {} : { brand: { id: rawBrand } }
+
+    const rawSort = req.query.sort
+    // Every ordering carries the id tiebreaker — seeded rows share values
+    // (createdAt, price), and ties make pagination non-deterministic.
+    const orderBy =
+      rawSort === 'name'
+        ? [{ nameHe: 'asc' as const }, { id: 'desc' as const }]
+        : rawSort === 'price_asc'
+          ? [{ price: 'asc' as const }, { id: 'desc' as const }]
+          : rawSort === 'price_desc'
+            ? [{ price: 'desc' as const }, { id: 'desc' as const }]
+            : rawSort === 'stock_asc'
+              ? [{ stockQuantity: 'asc' as const }, { id: 'desc' as const }]
+              : [{ createdAt: 'desc' as const }, { id: 'desc' as const }]
+
+    const where = { ...activeFilter, ...categoryFilter, ...brandFilter, ...search }
 
     try {
       const [totalItems, products] = await Promise.all([
         prisma.product.count({ where }),
         prisma.product.findMany({
           where,
-          // The orders list's tiebreaker reasoning, verbatim: seeded rows
-          // share a transaction-start createdAt, and ties make pagination
-          // non-deterministic between queries.
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          orderBy,
           skip: (page - 1) * ADMIN_PRODUCTS_PAGE_SIZE,
           take: ADMIN_PRODUCTS_PAGE_SIZE,
           select: PRODUCT_SELECT,

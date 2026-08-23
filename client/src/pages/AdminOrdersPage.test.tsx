@@ -515,6 +515,6 @@ describe('Hebrew', () => {
     renderPage()
     // `processing` is בליקוט — the specification's own word, shared with the
     // checkout confirmation and, later, order history.
-    expect(await screen.findByRole('button', { name: /בליקוט/ })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /ליקוט/ })).toBeTruthy()
   })
 })
