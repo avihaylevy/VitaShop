@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { ProductCardModel } from '../../types/product'
 import { getStockState } from '../../lib/stockState'
-import { getCategoryTone } from '../../lib/categoryTone'
+import { getCategoryTone, getCategoryToneStrong } from '../../lib/categoryTone'
 import { ProductImage } from './ProductImage'
 import { PriceBlock } from './PriceBlock'
 import { StockState } from './StockState'
@@ -134,7 +134,9 @@ export function ProductCard({
       // A colour-only change, so it survives prefers-reduced-motion.
       // h-full: the card fills its grid cell so the mt-auto commerce block
       // pins to one shared bottom edge across a row (ISSUE-127b).
-      className="group relative flex h-full flex-col gap-3 p-4 transition-[box-shadow,border-color] duration-200 ease-standard hover:z-10 hover:shadow-[var(--shadow-card-hover)] motion-safe:transition-transform motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.012] focus-within:border-brand-teal"
+      // DEC-106 density pass: p-4/gap-3 → p-3/gap-2.5 (the user: cards
+      // read tall). The heart pins to top-5/end-5 to track the padding.
+      className="group relative flex h-full flex-col gap-2.5 p-3 transition-[box-shadow,border-color] duration-200 ease-standard hover:z-10 hover:shadow-[var(--shadow-card-hover)] motion-safe:transition-transform motion-safe:hover:-translate-y-1 motion-safe:hover:scale-[1.012] focus-within:border-brand-teal"
       style={{ backgroundColor: categoryTone }}
     >
       {/*
@@ -157,13 +159,21 @@ export function ProductCard({
       <FavouriteButton
         slug={slug}
         onToggled={onFavouriteToggled && ((result) => onFavouriteToggled(result, slug))}
-        className="absolute top-6 end-6 z-10 rounded-round border border-border-hairline bg-well/90"
+        className="absolute top-5 end-5 z-10 rounded-round border border-border-hairline bg-well/90"
       />
 
-      {/* §2 --text-label: 12 / Assistant 700 / tracking .07em — the eyebrow
-          is the token's first consumer, so it must land exactly. */}
+      {/* §2 --text-label, DEC-106: the eyebrow became a small CHIP in the
+          category's STRONG tone — the same hue family as the card surface,
+          one level up, tying card to shelf chip. Ink text (measured ≥9.1
+          on every strong tone); the tone is still never the sole signal —
+          the label text IS the category name. */}
       {showCategoryEyebrow && (
-        <p className="text-xs font-bold tracking-[0.07em] text-text-muted">{categoryLabel}</p>
+        <p
+          style={{ backgroundColor: getCategoryToneStrong(categoryNameHe) }}
+          className="w-fit rounded-round px-2.5 py-0.5 text-xs font-bold tracking-[0.07em] text-text-ink"
+        >
+          {categoryLabel}
+        </p>
       )}
 
       {/*

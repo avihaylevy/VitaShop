@@ -23,8 +23,12 @@ export function Header() {
   // call, superseding ISSUE-085's stand-down rule): SearchBox itself now
   // carries the /catalog q-state binding, so it renders unconditionally.
 
+  // DEC-108 — sticky: search and the section tabs stay reachable
+  // through the whole scroll (the user's ask). z-30: above the
+  // catalog's chrome row (z-20), below dropdown/overlay/modal
+  // (40/50/60). Height contract: --sticky-header-h in index.css.
   return (
-    <header className="hidden border-b border-border-hairline bg-surface-header md:block">
+    <header className="sticky top-0 z-30 hidden border-b border-border-hairline bg-surface-header md:block">
       <div className="mx-auto flex max-w-[1440px] items-center gap-6 px-7 py-3">
         <Link to="/" className={`${FOCUS_RING} shrink-0 rounded-card`}>
           <Logo variant="full" />

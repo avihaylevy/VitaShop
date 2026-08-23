@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getCategoryTone } from './categoryTone'
+import {
+  CATEGORY_TONE,
+  CATEGORY_TONE_STRONG,
+  getCategoryTone,
+  getCategoryToneStrong,
+} from './categoryTone'
 
 /**
  * Explicit expectation, independent of categoryTone.ts's internals — this
@@ -103,5 +108,28 @@ describe('getCategoryTone', () => {
 
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0]?.[0]).toContain('קטגוריה-לא-קיימת-מזוהה')
+  })
+})
+
+/**
+ * DEC-106 — the strong level. What is pinned: the two maps cover the SAME
+ * six categories (a category added to one and not the other would give a
+ * chip and its card different hue families silently), every strong value
+ * points at its own -strong token, and the fallback contract matches
+ * getCategoryTone's.
+ */
+describe('getCategoryToneStrong (DEC-106)', () => {
+  it('covers exactly the same categories as the soft map', () => {
+    expect(Object.keys(CATEGORY_TONE_STRONG).sort()).toEqual(Object.keys(CATEGORY_TONE).sort())
+  })
+
+  it('every strong value is the -strong token of a tone variable', () => {
+    for (const value of Object.values(CATEGORY_TONE_STRONG)) {
+      expect(value).toMatch(/^var\(--tone-[a-z]+-strong\)$/)
+    }
+  })
+
+  it('an unmapped category falls back to the sunken surface, same as the soft getter', () => {
+    expect(getCategoryToneStrong('קטגוריה-לא-קיימת')).toBe(FALLBACK_TONE)
   })
 })

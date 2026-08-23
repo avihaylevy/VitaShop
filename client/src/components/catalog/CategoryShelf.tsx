@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { CatalogCategoryDto } from '../../types/catalog'
-import { getCategoryTone } from '../../lib/categoryTone'
+import { getCategoryToneStrong } from '../../lib/categoryTone'
 import { FOCUS_RING } from '../ui/focusRing'
 
 type CategoryShelfProps = {
@@ -18,8 +18,15 @@ type CategoryShelfProps = {
  * the 44px touch target stays. whitespace-nowrap keeps a two-word category
  * from wrapping inside its own chip.
  */
+/*
+ * DEC-106 — the chips wear the STRONG tone level (the soft level washed
+ * out at chip size against the near-white page), with a rounder radius
+ * and a touch more inline padding so they read as the page's primary
+ * navigation. The active chip adds an inset ink ring ON TOP of the
+ * underline+weight it already had — never colour alone.
+ */
 const LINK_CLASS =
-  'inline-flex min-h-11 min-w-11 items-center justify-center whitespace-nowrap rounded-compact px-4 text-sm text-text-ink transition-colors duration-150 ease-standard md:min-h-9 md:px-3'
+  'inline-flex min-h-11 min-w-11 items-center justify-center whitespace-nowrap rounded-card px-5 text-sm text-text-ink transition-colors duration-150 ease-standard md:min-h-9 md:px-4'
 
 /**
  * Category navigation only — REQ-F-001's six canonical categories plus
@@ -44,7 +51,9 @@ export function CategoryShelf({ categories, activeCategorySlug, className = '' }
             to="/catalog"
             aria-current={isAllActive ? 'page' : undefined}
             className={`${FOCUS_RING} ${LINK_CLASS} border border-border-control bg-well ${
-              isAllActive ? 'font-semibold underline decoration-2 underline-offset-4' : 'font-medium hover:bg-surface-sunken'
+              isAllActive
+                ? 'font-semibold underline decoration-2 underline-offset-4 shadow-[inset_0_0_0_1.5px_var(--text-ink)]'
+                : 'font-medium hover:bg-surface-sunken'
             }`}
           >
             {t('categoryShelf.allProducts')}
@@ -57,9 +66,11 @@ export function CategoryShelf({ categories, activeCategorySlug, className = '' }
               <Link
                 to={`/catalog?category=${category.slug}`}
                 aria-current={isActive ? 'page' : undefined}
-                style={{ backgroundColor: getCategoryTone(category.nameHe) }}
+                style={{ backgroundColor: getCategoryToneStrong(category.nameHe) }}
                 className={`${FOCUS_RING} ${LINK_CLASS} ${
-                  isActive ? 'font-semibold underline decoration-2 underline-offset-4' : 'font-medium hover:opacity-80'
+                  isActive
+                    ? 'font-semibold underline decoration-2 underline-offset-4 shadow-[inset_0_0_0_1.5px_var(--text-ink)]'
+                    : 'font-medium hover:opacity-80'
                 }`}
               >
                 {i18n.language === 'he' ? category.nameHe : category.nameEn}

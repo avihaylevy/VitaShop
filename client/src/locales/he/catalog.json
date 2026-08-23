@@ -78,7 +78,11 @@
     "filteredEmptyFiltersMessage": "לא נמצאו מוצרים התואמים לסינון שנבחר.",
     "resultCount_one": "נמצא מוצר אחד",
     "resultCount_two": "נמצאו שני מוצרים",
-    "resultCount_other": "נמצאו <n>{{count}}</n> מוצרים"
+    "resultCount_other": "נמצאו <n>{{count}}</n> מוצרים",
+    "subtitle": "מצאו מוצרים לפי קטגוריה, מטרה או מותג.",
+    "countLine_one": "מוצר אחד",
+    "countLine_two": "שני מוצרים",
+    "countLine_other": "<n>{{count}}</n> מוצרים"
   },
   "productDetails": {
     "loading": "טוען את פרטי המוצר…",
@@ -130,10 +134,15 @@
     "groupSelectedCount_other": "{{count}} ערכים נבחרו",
     "activeCount_one": "מסנן אחד פעיל",
     "activeCount_two": "שני מסננים פעילים",
-    "activeCount_other": "{{count}} מסננים פעילים"
+    "activeCount_other": "{{count}} מסננים פעילים",
+    "activeLabel": "סינון פעיל:",
+    "clearShort": "נקה סינון",
+    "removeFilter": "הסרת הסינון {{label}}",
+    "minPriceChip": "מ-{{value}} ₪",
+    "maxPriceChip": "עד {{value}} ₪"
   },
   "sort": {
-    "label": "מיון",
+    "label": "מיון:",
     "newest": "החדשים ביותר",
     "price_asc": "מחיר: מהנמוך לגבוה",
     "price_desc": "מחיר: מהגבוה לנמוך",

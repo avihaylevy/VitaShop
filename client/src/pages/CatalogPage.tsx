@@ -9,6 +9,8 @@ import { CategoryShelf, CatalogLoadingState, CatalogErrorState, CatalogEmptyStat
 import { ProductGrid } from '../components/catalog/ProductGrid'
 import { CatalogSortSelect } from '../components/catalog/CatalogSortSelect'
 import { CatalogFilterPanel } from '../components/catalog/CatalogFilterPanel'
+import { ActiveFilterChips } from '../components/catalog/ActiveFilterChips'
+import { FilterIcon } from '../components/icons'
 import { CatalogPagination } from '../components/catalog/CatalogPagination'
 import { CatalogFallbackSection } from '../components/catalog/CatalogFallbackSection'
 import { CartDrawer } from '../components/cart/CartDrawer'
@@ -290,6 +292,9 @@ export function CatalogPage() {
   return (
     <div className="px-7 py-8">
       <h1 className="heading-page">{t('nav.catalog', { ns: 'layout' })}</h1>
+      {/* DEC-106 — one orienting line so the header does not sit bare over
+          the chrome row; it must not compete with the categories. */}
+      <p className="mt-1 text-sm text-text-muted">{t('catalogPage.subtitle', { ns: 'catalog' })}</p>
 
       {/*
         🔴 The query controls render PERSISTENTLY, outside the resolved-state
@@ -313,7 +318,15 @@ export function CatalogPage() {
         line (wrapping below it when narrow). The shelf stays permanently
         mounted (§10's focus rule) — it only moved rows, not mount points.
       */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+      {/* DEC-106 — the chrome row is STICKY: the chips are the page's
+          primary navigation and the sort/filter act on everything below,
+          so they stay reachable through the whole scroll. Full-bleed
+          within the page padding (-mx-7/px-7) so the sticky surface runs
+          edge to edge, with the hairline drawing the seam over content.
+          z-20 sits under the drawer/dialog overlays (z-40+) and over the
+          raised hover card (z-10). */}
+      <div className="sticky top-[var(--sticky-header-h)] z-20 -mx-7 mt-4 border-b border-border-hairline bg-surface-page px-7 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <CategoryShelf categories={categories} activeCategorySlug={categorySlug} className="min-w-0 flex-1" />
         <div className="flex items-center gap-2">
           <button
@@ -323,6 +336,7 @@ export function CatalogPage() {
             onClick={() => setFiltersOpen(true)}
             className={`${FOCUS_RING} ${CHROME_BUTTON} md:hidden`}
           >
+            <FilterIcon aria-hidden="true" className="size-4 shrink-0" />
             <span aria-hidden="true">
               {t('filters.openLabel', { ns: 'catalog' })}
               {activeCount > 0 ? ` (${activeCount})` : ''}
@@ -358,6 +372,7 @@ export function CatalogPage() {
               aria-expanded={railOpen}
               onClick={() => setRailOpen((value) => !value)}
             >
+              <FilterIcon aria-hidden="true" className="size-4 shrink-0" />
               <span aria-hidden="true">
                 {t('filters.openLabel', { ns: 'catalog' })}
                 {activeCount > 0 ? ` (${activeCount})` : ''}
@@ -372,7 +387,13 @@ export function CatalogPage() {
 
           <CatalogSortSelect value={urlState.sort} onChange={handleSortChange} />
         </div>
+        </div>
       </div>
+
+      {/* DEC-106 — the applied panel filters, visible and removable. Lives
+          OUTSIDE the sticky row so a long chip list never eats viewport
+          while scrolling; scope and reasoning in ActiveFilterChips. */}
+      <ActiveFilterChips urlState={urlState} facets={facets} onChange={applyQueryChange} />
 
       {/*
         🔴 Exactly one resolved catalogue state renders below, per
@@ -491,6 +512,23 @@ export function CatalogPage() {
                   >
                     {gridHeading}
                   </h2>
+                )}
+
+                {/* DEC-106 — the count, DRAWN this time (the user, via the
+                    GPT review, reversing ISSUE-116's "do not draw it"):
+                    instant feedback on what the filters just did. §10's
+                    sr-only polite announcement above is untouched — this
+                    line is visual, that one is the announcement; numeral
+                    isolated LTR like every count. */}
+                {viewState.state === 'ready' && hasResultCount && (
+                  <p className="mt-0.5 text-sm text-text-muted">
+                    <Trans
+                      i18nKey="catalogPage.countLine"
+                      ns="catalog"
+                      count={totalItems}
+                      components={{ n: <span dir="ltr" /> }}
+                    />
+                  </p>
                 )}
 
                 {viewState.state === 'invalid-category' ? (

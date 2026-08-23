@@ -28,10 +28,11 @@ export function CatalogSortSelect({ value, onChange, className = '' }: CatalogSo
 
   return (
     <div className={`flex items-center ${className}`}>
-      {/* ISSUE-122 — the label is for assistive tech; the control's own
-          displayed value says which sort is active, so the visible caption
-          was pure width. */}
-      <label htmlFor={selectId} className="sr-only">
+      {/* ISSUE-122 hid this caption as pure width; DEC-106 (the user,
+          2026-08-23, via the GPT review) brings it back VISIBLE — "מיון:"
+          names what the control does before its value is read. Same
+          element, same key: the accessible name never changed. */}
+      <label htmlFor={selectId} className="me-2 text-sm text-text-muted">
         {t('sort.label')}
       </label>
       <select

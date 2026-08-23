@@ -89,6 +89,21 @@
   --tone-probiotics: #F7DFDB;
   --tone-herbs: #E4ECD4;
 
+  /*
+   * DEC-106 — the STRONG level of each tone: one derivation applied to all
+   * six (hue held, saturation +18, lightness −9), for the category CHIPS
+   * and the card's category eyebrow chip — small surfaces the soft level
+   * washed out on. The cards keep the soft level; the two levels of one
+   * hue are what ties chip to card. Measured (2026-08-23): ink on every
+   * strong tone 9.11–11.67 (floor 4.5); strong vs page 1.27–1.62.
+   */
+  --tone-vitamins-strong: #F7D897;
+  --tone-minerals-strong: #C4CDE3;
+  --tone-omega-strong: #B2E3D2;
+  --tone-proteins-strong: #F7C79F;
+  --tone-probiotics-strong: #F7B8AD;
+  --tone-herbs-strong: #D3E8AA;
+
   /* Brand and state — §1. Exactly one meaning each. */
   --brand-teal: #15706A;
   --brand-teal-strong: #0E5852;
@@ -298,6 +313,34 @@ summary,
 input,
 textarea {
   touch-action: manipulation;
+}
+
+/*
+ * DEC-108 — the sticky header. One variable both consumers read: the
+ * headers stick with it as their height contract, and the catalog's
+ * chrome row offsets below it. Values are the MEASURED header heights
+ * (mobile two-row 113px, desktop two-row 118px); if the header's
+ * structure changes, this is the one place to retune — and the browser
+ * matrix is what verifies it, not the numbers' memory.
+ *
+ * Focus/scroll safety: anything focused or jumped to programmatically
+ * must not land hidden under the stuck bars — hence the scroll-margin
+ * rules below (skip-link target, and the catalog results heading that
+ * page changes focus, which sits under BOTH stuck bars).
+ */
+:root {
+  --sticky-header-h: 113px;
+}
+@media (min-width: 768px) {
+  :root {
+    --sticky-header-h: 118px;
+  }
+}
+#main {
+  scroll-margin-top: var(--sticky-header-h);
+}
+#catalog-grid-heading {
+  scroll-margin-top: calc(var(--sticky-header-h) + 72px);
 }
 
 /*

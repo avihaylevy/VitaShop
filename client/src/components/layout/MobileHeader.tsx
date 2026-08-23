@@ -31,8 +31,12 @@ export function MobileHeader() {
     setMenuOpen(false)
   }
 
+  // DEC-108 — sticky like the desktop header; on mobile this keeps the
+  // SEARCH row one thumb-reach away (the tabs live in the hamburger
+  // drawer here, so nothing extra sticks). Same z-30 layering and
+  // --sticky-header-h contract.
   return (
-    <header className="border-b border-border-hairline bg-surface-header md:hidden">
+    <header className="sticky top-0 z-30 border-b border-border-hairline bg-surface-header md:hidden">
       <div className="flex items-center gap-0 px-1 py-2 min-[375px]:gap-1 min-[375px]:px-3">
         <div className="relative shrink-0">
           <IconButton

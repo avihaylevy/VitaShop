@@ -76,7 +76,10 @@
     "filteredEmptySearchMessage": "No products matched the search \"{{query}}\".",
     "filteredEmptyFiltersMessage": "No products matched the selected filters.",
     "resultCount_one": "1 product found",
-    "resultCount_other": "<n>{{count}}</n> products found"
+    "resultCount_other": "<n>{{count}}</n> products found",
+    "subtitle": "Find products by category, goal, or brand.",
+    "countLine_one": "1 product",
+    "countLine_other": "<n>{{count}}</n> products"
   },
   "productDetails": {
     "loading": "Loading product details…",
@@ -126,10 +129,15 @@
     "groupSelectedCount_one": "1 value selected",
     "groupSelectedCount_other": "{{count}} values selected",
     "activeCount_one": "1 active filter",
-    "activeCount_other": "{{count}} active filters"
+    "activeCount_other": "{{count}} active filters",
+    "activeLabel": "Active filters:",
+    "clearShort": "Clear filters",
+    "removeFilter": "Remove the {{label}} filter",
+    "minPriceChip": "From ₪{{value}}",
+    "maxPriceChip": "Up to ₪{{value}}"
   },
   "sort": {
-    "label": "Sort",
+    "label": "Sort:",
     "newest": "Newest",
     "price_asc": "Price: low to high",
     "price_desc": "Price: high to low",

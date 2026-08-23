@@ -340,7 +340,8 @@ describe('CatalogPage accessibility — query controls (Checkpoint I)', () => {
     // the one search landmark, and it is not part of this page's render.
     expect(count(html, 'role="search"')).toBe(0)
     // A real <select> with a real <label for>, not a custom listbox (§10).
-    expect(html).toMatch(/<label for="[^"]+"[^>]*>מיון<\/label>/)
+    // DEC-106 made the caption visible again ("מיון:"); same element, same key.
+    expect(html).toMatch(/<label for="[^"]+"[^>]*>מיון:<\/label>/)
     expect(count(html, '<select')).toBe(1)
     expect(html).not.toContain('role="listbox"')
     for (const option of ['החדשים ביותר', 'מחיר: מהנמוך לגבוה', 'מחיר: מהגבוה לנמוך', 'הפופולריים ביותר']) {

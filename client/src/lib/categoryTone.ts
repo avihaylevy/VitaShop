@@ -16,6 +16,20 @@ export const CATEGORY_TONE: Readonly<Record<string, string>> = {
   'צמחי מרפא': 'var(--tone-herbs)',
 }
 
+/**
+ * DEC-106 — the strong level of each tone (chips and eyebrow chips; the
+ * card surfaces keep the soft level above). Derived by ONE rule from the
+ * soft set — see index.css for the rule and the measured contrast.
+ */
+export const CATEGORY_TONE_STRONG: Readonly<Record<string, string>> = {
+  ויטמינים: 'var(--tone-vitamins-strong)',
+  מינרלים: 'var(--tone-minerals-strong)',
+  'אומגה ושומנים': 'var(--tone-omega-strong)',
+  'חלבונים ואבקות': 'var(--tone-proteins-strong)',
+  פרוביוטיקה: 'var(--tone-probiotics-strong)',
+  'צמחי מרפא': 'var(--tone-herbs-strong)',
+}
+
 // DEC-081 made the page ground near-white, so a page-coloured fallback
 // card would vanish against it — the sunken surface keeps an unmapped
 // category visibly a card, just untinted.
@@ -35,5 +49,15 @@ export function getCategoryTone(categoryNameHe: string): string {
     console.warn(`getCategoryTone: unmapped category "${categoryNameHe}", falling back to page surface`)
   }
 
+  return FALLBACK_TONE
+}
+
+/** DEC-106 — same contract as getCategoryTone, one level stronger. */
+export function getCategoryToneStrong(categoryNameHe: string): string {
+  const tone = CATEGORY_TONE_STRONG[categoryNameHe]
+  if (tone !== undefined) {
+    return tone
+  }
+  // getCategoryTone owns the one-per-name warning; no second copy here.
   return FALLBACK_TONE
 }

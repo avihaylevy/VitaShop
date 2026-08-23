@@ -347,7 +347,11 @@ describe('CatalogPage responsive — filter surface breakpoint parity (Checkpoin
       urlState: { ...EMPTY_CATALOG_URL_STATE, inStock: 'true' },
     })
     const open = await renderCatalog('/catalog?inStock=true')
-    expect(open.split('רק מוצרים במלאי').length - 1).toBe(1)
+    // 3 occurrences, each accounted for: the rail panel's checkbox label
+    // (the ONE panel mount this test guards), plus DEC-106's active-filter
+    // chip — its visible text and its remove aria-label both carry the
+    // same resolved string. The panel itself still mounts exactly once.
+    expect(open.split('רק מוצרים במלאי').length - 1).toBe(3)
     expect(open).not.toContain('role="dialog"')
   })
 
