@@ -111,7 +111,29 @@ async function main(): Promise<void> {
     role: 'customer',
   })
 
-  console.log('Done. Both accounts are `active` and can sign in immediately.')
+  /*
+   * The classmates' REVIEWER admin (the user's ask, 2026-08-23) — a second
+   * admin with simple, shareable details for peer review. OPTIONAL: seeded
+   * only when both variables are set, so nothing breaks for an .env that
+   * predates them. 🔴 Same rule as the other two: the password comes from
+   * the environment, never from this file — the user picks the "simple"
+   * value themselves in .env and hands it to their classmates out-of-band.
+   */
+  const reviewerEmail = process.env.SEED_REVIEWER_EMAIL
+  const reviewerPassword = process.env.SEED_REVIEWER_PASSWORD
+  if (reviewerEmail?.trim() && reviewerPassword?.trim()) {
+    await upsertAccount({
+      email: reviewerEmail.trim(),
+      password: reviewerPassword,
+      firstName: 'Reviewer',
+      lastName: 'VitaShop',
+      role: 'admin',
+    })
+  } else {
+    console.log('  ⏭  reviewer admin skipped (SEED_REVIEWER_EMAIL / SEED_REVIEWER_PASSWORD not set)')
+  }
+
+  console.log('Done. Every seeded account is `active` and can sign in immediately.')
 }
 
 main()
