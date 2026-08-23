@@ -477,6 +477,25 @@ textarea {
 }
 
 /*
+ * The Contact page's FAQ cards — deliberately a DIFFERENT entrance from
+ * about-card-rise (the user asked for variety): a soft scale-settle
+ * instead of a rise. Same contract otherwise: in-view triggered
+ * (useInViewOnce), class applied only on visibility so no-JS content
+ * never hides, opacity+transform only, motion-safe-gated at the call
+ * site.
+ */
+@keyframes faq-card-settle {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/*
  * ISSUE-112 — the welcome toast slides in just under the header. Entrance
  * only; the exit is an unmount (a six-second status message needs no exit
  * choreography). motion-safe-gated at the call site.

@@ -32,9 +32,12 @@ export function useInViewOnce<T extends Element>(): [RefObject<T | null>, boolea
           observer.disconnect()
         }
       },
-      // Fire when the element is ~15% into the viewport, so the entrance
-      // is actually seen rather than starting at the exact screen edge.
-      { rootMargin: '0px 0px -15% 0px' },
+      // Fire once the element is 48px into the viewport — enough that the
+      // entrance is seen, small enough to stay REACHABLE. A percentage
+      // margin proved unreachable for content near the page bottom: the
+      // Contact FAQ strip sat 1px short of a -15% line at MAX SCROLL, so
+      // its entrance could never fire on a 900px viewport (measured).
+      { rootMargin: '0px 0px -48px 0px' },
     )
     observer.observe(node)
     return () => observer.disconnect()
