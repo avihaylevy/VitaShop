@@ -93,7 +93,10 @@ export function AgentTranscript({
             </span>
             {/* ISSUE-148: the signed-in shopper is greeted BY NAME (bounded
                 like the header greeting — no server-side length cap). */}
-            <p className="max-w-full truncate font-display text-base font-semibold text-text-ink">
+            {/* font-medium — Fredoka (the display face since 2026-08-23) is
+                clamped at 600; semibold reads shouty in the rounded face,
+                and 700 would render synthetic. */}
+            <p className="max-w-full truncate font-display text-base font-medium text-text-ink">
               {userName !== null
                 ? t('panel.greetingNamed', { name: userName })
                 : t('panel.greeting')}
