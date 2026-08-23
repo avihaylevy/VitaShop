@@ -3,7 +3,6 @@
     "title": "About VitaShop",
     "story1": "VitaShop was born from a simple idea: buying vitamins and dietary supplements should be clear. Between crowded shelves and big promises, we wanted one place that puts things in order — a clean catalogue, organised by categories and by goals.",
     "story2": "We pick our products from recognised brands, and make sure every product arrives with its full information: ingredients, usage instructions and warnings — as the manufacturer publishes them, no shortcuts.",
-    "story3": "This store keeps growing, but one thing does not change: transparency first, selling second.",
     "valuesTitle": "What matters to us",
     "value1Title": "Recognised brands",
     "value1Text": "A selection picked carefully from leading brands.",
@@ -11,7 +10,16 @@
     "value2Text": "Every product arrives with its full details, as the manufacturer publishes them.",
     "value3Title": "Shop by goal",
     "value3Text": "Filter by health goals to find exactly what you came for.",
-    "cta": "Browse the full catalogue"
+    "cta": "Browse the full catalogue",
+    "intro": "One place that makes vitamins and supplements make sense.",
+    "whyTitle": "Why VitaShop?",
+    "howTitle": "How we keep it simple",
+    "step1": "Discover",
+    "step2": "Understand",
+    "step3": "Choose",
+    "statementLine1": "Less noise.",
+    "statementLine2": "More clarity.",
+    "readyTitle": "Ready to start?"
   },
   "contact": {
     "title": "Contact us",

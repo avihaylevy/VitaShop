@@ -458,6 +458,25 @@ textarea {
 }
 
 /*
+ * The About page's value cards — entrance played when the grid SCROLLS
+ * INTO VIEW (useInViewOnce), staggered by animation-delay at the call
+ * site. Starts from 0 opacity — safe ONLY because the animation class is
+ * added on visibility and the default state is fully visible; a mount-time
+ * animation from 0 would hide no-JS content. Opacity+transform only;
+ * motion-safe-gated where applied.
+ */
+@keyframes about-card-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/*
  * ISSUE-112 — the welcome toast slides in just under the header. Entrance
  * only; the exit is an unmount (a six-second status message needs no exit
  * choreography). motion-safe-gated at the call site.
