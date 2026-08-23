@@ -14,6 +14,8 @@
 
 # personal overrides — project settings.json IS committed
 .claude/settings.local.json
+# session-handoff notes — internal agent notes, not project deliverable
+.claude/next-task.md
 
 # ── Generated ────────────────────────────────
 # graphify knowledge graph — derived data, rebuilt by `graphify update .`

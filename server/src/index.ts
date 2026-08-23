@@ -54,6 +54,28 @@ if (!clientOrigin) {
 // 🔴 Safe only because `origin` is one exact origin and never "*" — DEC-010,
 // and DEC-018's condition for allowing credentials at all.
 app.use(cors({ origin: clientOrigin, credentials: true }))
+
+// Security headers on EVERY response, not just /uploads/products. Hand-set
+// rather than helmet: three headers do not justify a dependency (CLAUDE.md
+// rule — new dependencies are the user's call), and each one here is doing
+// a stated job:
+//   nosniff          — JSON answered to a <script src> must not be re-read
+//                      as JavaScript; uploads already pinned this, the API
+//                      responses were the gap.
+//   X-Frame-Options  — this API serves no frameable UI; DENY costs nothing
+//                      and closes clickjacking against any HTML error page.
+//   Referrer-Policy  — belt-and-braces; the API emits no links, but a
+//                      redirect added later must not leak the referring URL.
+// HSTS is deliberately ABSENT: TLS terminates at the hosting platform
+// (technical/DEPLOYMENT.md) and an HSTS header sent over plain HTTP in dev
+// is ignored noise at best.
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  next()
+})
+
 app.use(express.json())
 
 // MILESTONE-006 Checkpoint C. Attaches `req.session` to every request.
@@ -146,6 +168,29 @@ app.use(
     appBaseUrl: clientOrigin,
   }),
 )
+
+// The LAST middleware — Express 5 forwards a rejected async handler here.
+// Without it, the default handler answers text/html: a stack trace in
+// development (information leak to any caller) and a bare HTML page in
+// production (shape break for every JSON client). The body is constant and
+// carries nothing about the failure; the detail goes to the server log only.
+//
+// 🔴 A 4xx CARRIED BY THE ERROR STAYS A 4xx (review of this diff): body
+// parsing throws with status 400 (malformed JSON) or 413 (too large), and
+// the first draft flattened those to 500 — reporting a client mistake as a
+// server fault. Only genuine 5xx get logged as errors; body-parse noise is
+// a client problem, not a page.
+app.use(((error, _req, res, _next) => {
+  const carried = (error as { status?: unknown } | null)?.status
+  const status = typeof carried === 'number' && carried >= 400 && carried < 500 ? carried : 500
+  if (status >= 500) console.error('[server] unhandled error', error)
+  if (res.headersSent) return
+  res.status(status).json(
+    status >= 500
+      ? { error: { code: 'INTERNAL_ERROR', message: 'Something went wrong. Try again shortly.' } }
+      : { error: { code: 'BAD_REQUEST', message: 'The request could not be processed.' } },
+  )
+}) as express.ErrorRequestHandler)
 
 const port = process.env.PORT ?? 3000
 
