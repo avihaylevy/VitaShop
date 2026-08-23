@@ -14,6 +14,7 @@ import { Button } from '../components/ui/Button'
 import { LinkButton } from '../components/ui/LinkButton'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { getCategoryTone } from '../lib/categoryTone'
+import { DocumentIcon, FilterIcon, GridIcon } from '../components/icons'
 import type { SupportedLanguage } from '../i18n'
 
 /**
@@ -61,11 +62,23 @@ export function HomePage() {
 
   return (
     <div className="px-7 py-8">
-      {/* HERO — headline + tagline + one CTA at the start, a product
-          composition at the end; the composition is decorative and hidden
-          from assistive tech (the CTA is the content). */}
-      <section className="rounded-card bg-surface-section p-6 md:p-10">
-        <div className="grid items-center gap-8 md:grid-cols-[1fr_auto]">
+      {/* HERO — the "shelf scene" rework (user, 2026-08-23, after rejecting
+          a baked-in-text banner): live i18n text + CTA + feature chips at
+          the start, and the product composition upgraded from a flat row to
+          products standing on drawn pedestals over soft NEUTRAL backdrop
+          shapes. 🔴 The shapes are neutral warm tints on purpose — DEC-020
+          constraint 6 binds the six category tones to Category, never to
+          arbitrary products, so a tone behind a showcase bottle would be
+          exactly the decoration constraint 3 forbids. The composition stays
+          decorative and hidden from assistive tech (the CTA is the content). */}
+      <section className="relative overflow-hidden rounded-card bg-surface-section p-6 md:p-10">
+        {/* Backdrop — two soft shapes behind the composition end, echoing
+            the pedestal-and-arc language of the user's reference banner. */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 end-6 size-96 rounded-full bg-surface-sunken" />
+          <div className="absolute -bottom-28 end-72 size-72 rounded-full bg-well/90" />
+        </div>
+        <div className="relative grid items-center gap-8 md:grid-cols-[1fr_auto]">
           <div>
             {/* text-balance — ISSUE-151: the headline stranded one word on
                 its own line; balanced wrapping equalizes the lines. */}
@@ -78,12 +91,53 @@ export function HomePage() {
                 {t('home.browseCatalog', { ns: 'catalog' })}
               </LinkButton>
             </div>
+            {/* Feature chips — the reference banner's value points as REAL
+                translatable text. A list, because it is one: three parallel
+                claims about the catalogue. Icons are decorative; the text is
+                the content. border-card, not border-control: these chips are
+                not interactive and must not dress like inputs. */}
+            <ul className="mt-8 flex flex-wrap gap-2">
+              {(
+                [
+                  ['featureInfo', DocumentIcon],
+                  ['featureFiltering', FilterIcon],
+                  ['featureCategories', GridIcon],
+                ] as const
+              ).map(([key, Icon]) => (
+                <li
+                  key={key}
+                  className="flex items-center gap-2 rounded-card border border-border-card bg-well px-3 py-2 text-sm font-medium text-text-ink"
+                >
+                  <Icon aria-hidden="true" className="size-4 shrink-0 text-text-muted" />
+                  {t(`home.${key}`, { ns: 'catalog' })}
+                </li>
+              ))}
+            </ul>
           </div>
+          {/* The shelf scene: staggered heights, each product on its own
+              pedestal ellipse — items-END so bottles of different heights
+              stand on one visual ground line, like goods on a shelf.
+              dir="rtl" PINS the bottle order so both languages show the
+              identical scene (user, 2026-08-23: the flipped arrangement
+              read as a different composition). Legitimate under the
+              mirrored-logical-layout rule for the same reason numbers get
+              dir="ltr": this is decorative aria-hidden artwork with no
+              reading order — only a composition — while the SECTION still
+              mirrors sides with the reading direction as it should. */}
           {showcase.heroImages.length > 0 && (
-            <ul aria-hidden="true" className="hidden items-end gap-3 md:flex">
+            <ul aria-hidden="true" dir="rtl" className="hidden items-end gap-4 md:flex">
               {showcase.heroImages.map((file, index) => (
-                <li key={file} className={index === 1 ? 'w-44' : 'w-32'}>
+                <li
+                  key={file}
+                  className={`flex flex-col items-center motion-safe:animate-[hero-shelf-rise_.5s_ease-out_both] ${index === 1 ? 'w-56' : 'w-40'}`}
+                  style={{ animationDelay: `${index * 90}ms` }}
+                >
                   <ProductImage imageFile={file} alt="" />
+                  {/* The pedestal — a flat stone ellipse under each product,
+                      the banner's plinths redrawn in the system's neutrals.
+                      A visible gap above it, or the white image well
+                      swallows it entirely (measured at 1280). */}
+                  <div className="mt-2 h-3 w-11/12 rounded-[50%] bg-surface-sunken shadow-[0_3px_6px_rgba(31,37,46,0.14)]" />
                 </li>
               ))}
             </ul>

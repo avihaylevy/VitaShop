@@ -160,3 +160,33 @@ export function TrashIcon(props: IconSvgProps) {
     </svg>
   )
 }
+
+export function DocumentIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M14 3.5H7.2A1.2 1.2 0 0 0 6 4.7v14.6a1.2 1.2 0 0 0 1.2 1.2h9.6a1.2 1.2 0 0 0 1.2-1.2V7.5Z" />
+      <path d="M14 3.5v4h4" />
+      <line x1="9" y1="12" x2="15" y2="12" />
+      <line x1="9" y1="15.5" x2="13" y2="15.5" />
+    </svg>
+  )
+}
+
+export function FilterIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M4 5.5h16l-6.2 7.1v5.2l-3.6 2.2v-7.4Z" />
+    </svg>
+  )
+}
+
+export function GridIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <rect x="4.5" y="4.5" width="6" height="6" rx="1.2" />
+      <rect x="13.5" y="4.5" width="6" height="6" rx="1.2" />
+      <rect x="4.5" y="13.5" width="6" height="6" rx="1.2" />
+      <rect x="13.5" y="13.5" width="6" height="6" rx="1.2" />
+    </svg>
+  )
+}

@@ -418,6 +418,24 @@ body {
 }
 
 /*
+ * The hero's shelf composition — each product rises onto its pedestal once,
+ * on mount, staggered by animation-delay at the call site. Opacity+transform
+ * only, from an already-readable 0.4; the page's ONE authored entrance
+ * (craft floor: one moment, not scattered effects). motion-safe-gated at
+ * the call site in HomePage; reduced motion renders the settled state.
+ */
+@keyframes hero-shelf-rise {
+  0% {
+    opacity: 0.4;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/*
  * ISSUE-112 — the welcome toast slides in just under the header. Entrance
  * only; the exit is an unmount (a six-second status message needs no exit
  * choreography). motion-safe-gated at the call site.
