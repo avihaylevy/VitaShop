@@ -180,6 +180,34 @@ export function FilterIcon(props: IconSvgProps) {
   )
 }
 
+export function EyeIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+export function EyeOffIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M2.5 12S6 5.8 12 5.8c1.6 0 3 .4 4.3 1M21.5 12S18 18.2 12 18.2c-1.6 0-3-.4-4.3-1" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+      <line x1="4" y1="20" x2="20" y2="4" />
+    </svg>
+  )
+}
+
+export function CheckCircleIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.5 12.2 11 14.7l4.5-5" />
+    </svg>
+  )
+}
+
 export function GridIcon(props: IconSvgProps) {
   return (
     <svg {...BASE} {...props}>

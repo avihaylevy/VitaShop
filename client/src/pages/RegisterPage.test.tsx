@@ -24,7 +24,7 @@ function fill(label: RegExp | string, value: string) {
 function fillValidForm() {
   fill(/First name/i, 'Test')
   fill(/Last name/i, 'Shopper')
-  fill(/Email/i, 'shopper@example.com')
+  fill(/^Email address$/i, 'shopper@example.com')
   // String labels are EXACT matches in Testing Library, so 'Password'
   // cannot hit 'Confirm password' — same helper as every other field.
   fill('Password', 'Abcdef12')
@@ -64,7 +64,7 @@ function sentBody(): Record<string, unknown> {
 
 describe('item 1 — the club opt-in at registration', () => {
   it('🔴 UNCHECKED by default, and the payload says joinClub: false', async () => {
-    const club = screen.getByRole('checkbox', { name: /membership club/i }) as HTMLInputElement
+    const club = screen.getByRole('checkbox', { name: /join the club/i }) as HTMLInputElement
     expect(club.checked).toBe(false)
 
     fillValidForm()
@@ -76,7 +76,7 @@ describe('item 1 — the club opt-in at registration', () => {
 
   it('checking the box sends joinClub: true', async () => {
     fillValidForm()
-    fireEvent.click(screen.getByRole('checkbox', { name: /membership club/i }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /join the club/i }))
     fireEvent.click(screen.getByRole('button', { name: /Create account/i }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())

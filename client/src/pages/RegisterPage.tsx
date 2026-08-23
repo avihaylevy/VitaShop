@@ -3,6 +3,11 @@ import { TextLink, textLinkClass } from '../components/ui/TextLink'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { AuthCard, Field, FormError } from '../components/auth/AuthLayout'
+import { PasswordField } from '../components/auth/PasswordField'
+import { Icon } from '../components/ui/Icon'
+import { CheckCircleIcon, UserIcon } from '../components/icons'
+import signupHe from '../assets/brand/signup-he.jpg'
+import signupEn from '../assets/brand/signup-en.jpg'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { register, type AuthFailure } from '../lib/authApi'
@@ -20,7 +25,7 @@ import { register, type AuthFailure } from '../lib/authApi'
  * user typed, not about who is registered.
  */
 export function RegisterPage() {
-  const { t } = useTranslation('auth')
+  const { t, i18n } = useTranslation('auth')
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -90,22 +95,39 @@ export function RegisterPage() {
           : t('errors.unexpected')
 
   return (
-    <AuthCard titleId="register-title" title={t('register.title')}>
+    /* The signup redesign (2026-08-23, the user's mock): a two-panel card —
+       the form beside the brand panel. The panel is PER-LANGUAGE artwork
+       (logo, tagline and feature icons baked in — one image per language,
+       the hero-banner pattern), decorative to assistive tech; the <h1>
+       carries the page. Below md the panel is hidden: the form is the
+       point on a phone. */
+    <section
+      aria-labelledby="register-title"
+      className="mx-auto grid w-full max-w-5xl gap-0 overflow-hidden px-4 py-10 sm:py-14 md:grid-cols-2 md:rounded-card md:border md:border-border-card md:bg-well md:px-0 md:py-0"
+    >
+      <div className="md:p-8">
+        <h1 id="register-title" className="heading-section">
+          {t('register.title')}
+        </h1>
       <form onSubmit={onSubmit} noValidate>
-        <Field
-          label={t('register.firstNameLabel')}
-          autoComplete="given-name"
-          value={firstName}
-          onChange={setFirstName}
-          error={errorFor('FIRST_NAME_REQUIRED')}
-        />
-        <Field
-          label={t('register.lastNameLabel')}
-          autoComplete="family-name"
-          value={lastName}
-          onChange={setLastName}
-          error={errorFor('LAST_NAME_REQUIRED')}
-        />
+        {/* One row for the two names (the mock); each Field keeps its own
+            error slot so a single missing name never shifts its sibling. */}
+        <div className="grid gap-x-3 sm:grid-cols-2">
+          <Field
+            label={t('register.firstNameLabel')}
+            autoComplete="given-name"
+            value={firstName}
+            onChange={setFirstName}
+            error={errorFor('FIRST_NAME_REQUIRED')}
+          />
+          <Field
+            label={t('register.lastNameLabel')}
+            autoComplete="family-name"
+            value={lastName}
+            onChange={setLastName}
+            error={errorFor('LAST_NAME_REQUIRED')}
+          />
+        </div>
         <Field
           label={t('register.emailLabel')}
           type="email"
@@ -115,10 +137,8 @@ export function RegisterPage() {
           onChange={setEmail}
           error={errorFor('EMAIL_INVALID')}
         />
-        <Field
+        <PasswordField
           label={t('register.passwordLabel')}
-          hint={t('register.passwordHint')}
-          type="password"
           autoComplete="new-password"
           value={password}
           onChange={setPassword}
@@ -128,10 +148,11 @@ export function RegisterPage() {
             errorFor('PASSWORD_NEEDS_DIGIT') ??
             errorFor('PASSWORD_TOO_LONG')
           }
-        />
-        <Field
+        >
+          <PasswordChecklist password={password} />
+        </PasswordField>
+        <PasswordField
           label={t('register.confirmPasswordLabel')}
-          type="password"
           autoComplete="new-password"
           value={confirmPassword}
           onChange={setConfirmPassword}
@@ -187,17 +208,71 @@ export function RegisterPage() {
         <FormError message={formMessage} />
 
         <Button type="submit" disabled={submitting} className="mt-2 w-full">
+          <Icon size={18}>
+            <UserIcon />
+          </Icon>
           {submitting ? t('register.submitting') : t('register.submit')}
         </Button>
       </form>
 
-      <p className="mt-6 text-sm text-text-muted">
+      {/* The mock's divider — decorative; the login link is the content. */}
+      <div aria-hidden="true" className="mt-6 flex items-center gap-3">
+        <span className="h-px flex-1 bg-border-hairline" />
+        <span className="text-sm text-text-muted">{t('register.orDivider')}</span>
+        <span className="h-px flex-1 bg-border-hairline" />
+      </div>
+
+      <p className="mt-4 text-center text-sm text-text-muted">
         {t('register.hasAccount')}{' '}
         <TextLink to="/login" inline>
           {t('register.loginLink')}
         </TextLink>
       </p>
-    </AuthCard>
+      </div>
+
+      {/* The brand panel — per-language artwork; the FORM stays the
+          start-side column (first in reading order) in both directions. */}
+      <img
+        src={i18n.language === 'he' ? signupHe : signupEn}
+        alt=""
+        className="hidden h-full w-full object-cover md:block"
+      />
+    </section>
+  )
+}
+
+/**
+ * The live requirements checklist — the REAL server policy (Table 3 field
+ * 23: >= 8 characters, an uppercase letter, a digit), never the mock's
+ * looser "any letter" wording: a checklist that green-ticks a password the
+ * server rejects is worse than none. Each met rule turns teal and appends
+ * an sr-only "done"; the icons are decorative.
+ */
+function PasswordChecklist({ password }: { password: string }) {
+  const { t } = useTranslation('auth')
+  const rules = [
+    { key: 'req8', met: password.length >= 8 },
+    { key: 'reqUpper', met: /[A-Z]/.test(password) },
+    { key: 'reqDigit', met: /\d/.test(password) },
+  ]
+  return (
+    <div className="mt-2 rounded-card bg-surface-section px-3 py-2">
+      <p className="text-xs text-text-muted">{t('register.checklistTitle')}</p>
+      <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+        {rules.map((rule) => (
+          <li
+            key={rule.key}
+            className={`flex items-center gap-1.5 text-xs ${rule.met ? 'font-semibold text-brand-teal-strong' : 'text-text-muted'}`}
+          >
+            <Icon size={14} className={rule.met ? '' : 'opacity-40'}>
+              <CheckCircleIcon />
+            </Icon>
+            {t(`register.${rule.key}`)}
+            {rule.met && <span className="sr-only"> — {t('register.reqMet')}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
