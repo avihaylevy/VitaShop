@@ -1,9 +1,12 @@
 // MILESTONE-005 Checkpoint D — pure pagination arithmetic for
-// `GET /api/products`. §4a: pageSize is server-fixed at 24; §4a's
-// already-shipped totalPages convention (routes/catalog.ts's
-// Math.ceil(totalItems / PAGE_SIZE)) is preserved verbatim, including the
-// totalItems === 0 -> totalPages === 0 case (Math.ceil(0/24) === 0, no
-// special-casing needed).
+// `GET /api/products`. §4a: pageSize is server-fixed; the VALUE moved
+// 24 → 12 on 2026-08-23 (DEC-107, the user: a 24-product page reads
+// excessive) — a RECORDED DEVIATION from §4a's literal 24. Still
+// server-fixed, never client-influenced; 12 fills whole rows at every
+// grid width (4/3/2/1 columns). §4a's already-shipped totalPages
+// convention (routes/catalog.ts's Math.ceil(totalItems / PAGE_SIZE)) is
+// preserved verbatim, including the totalItems === 0 -> totalPages === 0
+// case (Math.ceil(0/12) === 0, no special-casing needed).
 //
 // §4c: the API MAY return a past-the-end page (items: [], totalItems > 0,
 // page > totalPages) — that is legal and honest at this layer. Canonicalizing
@@ -24,7 +27,7 @@
 // catalogPagination.test.ts and the route-level spy test in
 // catalog.integration.test.ts.
 
-export const PAGE_SIZE = 24
+export const PAGE_SIZE = 12
 
 // Thrown only if a WITHIN-RANGE page's skip arithmetic would itself exceed
 // Number.MAX_SAFE_INTEGER — requires totalItems to be far beyond anything a

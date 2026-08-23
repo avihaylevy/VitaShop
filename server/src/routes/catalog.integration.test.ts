@@ -9,6 +9,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { readVerifiedProductRows } from '../lib/productsCsv.js'
+import { PAGE_SIZE } from '../lib/catalogPagination.js'
 import { UPLOAD_REF_PATTERN } from '../lib/uploadPaths.js'
 import { CANONICAL_CATEGORIES } from '../lib/catalogCategories.js'
 import type { PublicCatalogProduct } from '../lib/catalogMapper.js'
@@ -201,10 +202,10 @@ describe('GET /api/products', () => {
     const body = (await res.json()) as ProductsEnvelope
     expect(Array.isArray(body.items)).toBe(true)
     expect(body.page).toBe(1)
-    expect(body.pageSize).toBe(24)
+    expect(body.pageSize).toBe(PAGE_SIZE)
     // A full page holds pageSize items; a final/only page holds the remainder.
-    expect(body.items.length).toBe(Math.min(body.totalItems, 24))
-    expect(body.totalPages).toBe(Math.ceil(body.totalItems / 24))
+    expect(body.items.length).toBe(Math.min(body.totalItems, PAGE_SIZE))
+    expect(body.totalPages).toBe(Math.ceil(body.totalItems / PAGE_SIZE))
   })
 
   it('returns only active products (matches a direct read-only count)', async () => {
@@ -611,9 +612,9 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
       expect(product.nameHe).not.toContain('החרדית')
       expect(product.nameEn).not.toContain('החרדית')
     }
-    const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent('החרדית')}`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(new Set(body.items.map((i) => i.slug))).toEqual(new Set(expected.map((p) => p.slug)))
+    // ALL pages — same DEC-107 note as assertCategorySearch above.
+    const { slugs } = await fetchAllPages(`q=${encodeURIComponent('החרדית')}`)
+    expect(new Set(slugs)).toEqual(new Set(expected.map((p) => p.slug)))
   })
 
   /**
@@ -776,12 +777,13 @@ describe('GET /api/products — free-text search (Checkpoint E)', () => {
   async function assertCategorySearch(nameHe: string, term: string): Promise<void> {
     const members = await activeSlugsInCategory(nameHe)
     const expected = await expectedForCategoryTerm(nameHe, term)
-    const res = await fetch(`${baseUrl}/api/products?q=${encodeURIComponent(term)}`)
-    const body = (await res.json()) as ProductsEnvelope
-    expect(body.totalItems).toBe(expected.size)
-    for (const item of body.items) expect(expected).toContain(item.slug)
+    // ALL pages (ISSUE-154's rule; PAGE_SIZE 12 under DEC-107 made the
+    // single-page read a strict subset for the larger categories).
+    const { slugs, first } = await fetchAllPages(`q=${encodeURIComponent(term)}`)
+    expect(first.totalItems).toBe(expected.size)
+    for (const slug of slugs) expect(expected).toContain(slug)
     // The property that actually matters: no category member is ever missed.
-    const returned = new Set(body.items.map((i) => i.slug))
+    const returned = new Set(slugs)
     for (const slug of members) expect(returned.has(slug)).toBe(true)
   }
 
@@ -1437,25 +1439,25 @@ describe('GET /api/products — pagination (Checkpoint D)', () => {
    */
   it('a multi-page catalogue: page 2 holds the remainder and does not overlap page 1', async () => {
     const totalItems = await testPrisma.product.count({ where: { isActive: true } })
-    expect(totalItems).toBeGreaterThan(24) // the point of MILESTONE-004 — pagination has something to paginate
+    expect(totalItems).toBeGreaterThan(PAGE_SIZE) // the point of MILESTONE-004 — pagination has something to paginate
 
     const page1 = (await fetch(`${baseUrl}/api/products?page=1`).then((r) => r.json())) as ProductsEnvelope
     const page2 = (await fetch(`${baseUrl}/api/products?page=2`).then((r) => r.json())) as ProductsEnvelope
 
     expect(page1.totalItems).toBe(totalItems)
-    expect(page1.totalPages).toBe(Math.ceil(totalItems / 24))
-    expect(page1.items).toHaveLength(24)
+    expect(page1.totalPages).toBe(Math.ceil(totalItems / PAGE_SIZE))
+    expect(page1.items).toHaveLength(PAGE_SIZE)
 
     expect(page2.page).toBe(2)
     expect(page2.totalItems).toBe(totalItems)
-    expect(page2.items).toHaveLength(Math.min(totalItems - 24, 24))
+    expect(page2.items).toHaveLength(Math.min(totalItems - PAGE_SIZE, PAGE_SIZE))
     expect(page2.items.length).toBeGreaterThan(0)
 
     // No overlap and no gap — the two pages partition the catalogue.
     const s1 = new Set(page1.items.map((i) => i.slug))
     const s2 = new Set(page2.items.map((i) => i.slug))
     for (const slug of s2) expect(s1.has(slug)).toBe(false)
-    expect(s1.size + s2.size).toBe(Math.min(totalItems, 48))
+    expect(s1.size + s2.size).toBe(Math.min(totalItems, PAGE_SIZE * 2))
   })
 
   it('a past-the-end page returns a truthful empty page — items: [], page > totalPages, totalItems > 0 — not canonicalized server-side', async () => {
@@ -1463,7 +1465,7 @@ describe('GET /api/products — pagination (Checkpoint D)', () => {
     if (totalItems === 0) throw new Error('fixture assumption failed: no active products at all')
     // Derived from totalPages, never hardcoded — that is what made the
     // previous version silently wrong the moment the catalogue grew.
-    const totalPages = Math.ceil(totalItems / 24)
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE)
     const pastTheEnd = totalPages + 1
     const res = await fetch(`${baseUrl}/api/products?page=${pastTheEnd}`)
     expect(res.status).toBe(200)
@@ -1518,19 +1520,19 @@ describe('GET /api/products — pagination (Checkpoint D)', () => {
     // A full page holds pageSize items once the catalogue outgrows one page
     // (batch 4: 27 active). What this test is about is the guard not blocking
     // a valid page, so it asserts the page is FULL and the skip/take are right.
-    expect(body.items).toHaveLength(Math.min(totalItems, 24))
+    expect(body.items).toHaveLength(Math.min(totalItems, PAGE_SIZE))
     expect(findManySpy).toHaveBeenCalledTimes(1)
-    expect(findManySpy).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 24 }))
+    expect(findManySpy).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: PAGE_SIZE }))
   })
 
   it('the safe-execution guard does not block page 2 either — skip is computed, not zeroed', async () => {
     const totalItems = await testPrisma.product.count({ where: { isActive: true } })
-    expect(totalItems).toBeGreaterThan(24) // fixture assumption: a real page 2 exists
+    expect(totalItems).toBeGreaterThan(PAGE_SIZE) // fixture assumption: a real page 2 exists
     const findManySpy = vi.spyOn(appPrisma.product, 'findMany')
     const res = await fetch(`${baseUrl}/api/products?page=2`)
     expect(res.status).toBe(200)
     expect(findManySpy).toHaveBeenCalledTimes(1)
-    expect(findManySpy).toHaveBeenCalledWith(expect.objectContaining({ skip: 24, take: 24 }))
+    expect(findManySpy).toHaveBeenCalledWith(expect.objectContaining({ skip: PAGE_SIZE, take: PAGE_SIZE }))
   })
 })
 
@@ -1794,13 +1796,20 @@ describe('GET /api/products/:slug — Product Details (Checkpoint J)', () => {
 
   it('the detail images array starts with exactly the image the list DTO exposes', async () => {
     const slug = await firstActiveSlug()
-    const [listRes, detailRes] = await Promise.all([
-      fetch(`${baseUrl}/api/products`),
-      fetch(`${baseUrl}/api/products/${slug}`),
-    ])
-    const list = (await listRes.json()) as ProductsEnvelope
-    const detail = (await detailRes.json()) as Record<string, unknown>
-    const listed = list.items.find((item) => item.slug === slug)
+    const detail = (await fetch(`${baseUrl}/api/products/${slug}`).then((r) => r.json())) as Record<
+      string,
+      unknown
+    >
+    // Walk pages until the slug's list DTO appears — DEC-107's PAGE_SIZE 12
+    // means the fixture's pick is not guaranteed to sit on page 1.
+    let listed: { imageFile: string | null } | undefined
+    const first = (await fetch(`${baseUrl}/api/products?page=1`).then((r) => r.json())) as ProductsEnvelope
+    listed = first.items.find((item) => item.slug === slug)
+    for (let page = 2; listed === undefined && page <= first.totalPages; page++) {
+      const body = (await fetch(`${baseUrl}/api/products?page=${page}`).then((r) => r.json())) as ProductsEnvelope
+      listed = body.items.find((item) => item.slug === slug)
+    }
+    expect(listed).toBeDefined()
 
     // One ordering rule (sortOrder, id) shared by both mappers — the list's
     // single image can never disagree with the detail's first.
