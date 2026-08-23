@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { TextLink } from '../components/ui/TextLink'
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
@@ -143,6 +144,17 @@ export function CheckoutPage() {
     | { status: 'done'; order: PaymentSuccess }
     | { status: 'failed'; failure: PaymentFailure }
   >({ status: 'idle' })
+
+  // Warn before the tab closes while a payment is IN FLIGHT (closing there
+  // races the order commit), or while a hand-typed address would be lost.
+  // A prefilled/saved address is recoverable and earns no warning, and a
+  // completed order ('done') clears it.
+  useUnsavedChangesWarning(
+    payState.status === 'paying' ||
+      (payState.status !== 'done' &&
+        pickedAddressId === 'new' &&
+        (address.line1 !== '' || address.city !== '' || address.zipCode !== '')),
+  )
 
   /**
    * 🔴 ONE KEY PER CHECKOUT ATTEMPT, HELD IN A REF — INV-05's client half.

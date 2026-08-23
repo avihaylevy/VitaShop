@@ -282,6 +282,24 @@ body {
 }
 
 /*
+ * Web Interface Guidelines pass (2026-08-23) — every interactive element
+ * opts out of the legacy double-tap-to-zoom delay. One rule here, not a
+ * utility class per call site: a control that misses the class would be
+ * the slow one, and nothing would ever say so. Pinch zoom is untouched
+ * (this is NOT user-scalable=no; that stays banned).
+ */
+button,
+[role='button'],
+a,
+label,
+select,
+summary,
+input,
+textarea {
+  touch-action: manipulation;
+}
+
+/*
  * Shared focus-visible treatment — DESIGN_SYSTEM.md §4, one treatment
  * everywhere (UI_IMPLEMENTATION_PLAN.md §11). Implemented once here and
  * applied via the `focus-ring` class from every interactive primitive,

@@ -75,7 +75,7 @@ export function AgentTranscript({
       aria-live="off"
       aria-label={t('a11y.conversation')}
       tabIndex={0}
-      className="flex-1 overflow-y-auto p-4 focus:outline-none"
+      className="flex-1 overflow-y-auto overscroll-contain p-4 focus:outline-none"
     >
       {/* ISSUE-144 — the greeting block. The intro stays in the DOM for the
           conversation's whole life (announce(t('panel.intro')) on reset

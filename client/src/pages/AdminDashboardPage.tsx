@@ -238,7 +238,7 @@ function DashboardBody({ data }: { data: AdminDashboardData }) {
               {card.value === null ? (
                 <span className="text-sm text-text-muted">{t('dashboard.noData')}</span>
               ) : (
-                <span dir="ltr" className="text-xl font-semibold text-text-ink">
+                <span dir="ltr" className="text-xl font-semibold tabular-nums text-text-ink">
                   {card.value}
                 </span>
               )}
@@ -255,13 +255,13 @@ function DashboardBody({ data }: { data: AdminDashboardData }) {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Surface variant="well" bordered className="flex flex-col gap-1 p-4">
             <span className="text-xs text-text-muted">{t('dashboard.sales.orders')}</span>
-            <span dir="ltr" className="text-xl font-semibold text-text-ink">
+            <span dir="ltr" className="text-xl font-semibold tabular-nums text-text-ink">
               {data.sales.orderCount}
             </span>
           </Surface>
           <Surface variant="well" bordered className="flex flex-col gap-1 p-4">
             <span className="text-xs text-text-muted">{t('dashboard.sales.turnover')}</span>
-            <span dir="ltr" className="text-xl font-semibold text-text-ink">
+            <span dir="ltr" className="text-xl font-semibold tabular-nums text-text-ink">
               {money(data.sales.turnover)}
             </span>
           </Surface>
@@ -284,9 +284,9 @@ function DashboardBody({ data }: { data: AdminDashboardData }) {
               <tbody>
                 {data.salesByDay.map((day) => (
                   <tr key={day.date} className="border-b border-border-card last:border-0">
-                    <td dir="ltr" className="py-2 text-start">{day.date}</td>
-                    <td dir="ltr" className="py-2 text-start">{day.orderCount}</td>
-                    <td dir="ltr" className="py-2 text-start">{money(day.turnover)}</td>
+                    <td dir="ltr" className="py-2 text-start tabular-nums">{day.date}</td>
+                    <td dir="ltr" className="py-2 text-start tabular-nums">{day.orderCount}</td>
+                    <td dir="ltr" className="py-2 text-start tabular-nums">{money(day.turnover)}</td>
                     <td className="py-2">
                       <div
                         aria-hidden="true"
@@ -321,11 +321,12 @@ function DashboardBody({ data }: { data: AdminDashboardData }) {
                 <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                   <span className="text-text-ink">{t(`dashboard.funnel.${stage.key}`)}</span>
                   <span className="text-text-muted">
-                    <span dir="ltr">{stage.count}</span>
+                    <span dir="ltr" className="tabular-nums">{stage.count}</span>
                     {stepRate !== null && (
                       <>
                         {' · '}
-                        <span dir="ltr">{stepRate}</span> {t('dashboard.funnel.ofPrevious')}
+                        <span dir="ltr" className="tabular-nums">{stepRate}</span>{' '}
+                        {t('dashboard.funnel.ofPrevious')}
                       </>
                     )}
                   </span>
@@ -367,8 +368,8 @@ function DashboardBody({ data }: { data: AdminDashboardData }) {
                         {productName(product)}
                       </TextLink>
                     </td>
-                    <td dir="ltr" className="py-2 text-start">{product.quantity}</td>
-                    <td dir="ltr" className="py-2 text-start">{money(product.turnover)}</td>
+                    <td dir="ltr" className="py-2 text-start tabular-nums">{product.quantity}</td>
+                    <td dir="ltr" className="py-2 text-start tabular-nums">{money(product.turnover)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -409,8 +410,8 @@ function DashboardBody({ data }: { data: AdminDashboardData }) {
                   {data.lowStock.map((row) => (
                     <tr key={row.id} className="border-b border-border-card last:border-0">
                       <td className="py-2 text-start">{productName(row)}</td>
-                      <td dir="ltr" className="py-2 text-start">{row.stockQuantity}</td>
-                      <td dir="ltr" className="py-2 text-start">{row.lowStockThreshold}</td>
+                      <td dir="ltr" className="py-2 text-start tabular-nums">{row.stockQuantity}</td>
+                      <td dir="ltr" className="py-2 text-start tabular-nums">{row.lowStockThreshold}</td>
                     </tr>
                   ))}
                 </tbody>

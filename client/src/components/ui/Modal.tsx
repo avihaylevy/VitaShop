@@ -149,7 +149,9 @@ export function Modal({
             </p>
           )}
 
-          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          {/* overscroll-contain — reaching the end of this scroll must not
+              start scrolling the page behind the overlay (mobile chaining). */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
         </div>
       </div>
     </Portal>

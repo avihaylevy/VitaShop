@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning'
 import { Pager } from '../components/ui/Pager'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import {
@@ -92,6 +93,12 @@ export function AdminProductsPage() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [detailDrafts, setDetailDrafts] = useState<Record<string, DetailDraft>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
+
+  // Closing the tab with pending row edits loses them silently — warn.
+  // In-app navigation is deliberately not blocked (the hook says why).
+  useUnsavedChangesWarning(
+    Object.keys(drafts).length > 0 || Object.keys(detailDrafts).length > 0,
+  )
   /** Keyed announcements so repeat outcomes re-announce (the ClubPage pattern). */
   const [announced, setAnnounced] = useState<{ text: string; id: number } | null>(null)
   const [failureText, setFailureText] = useState('')

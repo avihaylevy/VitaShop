@@ -10,6 +10,7 @@ import {
 } from '../lib/adminProductsApi'
 import { DOSAGE_FORM_KEYS } from '../lib/catalogApi'
 import { normalizePriceInput } from '../lib/adminPrice'
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning'
 import type {
   AdminProductDuplicate,
   AdminProductOptions,
@@ -87,6 +88,19 @@ export function AdminProductNewPage() {
   const [uploadStatus, setUploadStatus] = useState('')
   const [failureText, setFailureText] = useState('')
   const [created, setCreated] = useState<{ product: AdminProductRow; id: number } | null>(null)
+
+  // Closing the tab mid-draft loses the whole long form — warn while any
+  // field differs from empty and nothing was created yet. JSON compare is
+  // fine here: EMPTY_FORM is flat strings and this runs on render, not on
+  // keystrokes inside a hot loop.
+  useUnsavedChangesWarning(
+    created === null &&
+      (JSON.stringify(form) !== JSON.stringify(EMPTY_FORM) ||
+        goalIds.length > 0 ||
+        newGoals.length > 0 ||
+        goalDraft.nameHe !== '' ||
+        goalDraft.nameEn !== ''),
+  )
   /** ISSUE-145 — the outcome block beside the submit button; scrolled into
    * view on every settle so the refusal (or the success) is never rendered
    * off-screen after a long-form submit. */
