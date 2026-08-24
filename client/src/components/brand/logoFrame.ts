@@ -1,34 +1,30 @@
 /**
  * Frame geometry for `vitashop-logo-transparent.png` — replaces a flawed
  * `object-fit: cover` attempt. `cover`'s crop is driven by the FULL
- * CANVAS's own aspect ratio (1536×1024 = 1.5) vs. the box, not by the
- * trimmed content's aspect ratio (5.58). Since 1.5 is squarer than any
- * usable header-logo box (~6:1), `cover` is *always* width-constrained
- * for this asset — it shows the entire 1536px width (including ~360px of
- * side padding) and only ever crops vertically. Two real consequences,
- * confirmed by the arithmetic, not assumed:
- *   1. The rendered wordmark ends up smaller than intended, because a
- *      third of the box's width is unavoidably spent on transparent
- *      side-padding instead of letters — this is what read as "soft".
- *   2. Centering on the CANVAS's vertical midpoint (512) instead of the
- *      CONTENT's own vertical midpoint (484.5, since the content sits
- *      higher in the canvas than centre) clipped ~5.5 original-px off
- *      the content's top edge — sub-pixel at these sizes, but real, and
- *      exactly the kind of accidental clip this rewrite removes on
- *      principle rather than leaving in place because it's small.
+ * CANVAS's aspect ratio vs. the box, not by the trimmed content's much
+ * wider aspect. Every revision of this asset has a canvas far squarer
+ * than any usable header-logo box (~5.5:1 content), so `cover` is always
+ * width-constrained: it spends box width on transparent side-padding
+ * (rendering the wordmark smaller than intended, which read as "soft")
+ * and centres on the canvas midpoint instead of the content's own,
+ * clipping the content's edge by whatever the two midpoints differ.
  *
  * Fix: scale from the CONTENT's own bounding box, then translate so the
  * content is centred in a wrapper sized to content + a safe margin.
- * Content bbox (measured by pixel/alpha scan, see CONTENT_ASSETS.md):
- * x=187, y=379, w=1177, h=211 inside the 1536×1024 canvas.
+ * Content bbox is measured by alpha scan — never hand-estimated — by the
+ * committed derivation script `scripts/make-logo-transparent.py`, which
+ * prints it when regenerating the transparent asset; the doc of record is
+ * design/CONTENT_ASSETS.md in the memory system. Re-measured 2026-08-25
+ * for the user's replacement artwork (VitaShop-correct.png — teal mark +
+ * navy wordmark): x=249, y=358, w=1212, h=222 inside the 1672×941 canvas.
  */
 
-const SOURCE_WIDTH = 1536
-const SOURCE_HEIGHT = 1024
-const CONTENT_X = 187
-const CONTENT_Y = 379
-const CONTENT_WIDTH = 1177
-const CONTENT_HEIGHT = 211
+const SOURCE_WIDTH = 1672
+const SOURCE_HEIGHT = 941
+const CONTENT_X = 249
+const CONTENT_Y = 358
+const CONTENT_WIDTH = 1212
+const CONTENT_HEIGHT = 222
 
 /** 8% of the scaled content's own size, split evenly on each side — enough to never clip, small enough not to shrink the logo. */
 const MARGIN_RATIO = 0.08

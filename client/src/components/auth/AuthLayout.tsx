@@ -27,7 +27,11 @@ export function AuthCard({
       aria-labelledby={titleId}
     >
       {/* Same section-scale display treatment as RequireAuth's gate title —
-          the two render the same auth moment and must match. */}
+          the two render the same auth moment and must match. (LoginPage left
+          AuthCard in the 2026-08-25 redesign, on the user's direction — its
+          welcome heading is deliberately larger; that departure amends this
+          pairing for login only, the gate and the remaining AuthCard pages
+          still match each other.) */}
       <h1 id={titleId} className="heading-section">
         {title}
       </h1>
