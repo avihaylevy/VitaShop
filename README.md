@@ -2,7 +2,7 @@
 
 An e-commerce store for vitamins and dietary supplements, built as a coursework project for **Digital Systems Planning and Development**, Ramat Gan Academic College.
 
-The course evaluates **architecture, structure, and system operation** — not visual polish or feature count. That shapes every decision in this repository.
+
 
 ---
 
