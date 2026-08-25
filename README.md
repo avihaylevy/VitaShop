@@ -6,46 +6,33 @@ An e-commerce store for vitamins and dietary supplements, built as a coursework 
 
 ---
 
-## 🔴 Project memory
+## Project documentation
 
-**Requirements, decisions, tasks and status do not live in this repository.** They live in a separate Markdown knowledge base:
-
-```
-C:\Users\aviha\תכנות\זיכרון AI\פרוייקט ECOMMERCE\פרוייקט Ecommerce\VitaShop-Project\00_INDEX.md
-```
-
-**Start there.** `00_INDEX.md` defines the mandatory reading order, the status vocabulary, and the identifier scheme.
-
-| Looking for | File |
-|---|---|
-| What the system must do | `product/FUNCTIONAL_REQUIREMENTS.md` — 42 requirements |
-| Why something was built a certain way | `operations/DECISIONS.md` |
-| What actually works right now | `operations/STATUS.md` |
-| What is being worked on | `operations/CURRENT_TASK.md` |
-| Known problems and open questions | `operations/ISSUES.md` |
-| Architecture and invariants | `technical/ARCHITECTURE.md` |
-| 🔴 API keys and secrets | `quality/SECRETS_AND_KEYS.md` |
-
-**Why it is external:** the knowledge base is an Obsidian vault the author maintains alongside the code. Keeping it out of the repository means requirements and decisions are versioned as prose rather than tangled with source history, and it stays usable when the repository is empty — as it is now.
+The functional requirements, the decision log, and the session-by-session
+status live in a private Markdown knowledge base the author maintains
+alongside the code — which is why commit messages cite identifiers like
+`DEC-107` (a recorded decision) and `ISSUE-124` (a tracked issue). Keeping
+that process documentation external keeps the repository focused on what a
+reviewer needs: the code, the data, and how to run it. The course
+deliverable that summarises the system is the submission document.
 
 ---
 
 ## Status
 
-**Planning. No application code yet.**
+**Fully implemented and running locally, end to end.**
 
 ```
-✅  Specification read and mapped — 42 requirements, 7 user flows, acceptance tests
-✅  Stack decided
-✅  Repository skeleton and agent instructions in place
-✅  15 product images and the seed-data structure ready
-⬜  Database schema — blocked on an open decision
-⬜  Server, client — not started
+✅  Catalogue — 49 real products, 8 brands, search/filter/sort/paging, all server-side
+✅  Cart, checkout, orders — guest + registered, atomic stock, simulated payment, cancellation window
+✅  Auth — email verification, lockout, password reset, Argon2id hashing
+✅  Personal area — history, reorder, profile, address book, favourites, customer club
+✅  Admin module — products, inventory, orders, analytics dashboard (KPIs, funnel, low stock)
+✅  AI shopping assistant — catalogue-only, medical-safety rules, mock provider by default
+✅  Bilingual Hebrew/English with full RTL/LTR
+✅  2,190+ automated tests (server + client), mutation-tested guarantees
+⬜  Cloud deployment — the planned next step
 ```
-
-**Four decisions block the first line of server code.** They are tracked as `ISSUE-011`, `ISSUE-007`, `ISSUE-006` and the schema approval that depends on them. See `operations/CURRENT_TASK.md`.
-
-`operations/STATUS.md` is the authoritative, dated status. This section will drift; that file will not.
 
 ---
 
@@ -66,18 +53,21 @@ Database  PostgreSQL
 ```
 VitaShop/
 ├── README.md              you are here
+├── SETUP.md               reviewer walkthrough: clone → running store
+├── package.json           root convenience scripts (setup / db / seed / dev / test)
 ├── CLAUDE.md              instructions for Claude Code
 ├── AGENTS.md              instructions for Codex
 ├── CODEX.md               pointer to AGENTS.md
 ├── assets/
-│   ├── brand/             logo, favicon — the logo is swappable via one constant
+│   ├── brand/             logo artwork — source/ originals, web/ derived exports
 │   ├── products/          product images + seed data
-│   │   ├── products.csv       one row per product
+│   │   ├── products.csv       one row per product — the catalogue's source of truth
 │   │   ├── ingredients.csv    one row per active ingredient
 │   │   └── REFERENCE.md       allowed values and fill order
 │   └── ui/                icons, backgrounds
-├── client/                React frontend — not yet scaffolded
-└── server/                Express backend — not yet scaffolded
+├── scripts/               asset-derivation and data-check scripts (Python)
+├── client/                React frontend (Vite + TypeScript + Tailwind)
+└── server/                Express backend (TypeScript + Prisma + PostgreSQL)
 ```
 
 ### Product data
@@ -141,7 +131,7 @@ This project handles authentication, pricing and stock. A few rules are non-nego
 - **All price calculation, stock checking and permission verification happen server-side.** The client is never a source of truth
 - **No secrets in the repository.** API keys, database passwords and session secrets live only in `.env`, which is git-ignored
 - **No agent obtains or configures an API key.** The AI provider defaults to a mock implementation; switching to a real provider requires an explicit human decision each time
-- **Payment is simulated.** No card details are collected, transmitted or stored anywhere
+- **Payment is simulated.** The card form validates format client-side only (Luhn, expiry, CVV); card details are never transmitted to the server and never stored
 
 Full detail: `quality/SECURITY_PRIVACY.md` and `quality/SECRETS_AND_KEYS.md` in the knowledge base.
 
@@ -166,7 +156,7 @@ npm run dev:server   # http://localhost:3000
 npm run dev:client   # http://localhost:5173  (second terminal)
 ```
 
-Prerequisites will be Node.js and a local PostgreSQL instance. Environment variables will be documented in `.env.example`.
+Prerequisites: Node.js 24 and a local PostgreSQL instance (install options in SETUP.md). Every environment variable is documented in `server/.env.example` and `client/.env.example`.
 
 ---
 
@@ -179,7 +169,7 @@ Prerequisites will be Node.js and a local PostgreSQL instance. Environment varia
 
 **Deliberately out of scope:** real payment processing, product reviews, loyalty programmes, multi-warehouse inventory, VAT and invoicing, personalised nutritional advice.
 
-**Runs locally.** No deployment is planned, but the code is written deployment-ready — environment variables throughout, no hardcoded paths, no secrets.
+**Runs locally today.** Cloud deployment is the planned next step; the code is written deployment-ready — environment variables throughout, no hardcoded paths, no secrets.
 
 ---
 
@@ -199,4 +189,4 @@ An academic project. Not a real store — no orders are fulfilled and no payment
 
 ---
 
-Last updated: 2026-08-01
+Last updated: 2026-08-25
