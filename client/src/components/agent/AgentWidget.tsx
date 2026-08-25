@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Icon } from '../ui/Icon'
 import { ChatBubbleIcon } from '../icons'
@@ -69,6 +70,17 @@ export function AgentWidget() {
     // `announced` is a fresh object per confirmed add — the effect fires per
     // add even when the same product is added twice.
   }, [announced]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /*
+   * The agent is a SHOPPER tool — it searches the catalogue. On /admin/*
+   * screens it renders nothing (the user's call, 2026-08-25: the button
+   * cluttered the dashboards). The gate sits AFTER every hook and returns
+   * null rather than unmounting at the AppShell: the component stays
+   * mounted, so a transcript survives an admin detour and is back on the
+   * next shopper page.
+   */
+  const { pathname } = useLocation()
+  if (pathname.startsWith('/admin')) return null
 
   return (
     <>

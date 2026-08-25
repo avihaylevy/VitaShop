@@ -153,4 +153,36 @@ describe('AgentWidget', () => {
     )
     expect(screen.getByRole('status')).toBeTruthy()
   })
+
+  it('renders NOTHING on /admin routes — the agent is a shopper tool (2026-08-25)', async () => {
+    stubFetch(agentReply('לא רלוונטי'))
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/admin/products']}>
+          <CartProvider>
+            <AgentWidget />
+          </CartProvider>
+        </MemoryRouter>
+      </StrictMode>,
+    )
+    // The floating button, the live region — none of it exists on admin.
+    expect(screen.queryByRole('button', { name: i18n.t('agent:button.open') })).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('🔴 the control — the same render on a shopper route DOES show the button', async () => {
+    // Without this, the admin test above would pass equally well if the
+    // widget were broken everywhere.
+    stubFetch(agentReply('לא רלוונטי'))
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/catalog']}>
+          <CartProvider>
+            <AgentWidget />
+          </CartProvider>
+        </MemoryRouter>
+      </StrictMode>,
+    )
+    expect(await screen.findByRole('button', { name: i18n.t('agent:button.open') })).toBeTruthy()
+  })
 })
