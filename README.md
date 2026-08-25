@@ -110,33 +110,46 @@ The Hebrew (RTL) interface; every screen also ships in English (LTR).
 
 ### The shop
 
-| | |
-|---|---|
-| **Home** — categories, health goals, new arrivals ![Home page](docs/screenshots/home.png) | **Catalog** — server-side search, filters, sorting, paging ![Catalog](docs/screenshots/catalog.png) |
-| **Product page** — brand, ingredients, warnings, club pricing ![Product page](docs/screenshots/product.png) | **Cart** — live stock checks, shipping and club savings computed server-side ![Cart](docs/screenshots/cart.png) |
+<p align="center">
+  <img src="docs/screenshots/home.png" width="49%" alt="Home page">
+  <img src="docs/screenshots/catalog.png" width="49%" alt="Catalog">
+</p>
+<p align="center"><sub><b>Home</b> — categories, health goals, new arrivals&emsp;·&emsp;<b>Catalog</b> — server-side search, filters, sorting, paging</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/product.png" width="49%" alt="Product page">
+  <img src="docs/screenshots/cart.png" width="49%" alt="Cart">
+</p>
+<p align="center"><sub><b>Product page</b> — brand, ingredients, warnings, club pricing&emsp;·&emsp;<b>Cart</b> — live stock checks, server-side totals</sub></p>
 
 ### Checkout
 
-| | |
-|---|---|
-| **Delivery** — pickup, home delivery, or a pickup point ![Checkout delivery](docs/screenshots/checkout.png) | **Payment (simulated)** — the card form validates client-side only; details are never transmitted or stored ![Payment](docs/screenshots/payment.png) |
+<p align="center">
+  <img src="docs/screenshots/checkout.png" width="49%" alt="Checkout — delivery method">
+  <img src="docs/screenshots/payment.png" width="49%" alt="Payment — simulated">
+</p>
+<p align="center"><sub><b>Delivery</b> — pickup, home delivery, or a pickup point&emsp;·&emsp;<b>Payment (simulated)</b> — the card form validates client-side only; details are never transmitted or stored</sub></p>
 
 ### Accounts and AI
 
-| | |
-|---|---|
-| **Log in** ![Login](docs/screenshots/login.png) | **Sign up** — live password checklist, club opt-in ![Signup](docs/screenshots/signup.png) |
-| **AI shopping assistant** — free-language search over the catalogue, with medical-safety rules ![AI assistant](docs/screenshots/ai-assistant.png) | |
+<p align="center">
+  <img src="docs/screenshots/login.png" width="49%" alt="Log in">
+  <img src="docs/screenshots/signup.png" width="49%" alt="Sign up">
+</p>
+<p align="center"><sub><b>Log in</b>&emsp;·&emsp;<b>Sign up</b> — live password checklist, club opt-in</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/ai-assistant.png" width="72%" alt="AI shopping assistant">
+</p>
+<p align="center"><sub><b>AI shopping assistant</b> — free-language search over the catalogue, with medical-safety rules</sub></p>
 
 ### Admin
 
-| | |
-|---|---|
-| **Dashboard** — KPIs, conversion funnel, sales, low-stock alerts ![Admin dashboard](docs/screenshots/admin-dashboard.png) | **Product management** — inline editing, filters, soft-delete, product creation ![Admin products](docs/screenshots/admin-products.png) |
-
-### What the specification leaves open
-
-The functional specification states explicitly that it does not cover technology selection, screen design, or database structure at the table level. Those choices were made during development and are recorded in the project's decision log (the external knowledge base — see Project documentation above). This repository is the source of truth for **what is actually implemented**; a disagreement with the specification is an implementation gap, not a contradiction.
+<p align="center">
+  <img src="docs/screenshots/admin-dashboard.png" width="49%" alt="Admin dashboard">
+  <img src="docs/screenshots/admin-products.png" width="49%" alt="Product management">
+</p>
+<p align="center"><sub><b>Dashboard</b> — KPIs, conversion funnel, low-stock alerts&emsp;·&emsp;<b>Product management</b> — inline editing, filters, soft-delete</sub></p>
 
 ---
 
