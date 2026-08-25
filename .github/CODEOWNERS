@@ -1,0 +1,4 @@
+# Every path in the repository is owned by the project author.
+# With branch protection's "require review from Code Owners" enabled,
+# no pull request merges without this owner's approval.
+* @avihaylevy

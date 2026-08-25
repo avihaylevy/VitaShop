@@ -151,16 +151,19 @@ Full detail: `quality/SECURITY_PRIVACY.md` and `quality/SECRETS_AND_KEYS.md` in 
 
 ## Getting started
 
-**Not yet runnable.** `client/` and `server/` are empty. Once scaffolded, this section will carry the real commands.
+**The system is fully implemented and runs locally end to end.**
+The complete walkthrough — PostgreSQL install options, environment files,
+seeding, login accounts, tests — is in **[SETUP.md](SETUP.md)**.
 
-Planned:
+The short version, from the repo root:
 
 ```bash
-# server
-cd server && npm install && npx prisma migrate dev && npm run seed && npm run dev
-
-# client
-cd client && npm install && npm run dev
+npm run setup        # install server + client dependencies
+# create a local vitashop_dev database, fill in the two .env files (see SETUP.md)
+npm run db           # prisma migrations
+npm run seed         # full catalogue (in-repo data + images) + your accounts
+npm run dev:server   # http://localhost:3000
+npm run dev:client   # http://localhost:5173  (second terminal)
 ```
 
 Prerequisites will be Node.js and a local PostgreSQL instance. Environment variables will be documented in `.env.example`.
