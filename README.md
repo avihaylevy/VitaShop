@@ -104,20 +104,39 @@ The second mode exists so development can continue when one agent's budget runs 
 
 ---
 
-## Documents
+## Screenshots
 
-Both course documents ship in [`docs/`](docs/), so the repository is self-contained for a reviewer:
+The Hebrew (RTL) interface; every screen also ships in English (LTR).
 
-| Document | What it is |
+### The shop
+
+| | |
 |---|---|
-| [`docs/מסמך אפיון ראשוני.docx`](docs/) | The functional specification (Hebrew) — the source of truth for **what the system must do** |
-| [`docs/מסמך הגשה סופי - VitaShop.docx`](docs/) | The final submission document — the system as actually built, with screenshots and the recorded deviations |
+| **Home** — categories, health goals, new arrivals ![Home page](docs/screenshots/home.png) | **Catalog** — server-side search, filters, sorting, paging ![Catalog](docs/screenshots/catalog.png) |
+| **Product page** — brand, ingredients, warnings, club pricing ![Product page](docs/screenshots/product.png) | **Cart** — live stock checks, shipping and club savings computed server-side ![Cart](docs/screenshots/cart.png) |
 
-This repository is the source of truth for **what is actually implemented**. A disagreement between it and the specification is an implementation gap, not a contradiction.
+### Checkout
+
+| | |
+|---|---|
+| **Delivery** — pickup, home delivery, or a pickup point ![Checkout delivery](docs/screenshots/checkout.png) | **Payment (simulated)** — the card form validates client-side only; details are never transmitted or stored ![Payment](docs/screenshots/payment.png) |
+
+### Accounts and AI
+
+| | |
+|---|---|
+| **Log in** ![Login](docs/screenshots/login.png) | **Sign up** — live password checklist, club opt-in ![Signup](docs/screenshots/signup.png) |
+| **AI shopping assistant** — free-language search over the catalogue, with medical-safety rules ![AI assistant](docs/screenshots/ai-assistant.png) | |
+
+### Admin
+
+| | |
+|---|---|
+| **Dashboard** — KPIs, conversion funnel, sales, low-stock alerts ![Admin dashboard](docs/screenshots/admin-dashboard.png) | **Product management** — inline editing, filters, soft-delete, product creation ![Admin products](docs/screenshots/admin-products.png) |
 
 ### What the specification leaves open
 
-It states explicitly that it does not cover technology selection, screen design, or database structure at the table level. Those choices were made during development and are recorded in the project's decision log (the external knowledge base — see Project documentation above); the submission document's deviations table summarises the ones that diverge from the spec.
+The functional specification states explicitly that it does not cover technology selection, screen design, or database structure at the table level. Those choices were made during development and are recorded in the project's decision log (the external knowledge base — see Project documentation above). This repository is the source of truth for **what is actually implemented**; a disagreement with the specification is an implementation gap, not a contradiction.
 
 ---
 
