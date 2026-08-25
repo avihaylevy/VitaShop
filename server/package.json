@@ -14,6 +14,7 @@
     "start": "node dist/src/index.js",
     "test": "vitest run",
     "test:integration": "vitest run src/routes/catalog.integration.test.ts",
+    "seed": "tsx prisma/seed.ts",
     "seed:accounts": "tsx prisma/seedAccounts.ts"
   },
   "license": "UNLICENSED",

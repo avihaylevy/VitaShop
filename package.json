@@ -1,0 +1,13 @@
+{
+  "name": "vitashop-root",
+  "private": true,
+  "description": "Convenience scripts only — all real dependencies live in server/ and client/. No packages are installed at the root.",
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix client install",
+    "db": "npm --prefix server exec prisma migrate dev",
+    "seed": "npm --prefix server run seed && npm --prefix server run seed:accounts",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "test": "npm --prefix server test && npm --prefix client test"
+  }
+}
