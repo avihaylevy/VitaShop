@@ -98,7 +98,7 @@ From the repo root:
 
 ```bash
 npm run db                 # creates the schema (prisma migrate dev)
-npm run seed               # full catalogue (49 real products, 8 brands,
+npm run seed               # full catalogue (50 real products, 8 brands,
                            # images) + your logins from .env
 npm run dev:server         # server on http://localhost:3000
 ```
@@ -132,5 +132,7 @@ npm test                   # both suites, from the repo root
 - **App loads but products error** → the server isn't running on port 3000,
   or `VITE_API_BASE_URL` was changed.
 - Re-running `npm run seed` or `npm run seed:accounts` is always safe: the
-  seed converges to the CSV source of truth, and account seeding re-hashes
-  the passwords currently in your `.env`.
+  seed converges CSV-known products to the CSV source of truth, account
+  seeding re-hashes the passwords currently in your `.env`, and products
+  created through the **admin panel** are left untouched — the seed governs
+  only the slugs the CSV knows.

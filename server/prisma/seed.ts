@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient, Prisma, type DosageForm } from '@prisma/client'
 import { validateAllergenFields } from '../src/lib/allergenInfo.js'
+import { demotedProductSlugs } from './seedPolicy.js'
 import { parseCsvFile } from '../src/lib/productsCsv.js'
 import { assertLocalDevTarget } from './assertLocalDevTarget.js'
 import {
@@ -501,9 +502,19 @@ async function main() {
    * its order history and its images stay; it leaves the catalogue.
    * `catalogQuery` already filters on `isActive`, so this is the supported
    * way to withdraw a product.
+   *
+   * 🔴 CSV-SCOPED since 2026-08-25 (user decision): convergence governs only
+   * slugs the CSV KNOWS — a row demoted from verified=yes still deactivates,
+   * but a product created through the ADMIN PANEL (its slug absent from the
+   * CSV entirely) is left alone. Before this, a re-run of the seed against a
+   * database that had gained admin-created products silently withdrew them —
+   * exactly what happened to the user's ויטמין C ליפוזומלי the day this was
+   * fixed. On a deployed store the admin panel owns the catalogue after the
+   * one-time seed; the seed must never fight it.
    */
+  const demotedSlugs = demotedProductSlugs(productRows, verifiedSlugs)
   const deactivated = await prisma.product.updateMany({
-    where: { isActive: true, slug: { notIn: [...verifiedSlugs] } },
+    where: { isActive: true, slug: { in: demotedSlugs } },
     data: { isActive: false },
   })
   if (deactivated.count > 0) {

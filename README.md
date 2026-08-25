@@ -23,7 +23,7 @@ deliverable that summarises the system is the submission document.
 **Fully implemented and running locally, end to end.**
 
 ```
-✅  Catalogue — 49 real products, 8 brands, search/filter/sort/paging, all server-side
+✅  Catalogue — 50 real products, 8 brands, search/filter/sort/paging, all server-side
 ✅  Cart, checkout, orders — guest + registered, atomic stock, simulated payment, cancellation window
 ✅  Auth — email verification, lockout, password reset, Argon2id hashing
 ✅  Personal area — history, reorder, profile, address book, favourites, customer club
