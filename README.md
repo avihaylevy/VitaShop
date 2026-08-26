@@ -218,4 +218,4 @@ An academic project. Not a real store — no orders are fulfilled and no payment
 
 ---
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
