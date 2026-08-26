@@ -377,6 +377,23 @@ textarea {
   letter-spacing: -0.01em;
   color: var(--text-ink);
 }
+/* Pass 129 — the catalog's HERO title (the user: the 32px heading-page
+   "looks bland" on the shop's landing surface). One size up from
+   .heading-page, same face and weight discipline (500 is inside the
+   clamped 300-600 axis). Owned here like its siblings — never re-declared
+   per component. Currently the catalog page's h1 only. */
+.heading-hero {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text-ink);
+}
+@media (min-width: 768px) {
+  .heading-hero {
+    font-size: 42px;
+  }
+}
 
 .focus-ring {
   outline: none;

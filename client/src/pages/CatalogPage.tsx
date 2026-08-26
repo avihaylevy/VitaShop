@@ -291,10 +291,31 @@ export function CatalogPage() {
 
   return (
     <div className="px-7 py-8">
-      <h1 className="heading-page">{t('nav.catalog', { ns: 'layout' })}</h1>
+      {/* Pass 129 — the centered hero title, the user's pick (option 3):
+          its OWN i18n key, decoupled from the nav tab's nav.catalog label
+          (both were renamed this pass — the tab to קטלוג, this page to
+          הקטלוג שלנו — and they can now diverge freely). .heading-hero
+          size, and a tone-vitamins-strong highlight sweep behind the word —
+          the same STRONG tone level the shelf chips wear, tying the title
+          to the categories below. The sweep is decorative (aria-hidden) and
+          sits at z-[-1] inside the relative span, so the text itself stays
+          plain for AT/contrast. The chrome row below stays start-aligned. */}
+      <h1 className="heading-hero text-center">
+        <span className="relative inline-block px-2.5">
+          <span
+            aria-hidden="true"
+            // bg-[var(--...)] arbitrary value: the STRONG tones have no
+            // --color-* alias in @theme (they are reached via inline style
+            // in ProductCard/CategoryShelf), so no bg-tone-*-strong utility
+            // exists to use here.
+            className="absolute bottom-1.5 end-0 start-0 z-[-1] h-4 rounded-compact bg-[var(--tone-vitamins-strong)]"
+          />
+          {t('catalogPage.title', { ns: 'catalog' })}
+        </span>
+      </h1>
       {/* DEC-106 — one orienting line so the header does not sit bare over
           the chrome row; it must not compete with the categories. */}
-      <p className="mt-1 text-sm text-text-muted">{t('catalogPage.subtitle', { ns: 'catalog' })}</p>
+      <p className="mt-1 text-center text-sm text-text-muted">{t('catalogPage.subtitle', { ns: 'catalog' })}</p>
 
       {/*
         🔴 The query controls render PERSISTENTLY, outside the resolved-state

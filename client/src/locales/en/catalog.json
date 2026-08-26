@@ -77,7 +77,8 @@
     "filteredEmptyFiltersMessage": "No products matched the selected filters.",
     "resultCount_one": "1 product found",
     "resultCount_other": "<n>{{count}}</n> products found",
-    "subtitle": "Find products by category, goal, or brand.",
+    "title": "Our Catalog",
+    "subtitle": "All our vitamins and supplements in one place.",
     "countLine_one": "1 product",
     "countLine_other": "<n>{{count}}</n> products"
   },

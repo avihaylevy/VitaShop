@@ -79,7 +79,8 @@
     "resultCount_one": "נמצא מוצר אחד",
     "resultCount_two": "נמצאו שני מוצרים",
     "resultCount_other": "נמצאו <n>{{count}}</n> מוצרים",
-    "subtitle": "מצאו מוצרים לפי קטגוריה, מטרה או מותג.",
+    "title": "הקטלוג שלנו",
+    "subtitle": "כל הוויטמינים ותוספי התזונה שלנו במקום אחד.",
     "countLine_one": "מוצר אחד",
     "countLine_two": "שני מוצרים",
     "countLine_other": "<n>{{count}}</n> מוצרים"
