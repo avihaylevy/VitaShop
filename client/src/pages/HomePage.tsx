@@ -229,7 +229,7 @@ export function HomePage() {
       {/* One drawer + one toast, page-owned — the same contract as every
           other add surface. suppress: the drawer IS the confirmation on the
           adds that open it. */}
-      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
+      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} openedByAdd />
       <AddedToCartToast message={addedToCartMessage} announceKey={announced} suppress={drawerOpen} />
     </div>
   )

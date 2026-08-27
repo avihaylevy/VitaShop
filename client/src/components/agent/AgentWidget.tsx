@@ -151,7 +151,7 @@ export function AgentWidget() {
           returnFocusRef is the FLOATING BUTTON, deliberately — see the
           header note; the hook's own trigger lookup would point into the
           panel this widget just closed. */}
-      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={buttonRef} />
+      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={buttonRef} openedByAdd />
     </>
   )
 }

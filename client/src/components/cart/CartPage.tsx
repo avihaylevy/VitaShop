@@ -59,6 +59,25 @@ export function CartPage() {
   /** One money-formatting path for the whole app — DESIGN_SYSTEM §2. */
   const money = (value: string) => formatPrice(value, language)
 
+  /*
+   * DEC-112 — the free-shipping bar's width, as a plain testable value
+   * instead of arithmetic buried in a JSX style template (review finding).
+   * A visual ratio of two SERVER strings; no money figure is derived or
+   * displayed from it (§3.4's decision — isFree — is the server's).
+   * 🔴 Review finding: without the isFinite guard, a malformed threshold
+   * made the width "NaN%" — an INVALID declaration the browser drops, so
+   * the inner div defaulted to width:auto = a FULL bar beside a sentence
+   * saying "add ₪X more". Bad data must read as empty, never as done.
+   * (No Math.max(0,·): cartApi's isMoney admits only non-negative strings.)
+   */
+  const shippingProgressRatio =
+    (parseFloat(cart.shipping.basis) / parseFloat(cart.shipping.threshold)) * 100
+  const shippingProgressPct = cart.shipping.isFree
+    ? 100
+    : Number.isFinite(shippingProgressRatio)
+      ? Math.min(100, shippingProgressRatio)
+      : 0
+
   const handleRemove = useCallback(
     (line: CartLineDisplay) => {
       // Captured BEFORE the request: once it succeeds the line is gone and its
@@ -306,6 +325,28 @@ export function CartPage() {
                       shekel sign on the wrong side of the number in Hebrew and
                       bypassed the single formatting path the whole site uses.
                     */}
+                    {/*
+                      DEC-112 — the free-shipping PROGRESS BAR (Goal-Gradient,
+                      from the area-3 plan; landed on the PAGE per the
+                      decision, the drawer stays bar-free). DECORATIVE
+                      (aria-hidden): the sentence below carries the same
+                      information in words, so the bar adds glanceability,
+                      never meaning. The width ratio divides two figures the
+                      SERVER sent (basis / threshold) — no money is computed
+                      or displayed from it (§3.4 intact: every number the
+                      shopper reads is still a server string).
+                    */}
+                    {!cart.shipping.noDeliveryRequired && (
+                      <div
+                        aria-hidden="true"
+                        className="h-1.5 max-w-xs overflow-hidden rounded-round bg-surface-sunken"
+                      >
+                        <div
+                          className="h-full rounded-round bg-brand-teal transition-[width] duration-300 ease-standard"
+                          style={{ width: `${shippingProgressPct}%` }}
+                        />
+                      </div>
+                    )}
                     <p className="text-xs text-text-muted">
                       {/*
                         🔴 THE THRESHOLD IS MOOT WHEN NOTHING IS DELIVERED, and

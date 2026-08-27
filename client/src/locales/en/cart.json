@@ -38,7 +38,8 @@
     "removed": "{{product}} was removed from the cart."
   },
   "blocked": {
-    "message": "One or more products in your cart cannot be purchased right now. Update or remove them to continue to checkout."
+    "message": "One or more products in your cart cannot be purchased right now. Update or remove them to continue to checkout.",
+    "messageDrawer": "One or more products in your cart cannot be purchased right now. Update or remove them on the cart page."
   },
   "remove": {
     "label": "Remove",
@@ -70,7 +71,10 @@
   },
   "drawer": {
     "title": "Your cart",
+    "titleAdded": "Added to cart",
     "goToCart": "Go to cart",
+    "goToCartCount_one": "Go to cart (1 item)",
+    "goToCartCount_other": "Go to cart ({{count}} items)",
     "continue": "Continue shopping",
     "empty": "Your cart is empty."
   },

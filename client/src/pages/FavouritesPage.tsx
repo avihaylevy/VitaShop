@@ -179,7 +179,7 @@ export function FavouritesPage() {
         </div>
       )}
 
-      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} />
+      <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} openedByAdd />
       {/* Fifth list item 3 — the confirmation POPUP; the one status region for adds on this page. */}
       <AddedToCartToast message={addedToCartMessage} announceKey={announced} suppress={drawerOpen} />
     </div>

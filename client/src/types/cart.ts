@@ -55,10 +55,13 @@ export type CartLine = {
 /**
  * DEC-058 — shipping, computed SERVER-SIDE and reported whole.
  *
- * 🔴 Every figure here arrives finished. The client does not compare `basis`
- * to `threshold`, does not subtract to find the remainder, and does not decide
- * whether shipping is free — §3.4, and a browser that adds up shipping is a
- * browser asserting a price.
+ * 🔴 Every figure here arrives finished. The client does not subtract to
+ * find the remainder and does not decide whether shipping is free — §3.4,
+ * and a browser that adds up shipping is a browser asserting a price.
+ * ONE recorded exception (DEC-112): CartPage renders a DECORATIVE
+ * progress bar whose width is basis/threshold — a visual ratio, aria-
+ * hidden, never a displayed figure or a decision; `isFree` stays the
+ * server's answer.
  */
 export type Shipping = {
   /**
