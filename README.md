@@ -122,6 +122,12 @@ The Hebrew (RTL) interface; every screen also ships in English (LTR).
 </p>
 <p align="center"><sub><b>Product page</b> — brand, ingredients, warnings, club pricing&emsp;·&emsp;<b>Cart</b> — live stock checks, server-side totals</sub></p>
 
+<p align="center">
+  <img src="docs/screenshots/cart-drawer.png" width="49%" alt="Cart drawer">
+  <img src="docs/screenshots/favourites.png" width="49%" alt="Favourites">
+</p>
+<p align="center"><sub><b>Cart drawer</b> — quick "keep shopping" glance after every add&emsp;·&emsp;<b>Favourites</b> — card-sized grid, count line, one-tap add</sub></p>
+
 ### Checkout
 
 <p align="center">
