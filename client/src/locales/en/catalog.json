@@ -48,11 +48,9 @@
   },
   "home": {
     "heroTitle": "All your vitamins and supplements in one place",
-    "tagline": "Vitamins and dietary supplements in one place — a catalogue organised by categories and health goals.",
+    "tagline": "A catalogue organised by categories and health goals — full info, no noise.",
     "browseCatalog": "Browse all products",
-    "featureInfo": "Complete product info",
-    "featureFiltering": "Smart filtering",
-    "featureCategories": "Clear categories",
+    "clubCta": "Join the club — 10% off",
     "categoriesTitle": "Shop by category",
     "shopByGoalTitle": "Shop by goal",
     "loading": "Loading categories…",

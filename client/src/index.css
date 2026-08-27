@@ -412,6 +412,50 @@ textarea {
     font-size: 48px;
   }
 }
+/* Area 5 — the HOME hero band's title. Owned here like its siblings, and
+   here it is not optional: these heading classes are unlayered, so they
+   beat every Tailwind utility — a page-side text-[...] override on
+   .heading-page silently loses the cascade (the first cut shipped exactly
+   that: the class said clamp(...,30px), the browser rendered 32px).
+   The lg step deliberately goes DOWN from the md 32px: at lg the split
+   layout turns on and the one-row nowrap title shares the band with the
+   whole photo — the clamp is sized so the longer English strings clear
+   the photo at 1024, the narrowest split width. nowrap lives here with
+   the size because they are one contract (variant G's one-row rule). */
+.heading-hero-band {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text-ink);
+}
+@media (min-width: 768px) {
+  .heading-hero-band {
+    font-size: 32px;
+  }
+}
+@media (min-width: 1024px) {
+  .heading-hero-band {
+    font-size: clamp(24px, 2.35vw, 30px);
+    white-space: nowrap;
+  }
+}
+
+/* Area 5 — the home hero photo's wall-side fade into the band's cream.
+   Direction branches HERE, once, because gradients have no logical
+   keywords ('to inline-start' does not exist). The first cut carried the
+   pair as two Tailwind arbitrary classes on the element — same property
+   twice, winner decided by emit order, and the 82% stop duplicated. The
+   fade applies from lg only: below lg the photo is full-width under the
+   copy and fading its top edge would look like a defect. */
+@media (min-width: 1024px) {
+  .hero-photo-fade {
+    mask-image: linear-gradient(to left, black 82%, transparent 100%);
+  }
+  [dir='rtl'] .hero-photo-fade {
+    mask-image: linear-gradient(to right, black 82%, transparent 100%);
+  }
+}
 
 .focus-ring {
   outline: none;
@@ -533,11 +577,12 @@ textarea {
 }
 
 /*
- * The hero's shelf composition — each product rises onto its pedestal once,
- * on mount, staggered by animation-delay at the call site. Opacity+transform
- * only, from an already-readable 0.4; the page's ONE authored entrance
- * (craft floor: one moment, not scattered effects). motion-safe-gated at
- * the call site in HomePage; reduced motion renders the settled state.
+ * A gentle rise-on-mount, staggered by animation-delay at the call site.
+ * Opacity+transform only, from an already-readable 0.4; motion-safe-gated
+ * at the call sites; reduced motion renders the settled state.
+ * Named for the home hero's shelf composition it was born with (deleted at
+ * area 5) — its LIVE consumers are LoginPage's mark medallion and strength
+ * badge. Do not delete on a HomePage grep.
  */
 @keyframes hero-shelf-rise {
   0% {

@@ -560,3 +560,40 @@ describe('the shelf after a retry — ISSUE-098', () => {
     await waitFor(() => expect(statusRegion().textContent).toBe('שני מוצרים חדשים'))
   })
 })
+
+describe('area 5 — the hero photo and the club CTA', () => {
+  /*
+   * 🔴 THE LANGUAGE PICKS THE PHOTO. The pass-132 hero died because one
+   * photo cannot serve both reading directions; the fix is a mirrored pair
+   * (he: tabletop left / calm wall right; en: the mirror), chosen by the
+   * language alone — never a CSS direction branch. This pins the choice in
+   * BOTH directions, so a "simplification" to a single import, or a flipped
+   * ternary, goes red instead of shipping the wrong-direction photo.
+   */
+  it('🔴 the hero photo follows the language: en → the en asset, he → the he asset', async () => {
+    routed(ok([product(1)]))
+    const { container } = renderHome()
+    await screen.findByText('Product 1')
+
+    const hero = () => container.querySelector<HTMLImageElement>('img.hero-photo-fade')
+    expect(hero()?.src).toMatch(/home-hero-en/)
+    // THE CONTROL for the assertion above: the two assets are distinct
+    // files — otherwise both toMatch pins would pass against one import.
+    expect(hero()?.src).not.toMatch(/home-hero-he/)
+
+    await act(async () => {
+      await i18n.changeLanguage('he')
+    })
+    expect(hero()?.src).toMatch(/home-hero-he/)
+    expect(hero()?.src).not.toMatch(/home-hero-en/)
+  })
+
+  it('the club CTA is a real link to the club page', async () => {
+    routed(ok([product(1)]))
+    renderHome()
+    await screen.findByText('Product 1')
+
+    const club = screen.getByRole('link', { name: /join the club — 10% off/i })
+    expect(club.getAttribute('href')).toBe('/account/club')
+  })
+})

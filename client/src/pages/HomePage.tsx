@@ -12,10 +12,12 @@ import { AddedToCartToast } from '../components/cart/AddedToCartToast'
 import { useAddToCart } from '../hooks/useAddToCart'
 import { Button } from '../components/ui/Button'
 import { LinkButton } from '../components/ui/LinkButton'
+import { TextLink } from '../components/ui/TextLink'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { getCategoryTone } from '../lib/categoryTone'
-import { DocumentIcon, FilterIcon, GridIcon } from '../components/icons'
 import type { SupportedLanguage } from '../i18n'
+import heroPhotoHe from '../assets/brand/home-hero-he.webp'
+import heroPhotoEn from '../assets/brand/home-hero-en.webp'
 
 /**
  * Production home page — REBUILT at DEC-082 (the fifth list, items 6+7:
@@ -62,91 +64,72 @@ export function HomePage() {
 
   return (
     <div className="px-7 py-8">
-      {/* HERO — the "shelf scene" rework (user, 2026-08-23, after rejecting
-          a baked-in-text banner): live i18n text + CTA + feature chips at
-          the start, and the product composition upgraded from a flat row to
-          products standing on drawn pedestals over soft NEUTRAL backdrop
-          shapes. 🔴 The shapes are neutral warm tints on purpose — DEC-020
-          constraint 6 binds the six category tones to Category, never to
-          arbitrary products, so a tone behind a showcase bottle would be
-          exactly the decoration constraint 3 forbids. The composition stays
-          decorative and hidden from assistive tech (the CTA is the content). */}
-      <section className="relative overflow-hidden rounded-card bg-surface-section p-6 md:p-10">
-        {/* Backdrop — two soft shapes behind the composition end, echoing
-            the pedestal-and-arc language of the user's reference banner. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-24 end-6 size-96 rounded-full bg-surface-sunken" />
-          <div className="absolute -bottom-28 end-72 size-72 rounded-full bg-well/90" />
-        </div>
-        <div className="relative grid items-center gap-8 md:grid-cols-[1fr_auto]">
-          <div>
-            {/* text-balance — ISSUE-151: the headline stranded one word on
-                its own line; balanced wrapping equalizes the lines. */}
-            {/* The lecturer-fixes list (2026-08-23): the headline must not
-                break mid-sentence — one line from md up (nowrap; measured
-                fitting un-clipped at 768–1440 with the composition beside
-                it). Small screens still wrap, balanced. */}
-            <h1 className="heading-page max-w-xl text-balance md:max-w-none md:whitespace-nowrap">{t('home.heroTitle', { ns: 'catalog' })}</h1>
-            <p className="mt-3 max-w-xl text-base text-text-muted">
-              {t('home.tagline', { ns: 'catalog' })}
-            </p>
-            <div className="mt-6">
-              <LinkButton to="/catalog" size="hero">
-                {t('home.browseCatalog', { ns: 'catalog' })}
-              </LinkButton>
-            </div>
-            {/* Feature chips — the reference banner's value points as REAL
-                translatable text. A list, because it is one: three parallel
-                claims about the catalogue. Icons are decorative; the text is
-                the content. border-card, not border-control: these chips are
-                not interactive and must not dress like inputs. */}
-            <ul className="mt-8 flex flex-wrap gap-2">
-              {(
-                [
-                  ['featureInfo', DocumentIcon],
-                  ['featureFiltering', FilterIcon],
-                  ['featureCategories', GridIcon],
-                ] as const
-              ).map(([key, Icon]) => (
-                <li
-                  key={key}
-                  className="flex items-center gap-2 rounded-card border border-border-card bg-well px-3 py-2 text-sm font-medium text-text-ink"
-                >
-                  <Icon aria-hidden="true" className="size-4 shrink-0 text-text-muted" />
-                  {t(`home.${key}`, { ns: 'catalog' })}
-                </li>
-              ))}
-            </ul>
+      {/* HERO — area 5, variant G's split form (2026-08-27, approved after
+          variants A–F, then re-shaped twice on the user's live verdicts:
+          "considerably smaller" → flat band; "don't crop the vitamins" →
+          this split). The user's own generated "morning ritual" photo is
+          shown WHOLE — natural aspect at band height, anchored inline-end,
+          its wall-side edge mask-faded into the cream (.hero-photo-fade,
+          index.css) — and the copy sits on the cream beside it. No scrim,
+          no card.
+
+          🔴 TWO MIRRORED PHOTOS, ONE LAYOUT. The pass-132 build died because
+          one photo cannot serve both reading directions: each image keeps
+          its tabletop scene at the band's inline-END for its own language,
+          so the LANGUAGE picks the photo (the RegisterPage signup-he/-en
+          precedent) and the layout itself never branches on direction. A
+          replacement photo must come as the same mirrored pair.
+
+          Below lg the band cannot hold the split, so the copy stacks ABOVE
+          the photo on the section surface — same DOM nodes, the absolute
+          positioning simply switches on at lg. lg:max-h caps the band on
+          very wide screens, where the 3/0.9 ratio alone would grow it past
+          the height the user asked to shrink. */}
+      <section className="relative overflow-hidden rounded-card bg-surface-section lg:aspect-[3/0.9] lg:max-h-[420px]">
+        <div className="relative z-10 flex flex-col items-start p-6 md:p-10 lg:absolute lg:top-[10%] lg:start-[4%] lg:p-0">
+          {/* .heading-hero-band (index.css) owns the size AND the lg one-row
+              nowrap rule. It cannot be a text-[...] override on
+              .heading-page: heading classes are unlayered and beat every
+              Tailwind utility — the first cut tried exactly that and the
+              title silently rendered 32px while the class said 30 (measured
+              live; the cascade family in browser-verification.md). */}
+          <h1 className="heading-hero-band max-w-xl text-balance lg:max-w-none">
+            {t('home.heroTitle', { ns: 'catalog' })}
+          </h1>
+          {/* Ink at 500 from lg — the approved split mock's look: the small
+              one-row line beside the photo reads full-contrast; below lg it
+              reverts to the ordinary muted-on-surface treatment. (Utility
+              overriding utility — text-base — so unlike the h1 this clamp
+              really applies; measured 14.08px at 1280.) */}
+          <p className="mt-3 max-w-xl text-base text-text-muted lg:mt-2.5 lg:max-w-none lg:whitespace-nowrap lg:text-[clamp(13px,1.1vw,15px)] lg:font-medium lg:text-text-ink">
+            {t('home.tagline', { ns: 'catalog' })}
+          </p>
+          {/* The club link sits CENTERED UNDER the CTA (approved G spec) —
+              a column sized to its content so "centered" means centered on
+              the button, not on the hero. w-fit + max-w-full, never w-max:
+              the column must stay cappable so a longer label WRAPS instead
+              of being clipped by the section's overflow-hidden. */}
+          <div className="mt-6 flex w-fit max-w-full flex-col items-center gap-2.5">
+            <LinkButton to="/catalog" size="hero">
+              {t('home.browseCatalog', { ns: 'catalog' })}
+            </LinkButton>
+            <TextLink to="/account/club" tone="ink">
+              {t('home.clubCta', { ns: 'catalog' })}
+            </TextLink>
           </div>
-          {/* The shelf scene: staggered heights, each product on its own
-              pedestal ellipse — items-END so bottles of different heights
-              stand on one visual ground line, like goods on a shelf.
-              dir="rtl" PINS the bottle order so both languages show the
-              identical scene (user, 2026-08-23: the flipped arrangement
-              read as a different composition). Legitimate under the
-              mirrored-logical-layout rule for the same reason numbers get
-              dir="ltr": this is decorative aria-hidden artwork with no
-              reading order — only a composition — while the SECTION still
-              mirrors sides with the reading direction as it should. */}
-          {showcase.heroImages.length > 0 && (
-            <ul aria-hidden="true" dir="rtl" className="hidden items-end gap-4 md:flex">
-              {showcase.heroImages.map((file, index) => (
-                <li
-                  key={file}
-                  className={`flex flex-col items-center motion-safe:animate-[hero-shelf-rise_.5s_ease-out_both] ${index === 1 ? 'w-56' : 'w-40'}`}
-                  style={{ animationDelay: `${index * 90}ms` }}
-                >
-                  <ProductImage imageFile={file} alt="" />
-                  {/* The pedestal — a flat stone ellipse under each product,
-                      the banner's plinths redrawn in the system's neutrals.
-                      A visible gap above it, or the white image well
-                      swallows it entirely (measured at 1280). */}
-                  <div className="mt-2 h-3 w-11/12 rounded-[50%] bg-surface-sunken shadow-[0_3px_6px_rgba(31,37,46,0.14)]" />
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
+        {/* alt="" — the photo is scene-setting; every claim it makes is made
+            by the real text above it. NEVER CROPPED (the user, this pass:
+            "i dont like it that the image is cropped at the vitamins part"):
+            below lg the box is aspect-[3/2] = the source's own ratio, and at
+            lg the image keeps natural aspect at band height — object-CONTAIN
+            (not cover) so even a future photo at a different ratio
+            letterboxes instead of silently cropping the products away. */}
+        <img
+          src={language === 'he' ? heroPhotoHe : heroPhotoEn}
+          alt=""
+          className="hero-photo-fade aspect-[3/2] w-full object-contain lg:absolute lg:end-0 lg:top-0 lg:aspect-auto lg:h-full lg:w-auto"
+        />
       </section>
 
       {/* CATEGORY TILES — the page's real navigation, now with imagery.
