@@ -229,3 +229,86 @@ export function GridIcon(props: IconSvgProps) {
     </svg>
   )
 }
+
+/* ——— Area 4 (checkout, DEC-110.3) ——— */
+
+export function TruckIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
+      <path d="M15 8h4l3 3.33V17a1 1 0 0 1-1 1h-2" />
+      <circle cx="7" cy="18" r="2" />
+      <circle cx="17" cy="18" r="2" />
+      <path d="M9 18h6" />
+    </svg>
+  )
+}
+
+export function PackageIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <path d="M3.29 7 12 12l8.71-5" />
+      <path d="M12 22V12" />
+      <path d="m7.55 4.24 8.95 5.16" />
+    </svg>
+  )
+}
+
+export function StoreIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+      <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+      <path d="M2 7h20" />
+      <path d="M22 7v3a2 2 0 0 1-2 2 2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7" />
+    </svg>
+  )
+}
+
+export function MapPinIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  )
+}
+
+export function CreditCardIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <rect x="2.5" y="5" width="19" height="14" rx="2" />
+      <path d="M2.5 10h19" />
+      <path d="M6 15h4" />
+    </svg>
+  )
+}
+
+export function ShieldCheckIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  )
+}
+
+export function ClockIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  )
+}
+
+export function LockIcon(props: IconSvgProps) {
+  return (
+    <svg {...BASE} {...props}>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  )
+}

@@ -10,7 +10,10 @@
     "courier": "משלוח עד הבית",
     "pickup_point": "איסוף מנקודת חלוקה",
     "readyWithin": "צפוי להיות מוכן לאיסוף בתוך כ־{{days}} ימי עסקים",
-    "deliveredBetween": "צפי הגעה משוער: {{min}}–{{max}} ימי עסקים"
+    "deliveredBetween": "צפי הגעה משוער: {{min}}–{{max}} ימי עסקים",
+    "estCourier": "3–5 ימי עסקים",
+    "estPickupPoint": "3–5 ימי עסקים",
+    "estSelfPickup": "מוכן בתוך כ־2 ימי עסקים"
   },
   "summary": {
     "itemsTotal": "סכום המוצרים",
@@ -18,7 +21,12 @@
     "shippingFree": "חינם",
     "noDeliveryRequired": "אין משלוח באיסוף עצמי",
     "total": "סה\"כ לתשלום",
-    "lineQuantity": "כמות: {{quantity}}"
+    "lineQuantity": "כמות: {{quantity}}",
+    "lineQuantityCompact": "× {{quantity}}",
+    "itemCount_one": "פריט אחד",
+    "itemCount_two": "שני פריטים",
+    "itemCount_other": "{{count}} פריטים",
+    "jumpToSummary": "לסיכום ההזמנה"
   },
   "state": {
     "loading": "מחשבים את ההזמנה…",

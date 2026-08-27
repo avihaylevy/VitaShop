@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../i18n'
@@ -226,7 +226,9 @@ describe('F2b — the address form and the REQ-F-041 pre-fill', () => {
     )
     renderPage()
     // The summary still arrives; the form is simply empty and typeable.
-    expect(await screen.findByText(/order summary/i)).toBeTruthy()
+    // DEC-110.3: queried as the receipt's HEADING — the phrase also
+    // appears in the mobile jump strip, so a bare text query is ambiguous.
+    expect(await screen.findByRole('heading', { name: /order summary/i })).toBeTruthy()
     expect(screen.getByLabelText(/street and number/i)).toBeTruthy()
   })
 
@@ -556,7 +558,13 @@ describe('F2c — confirming and paying', () => {
     await fillAndPay()
     // REQ-F-042 requires the updated values to be SHOWN and confirmed again.
     expect(await screen.findByText(/please confirm them again/i)).toBeTruthy()
-    expect(screen.getByText(/999\.00/)).toBeTruthy()
+    // DEC-110.3: the refreshed total renders in both the receipt and the
+    // mobile jump strip — the pin is scoped to the RECEIPT's own region
+    // (review finding: a bare "appears somewhere" would stay green if a
+    // regression left a stale total in the receipt while only the strip
+    // refreshed).
+    const receipt = screen.getByRole('complementary', { name: /order summary/i })
+    expect(within(receipt).getAllByText(/999\.00/).length).toBeGreaterThan(0)
   })
 
   it('a CANCELLED order names it instead of reporting a payment failure', async () => {
