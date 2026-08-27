@@ -25,6 +25,8 @@ function buildProduct(overrides: Partial<ProductWithCatalogRelations> = {}): Pro
     stockQuantity: 60,
     descriptionHe: 'תיאור',
     descriptionEn: 'Description',
+    shortDescriptionHe: 'תקציר',
+    shortDescriptionEn: 'Short description',
     warningsAllergens: 'אין',
     allergenInfoIncomplete: false,
     targetAudience: null,
@@ -53,6 +55,8 @@ describe('mapProductToPublicCatalog', () => {
       price: '94.90',
       stockQuantity: 60,
       lowStockThreshold: 5,
+      shortDescriptionHe: 'תקציר',
+      shortDescriptionEn: 'Short description',
       imageFile: 'solgar-omega-3.jpg',
     })
   })
@@ -98,10 +102,12 @@ describe('mapProductToPublicCatalog', () => {
     expect(result.imageFile).toBe('a.jpg')
   })
 
-  it('never leaks internal fields (id, timestamps, description, ingredients, targetAudience)', () => {
+  it('never leaks internal fields (id, timestamps, warnings, ingredients, targetAudience)', () => {
     const result = mapProductToPublicCatalog(buildProduct())
     expect(result).not.toHaveProperty('id')
     expect(result).not.toHaveProperty('createdAt')
+    // DEC-111: the FULL description stays excluded (detail-only); the
+    // SHORT pair is the list's own field, asserted in the shape test.
     expect(result).not.toHaveProperty('descriptionHe')
     expect(result).not.toHaveProperty('descriptionEn')
     expect(result).not.toHaveProperty('warningsAllergens')

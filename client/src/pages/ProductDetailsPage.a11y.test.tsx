@@ -42,6 +42,9 @@ vi.mock('../hooks/useProductDetail', () => ({
 const mockUseCart = vi.fn()
 vi.mock('../state/CartContext', () => ({
   useCart: () => mockUseCart(),
+  // DEC-110 — the card's null-tolerant line hook: 'not in cart' keeps
+  // these suites on the add-pill shape they assert.
+  useOptionalCartLine: () => null,
 }))
 
 // ISSUE-115 — the page's heart reads favourites from context; inert here.
@@ -61,7 +64,7 @@ function product(overrides: Partial<ProductDetailModel> = {}): ProductDetailMode
     brandName: 'סולגאר',
     dosageForm: 'כמוסות',
     packageQuantity: 100,
-    imageFile: 'אומגה 3 של חברת סולגאר.jpg',
+    imageFile: 'אומגה 3 של חברת סולגאר.webp',
     serialNumber: 'b7c1e0a2-uuid',
     usageInstructions: 'כמוסה אחת ביום עם ארוחה',
     // 🔴 Real basenames from `lib/productImages.ts`. A filename with no
@@ -69,7 +72,7 @@ function product(overrides: Partial<ProductDetailModel> = {}): ProductDetailMode
     // renders no <img> and therefore no alt text at all — so a fabricated
     // filename here would silently make the alt-text assertions below
     // unfalsifiable.
-    images: ['אומגה 3 של חברת סולגאר.jpg', 'סולגר טבליות ויטמין B12.jpg'],
+    images: ['אומגה 3 של חברת סולגאר.webp', 'סולגר טבליות ויטמין B12.webp'],
     description: 'תיאור המוצר בעברית',
     warningsAllergens: 'מכיל דגים',
     allergenInfoIncomplete: false,

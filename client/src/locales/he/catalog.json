@@ -1,4 +1,10 @@
 {
+  "card": {
+    "add": "הוסף",
+    "addSrSuffix": "לעגלה, {{name}}",
+    "quantityInCart": "הכמות בעגלה: {{quantity}}",
+    "removedFromCart": "{{name}} הוסר מהעגלה"
+  },
   "addToCart": "הוספה לעגלה",
   "quantity": {
     "label": "כמות",

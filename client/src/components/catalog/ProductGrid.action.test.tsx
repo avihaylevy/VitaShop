@@ -13,6 +13,31 @@ vi.mock('../../state/FavouritesContext', () => ({
 }))
 
 /**
+ * DEC-110 (area 1) — the card derives its control from the cart line. The
+ * real hook is null-tolerant (no provider → pill), which the "not in cart"
+ * tests rely on unmocked; the in-cart tests flip this switchable stub
+ * instead of mounting a fetching CartProvider.
+ */
+const cartLineStub: {
+  line: { id: string; quantity: number } | null
+  setLineQuantity: ReturnType<typeof vi.fn>
+  removeLine: ReturnType<typeof vi.fn>
+} = { line: null, setLineQuantity: vi.fn(), removeLine: vi.fn() }
+
+vi.mock('../../state/CartContext', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../state/CartContext')>()
+  return {
+    ...original,
+    useOptionalCartLine: () => ({
+      line: cartLineStub.line,
+      setLineQuantity: cartLineStub.setLineQuantity,
+      removeLine: cartLineStub.removeLine,
+      pending: false,
+    }),
+  }
+})
+
+/**
  * MILESTONE-008 Checkpoint F4 — the guard the TYPE used to be.
  *
  * 🔴 NOTHING IN THIS SUITE ASSERTED THAT A CATALOGUE CARD HAS AN ADD TO CART
@@ -47,53 +72,115 @@ function renderGrid(ui: React.ReactElement) {
 
 beforeEach(async () => {
   await i18n.changeLanguage('en')
+  cartLineStub.line = null
+  cartLineStub.setLineQuantity = vi.fn()
+  cartLineStub.removeLine = vi.fn()
 })
 
 afterEach(cleanup)
 
-describe('a SHOPPING card', () => {
+describe('a SHOPPING card, product NOT in the cart', () => {
   it('🔴 renders an Add to cart button — the catalogue contract', () => {
     renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
     expect(screen.getByRole('button', { name: /add to cart/i })).toBeTruthy()
   })
 
-  it('calls back with the slug and the chosen quantity (default 1)', () => {
+  it('calls back with the slug and quantity 1 — the card adds one (DEC-110)', () => {
     const onAddToCart = vi.fn()
     renderGrid(<ProductGrid products={[MODEL]} onAddToCart={onAddToCart} />)
     screen.getByRole('button', { name: /add to cart/i }).click()
     expect(onAddToCart).toHaveBeenCalledWith('fixture-product', 1)
   })
 
-  it('🔴 ISSUE-118 — the stepper changes HOW MANY one press adds, then resets', () => {
-    const onAddToCart = vi.fn()
-    renderGrid(<ProductGrid products={[MODEL]} onAddToCart={onAddToCart} />)
-    const increase = screen.getByRole('button', { name: /increase quantity/i })
-    fireEvent.click(increase)
-    fireEvent.click(increase)
-    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
-    expect(onAddToCart).toHaveBeenCalledWith('fixture-product', 3)
-    // Reset after the hand-off: the next press is 1 again.
-    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
-    expect(onAddToCart).toHaveBeenLastCalledWith('fixture-product', 1)
-  })
-
-  it('the stepper floors at 1 and caps at 10 without disabling the focused button', () => {
-    renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
-    const decrease = screen.getByRole('button', { name: /decrease quantity/i })
-    const increase = screen.getByRole('button', { name: /increase quantity/i })
-    // At the floor: aria-disabled, still a real (focusable) button.
-    expect(decrease.getAttribute('aria-disabled')).toBe('true')
-    expect(decrease.hasAttribute('disabled')).toBe(false)
-    for (let i = 0; i < 12; i++) fireEvent.click(increase)
-    expect(increase.getAttribute('aria-disabled')).toBe('true')
-    expect(screen.getByText('10')).toBeTruthy()
-  })
-
-  it('keeps the ARIA shape: one accessible link + heart + stepper pair + add button', () => {
-    // ISSUE-115/118 widened the contract: heart, − , + , add = 4 buttons.
+  it('keeps the ARIA shape: one accessible link + heart + ONE add button', () => {
+    // DEC-110 narrowed the contract: the pre-add stepper left the card
+    // (it lives on the detail page); heart + add = 2 buttons.
     renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
     expect(screen.getAllByRole('link')).toHaveLength(1)
-    expect(screen.getAllByRole('button')).toHaveLength(4)
+    expect(screen.getAllByRole('button')).toHaveLength(2)
+  })
+})
+
+describe('a SHOPPING card, product IN the cart (DEC-110 — the stepper takes the pill\'s place)', () => {
+  beforeEach(() => {
+    cartLineStub.line = { id: 'line-1', quantity: 2 }
+  })
+
+  it('🔴 shows the cart-line stepper INSTEAD of the add button, at the server\'s quantity', () => {
+    renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: /add to cart/i })).toBeNull()
+    expect(screen.getByText('2')).toBeTruthy()
+    // ARIA shape: link + heart + − + + = 1 link, 3 buttons.
+    expect(screen.getAllByRole('link')).toHaveLength(1)
+    expect(screen.getAllByRole('button')).toHaveLength(3)
+  })
+
+  it('🔴 + routes through the ADD choreography (quiet-add rules), − PATCHes the line', () => {
+    // + is another add-of-one through onAddToCart — the quiet-add,
+    // announcement and clamp-reopens-drawer rules all live there, and a
+    // raw PATCH would fork them. − has no add analog, so it edits the
+    // line directly, subject = the resolved name.
+    const onAddToCart = vi.fn()
+    renderGrid(<ProductGrid products={[MODEL]} onAddToCart={onAddToCart} />)
+    fireEvent.click(screen.getByRole('button', { name: /increase quantity/i }))
+    expect(onAddToCart).toHaveBeenCalledWith('fixture-product', 1)
+    expect(cartLineStub.setLineQuantity).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /decrease quantity/i }))
+    expect(cartLineStub.setLineQuantity).toHaveBeenCalledWith('line-1', 'Fixture Product', 1)
+  })
+
+  it('🔴 − at quantity 1 REMOVES the line (the control hands back to the pill)', () => {
+    cartLineStub.line = { id: 'line-1', quantity: 1 }
+    cartLineStub.removeLine = vi.fn().mockResolvedValue({ cart: {}, outcome: {} })
+    renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /decrease quantity/i }))
+    expect(cartLineStub.removeLine).toHaveBeenCalledWith('line-1', 'Fixture Product')
+    expect(cartLineStub.setLineQuantity).not.toHaveBeenCalled()
+  })
+
+  it('caps at 10 with aria-disabled, never a focus-dropping disabled attribute', () => {
+    cartLineStub.line = { id: 'line-1', quantity: 10 }
+    renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
+    const increase = screen.getByRole('button', { name: /increase quantity/i })
+    expect(increase.getAttribute('aria-disabled')).toBe('true')
+    expect(increase.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(increase)
+    expect(cartLineStub.setLineQuantity).not.toHaveBeenCalled()
+  })
+})
+
+describe('DEC-110 — the pill↔stepper swap is a DELIBERATE focus hand-off (the unmount-takes-focus family)', () => {
+  it('🔴 after a pill press whose add lands, focus moves to the stepper\'s + button', async () => {
+    const { rerender } = renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
+    const pill = screen.getByRole('button', { name: /add to cart/i })
+    pill.focus()
+    fireEvent.click(pill)
+    // The add lands: the cart now holds the line (stub flip + rerender
+    // stands in for the provider's cart replacement).
+    cartLineStub.line = { id: 'line-1', quantity: 1 }
+    rerender(
+      <MemoryRouter>
+        <ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />
+      </MemoryRouter>,
+    )
+    const increase = screen.getByRole('button', { name: /increase quantity/i })
+    await vi.waitFor(() => expect(document.activeElement).toBe(increase))
+  })
+
+  it('🔴 the CONTROL — a cart change the card did NOT initiate moves no focus', async () => {
+    // e.g. the drawer added this product: the stepper appears, but focus
+    // stays wherever the shopper left it.
+    const { rerender } = renderGrid(<ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />)
+    const heart = screen.getByRole('button', { name: /favourites/i })
+    heart.focus()
+    cartLineStub.line = { id: 'line-1', quantity: 1 }
+    rerender(
+      <MemoryRouter>
+        <ProductGrid products={[MODEL]} onAddToCart={vi.fn()} />
+      </MemoryRouter>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(document.activeElement).toBe(heart)
   })
 })
 

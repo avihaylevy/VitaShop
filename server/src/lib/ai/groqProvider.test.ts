@@ -222,6 +222,8 @@ describe('GroqProvider.explainProducts', () => {
     stockQuantity: 10,
     lowStockThreshold: 5,
     imageFile: null,
+    shortDescriptionHe: 'תקציר בדיקה',
+    shortDescriptionEn: 'Fixture short description',
   }
 
   it('sends product FACTS as data, redacts the user message, returns the explanations array', async () => {

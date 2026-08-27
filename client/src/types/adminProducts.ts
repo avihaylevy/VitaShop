@@ -18,6 +18,9 @@ export type AdminProductRow = {
   usageInstructions: string
   descriptionHe: string
   descriptionEn: string
+  /** DEC-111 — the card teaser pair ('' = fall back to the description). */
+  shortDescriptionHe: string
+  shortDescriptionEn: string
   warningsAllergens: string
   /** DEC-083 tri-state: null = no sourced claim. */
   isKosher: boolean | null
@@ -98,6 +101,9 @@ export type AdminProductCreatePayload = {
   lowStockThreshold?: number
   descriptionHe: string
   descriptionEn: string
+  /** DEC-111 — optional card teasers; omitted/empty rides the server fallback. */
+  shortDescriptionHe?: string
+  shortDescriptionEn?: string
   warningsAllergens: string
   /** DEC-083 amended — the admin's tri-state dietary claims; omitted = no claim (null). */
   isKosher?: boolean | null

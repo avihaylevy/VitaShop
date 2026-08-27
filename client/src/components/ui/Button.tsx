@@ -44,7 +44,14 @@ const DISABLED_CLASS =
  * `aria-disabled:bg-…` compiles to an attribute selector and outranks the
  * plain class.
  */
-const ARIA_DISABLED_CLASS =
+// Exported so a call site that can't use <Button> itself (a shape Button
+// doesn't offer — ProductCard's pill is a rounded-round floating control,
+// not Button's rounded-card 44px one) still gets the SAME aria-disabled
+// look via the same specificity-safe attribute selector, instead of
+// hand-rolling a diverged one (review of this diff: it had drifted to a
+// different text colour and no border — the exact ISSUE-098 defect, one
+// call site over).
+export const ARIA_DISABLED_CLASS =
   'aria-disabled:pointer-events-none aria-disabled:border-border-hairline aria-disabled:bg-surface-sunken aria-disabled:text-text-muted'
 
 type ButtonProps = {

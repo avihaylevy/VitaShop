@@ -90,6 +90,23 @@ MAX_WIDTH_PCT = 84.0
 
 
 def trimmed_bbox(image: "Image.Image") -> tuple[int, int, int, int]:
+    # Pass 131 — TRANSPARENT CUTOUTS measure by ALPHA, not by whiteness.
+    # The white-trim path converts RGBA to RGB, which paints transparency
+    # BLACK, making the "content" the whole canvas: every cutout webp fell
+    # to frameWidth/Height 57/76 flat and the catalogue's product sizes
+    # stopped being normalised (the user's "some images aren't the same
+    # size"). An image whose corners are transparent is a cutout; its
+    # content box is the alpha bounding box.
+    if image.mode in ("RGBA", "LA") or "transparency" in image.info:
+        rgba = image.convert("RGBA")
+        w, h = rgba.size
+        corners = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+        if all(rgba.getpixel(p)[3] < 16 for p in corners):
+            alpha_mask = rgba.getchannel("A").point(lambda p: 255 if p > 16 else 0)
+            bbox = alpha_mask.getbbox()
+            if bbox is not None:
+                return bbox
+
     rgb = image.convert("RGB")
     background = Image.new("RGB", rgb.size, (255, 255, 255))
     diff = ImageChops.difference(rgb, background).convert("L")

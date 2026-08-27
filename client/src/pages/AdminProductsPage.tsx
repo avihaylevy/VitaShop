@@ -62,6 +62,9 @@ type DetailDraft = {
   dosageForm: string
   descriptionHe: string
   descriptionEn: string
+  /** DEC-111 — the card teaser pair. */
+  shortDescriptionHe: string
+  shortDescriptionEn: string
   usageInstructions: string
   warningsAllergens: string
   packageQuantity: string
@@ -232,6 +235,8 @@ export function AdminProductsPage() {
       dosageForm: row.dosageForm,
       descriptionHe: row.descriptionHe,
       descriptionEn: row.descriptionEn,
+      shortDescriptionHe: row.shortDescriptionHe,
+      shortDescriptionEn: row.shortDescriptionEn,
       usageInstructions: row.usageInstructions,
       warningsAllergens: row.warningsAllergens,
       packageQuantity: String(row.packageQuantity),
@@ -264,6 +269,8 @@ export function AdminProductsPage() {
       'dosageForm',
       'descriptionHe',
       'descriptionEn',
+      'shortDescriptionHe',
+      'shortDescriptionEn',
       'usageInstructions',
       'warningsAllergens',
     ] as const) {
@@ -761,6 +768,27 @@ export function AdminProductsPage() {
                                 onChange={(e) => setDetailDraft(row, { descriptionEn: e.target.value })}
                                 className={detailAreaClass}
                                 dir="ltr"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.shortDescriptionHe')}</span>
+                              <input
+                                type="text"
+                                maxLength={160}
+                                value={detailDraft!.shortDescriptionHe}
+                                onChange={(e) => setDetailDraft(row, { shortDescriptionHe: e.target.value })}
+                                className={`${FOCUS_RING} h-10 rounded-card border border-border-control bg-well px-2`}
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm">
+                              <span className="text-text-ink">{t('products.form.shortDescriptionEn')}</span>
+                              <input
+                                type="text"
+                                maxLength={160}
+                                dir="ltr"
+                                value={detailDraft!.shortDescriptionEn}
+                                onChange={(e) => setDetailDraft(row, { shortDescriptionEn: e.target.value })}
+                                className={`${FOCUS_RING} h-10 rounded-card border border-border-control bg-well px-2`}
                               />
                             </label>
                             <label className="flex flex-col gap-1 text-sm">

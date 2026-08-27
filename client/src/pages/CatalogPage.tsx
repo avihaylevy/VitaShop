@@ -422,7 +422,7 @@ export function CatalogPage() {
         page's own inline predicate computation, it does not run alongside
         it.
       */}
-      <div className="mt-6 flex flex-col gap-8 md:flex-row">
+      <div className="mt-3 flex flex-col gap-8 md:flex-row">
         {/*
           Desktop filter rail — a complementary landmark with its own
           accessible name. Below `md` it is display:none (so it is absent
@@ -516,9 +516,18 @@ export function CatalogPage() {
             this one branch skips the outer <h2>. No component prop,
             translation key, or visual style changed.
           */}
+              {/* Pass 131 (second round, the user: "remove the all-products
+                  line and lift the products into the dead gap"): the
+                  results heading is SR-ONLY now — it stays the section's
+                  accessible name and §10's page-change focus target, it
+                  just draws nothing (the chips row already says which
+                  category is active). The drawn count went the same way
+                  one round earlier (reversing DEC-106's drawn count, which
+                  itself reversed ISSUE-116; the sr-only polite result
+                  announcement above is the contract and is untouched). */}
               <section
                 aria-labelledby={viewState.state === 'invalid-category' ? undefined : 'catalog-grid-heading'}
-                className="mt-8"
+                className="mt-0"
               >
                 {viewState.state !== 'invalid-category' && (
                   // tabIndex={-1} makes the heading a programmatic focus
@@ -529,27 +538,10 @@ export function CatalogPage() {
                     id="catalog-grid-heading"
                     ref={resultsHeadingRef}
                     tabIndex={-1}
-                    className="heading-section"
+                    className="sr-only"
                   >
                     {gridHeading}
                   </h2>
-                )}
-
-                {/* DEC-106 — the count, DRAWN this time (the user, via the
-                    GPT review, reversing ISSUE-116's "do not draw it"):
-                    instant feedback on what the filters just did. §10's
-                    sr-only polite announcement above is untouched — this
-                    line is visual, that one is the announcement; numeral
-                    isolated LTR like every count. */}
-                {viewState.state === 'ready' && hasResultCount && (
-                  <p className="mt-0.5 text-sm text-text-muted">
-                    <Trans
-                      i18nKey="catalogPage.countLine"
-                      ns="catalog"
-                      count={totalItems}
-                      components={{ n: <span dir="ltr" /> }}
-                    />
-                  </p>
                 )}
 
                 {viewState.state === 'invalid-category' ? (

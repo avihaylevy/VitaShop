@@ -65,6 +65,14 @@ type CartContextValue = {
   refresh: () => Promise<void>
   /** Clears the last outcome once the UI has said it. */
   dismissOutcome: () => void
+  /**
+   * O(1) line lookup by slug, rebuilt once per cart change instead of once
+   * per card. Every catalogue card calls useOptionalCartLine, so an
+   * unmemoized `cart.items.find` here would be an O(items) scan repeated
+   * for every one of up to ~50 cards on every mutation (O(grid × items)
+   * total) instead of the O(items) this Map costs once.
+   */
+  lineBySlug: Map<string, Cart['items'][number]>
 }
 
 type MutationResult = { cart: Cart; outcome: CartMutationOutcome }
@@ -186,6 +194,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const dismissOutcome = useCallback(() => setOutcome(null), [])
 
+  const lineBySlug = useMemo(() => new Map(cart.items.map((item) => [item.slug, item])), [cart.items])
+
   const value = useMemo<CartContextValue>(
     () => ({
       status,
@@ -198,8 +208,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removeLine,
       refresh,
       dismissOutcome,
+      lineBySlug,
     }),
-    [status, cart, failure, outcome, pending, addItem, setLineQuantity, removeLine, refresh, dismissOutcome],
+    [
+      status,
+      cart,
+      failure,
+      outcome,
+      pending,
+      addItem,
+      setLineQuantity,
+      removeLine,
+      refresh,
+      dismissOutcome,
+      lineBySlug,
+    ],
   )
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
@@ -230,4 +253,49 @@ export function useOptionalCartClubMember(): boolean {
 
 export function useCartRefresh(): () => Promise<void> {
   return useContext(CartContext)?.refresh ?? NO_OP_REFRESH
+}
+
+/**
+ * DEC-110 (UI refresh, area 1) — the card's view of ITS OWN cart line,
+ * tolerant of a missing provider (null then, so ProductCard renders its
+ * add pill and nothing else — the ProductGrid suites render without a
+ * provider, and the dev showcase has no cart either).
+ *
+ * The line is derived from the cart the server last returned, never from
+ * a local "was added" flag: a quantity edited in the drawer, a removal on
+ * the cart page, or a sign-out cart swap all change the card's control
+ * because they change THE CART, with no event plumbing.
+ */
+export type CardCartLine = {
+  line: { id: string; quantity: number } | null
+  setLineQuantity: CartContextValue['setLineQuantity']
+  removeLine: CartContextValue['removeLine']
+  pending: boolean
+}
+
+export function useOptionalCartLine(slug: string): CardCartLine | null {
+  const context = useContext(CartContext)
+  // quantity > 0: a zero-quantity line is "not in the cart" for the card's
+  // purposes — the server never sends one in production, but test fixtures
+  // model an empty cart that way, and the stepper must not render over a 0.
+  const found = context?.lineBySlug.get(slug)
+  const line = found && found.quantity > 0 ? found : undefined
+  // Stable identity when THIS line's own id/quantity/pending haven't
+  // changed, even though the provider hands out a brand-new cart/lineBySlug
+  // on every mutation — otherwise every card's effects keyed on `line`
+  // would re-fire on every OTHER card's mutation, not just its own.
+  return useMemo(() => {
+    if (!context) return null
+    return {
+      line: line ? { id: line.id, quantity: line.quantity } : null,
+      setLineQuantity: context.setLineQuantity,
+      removeLine: context.removeLine,
+      pending: context.pending,
+    }
+    // context.setLineQuantity/removeLine are useCallback-stable across
+    // renders; deliberately NOT depending on `context` or `context.cart`
+    // itself, or every card would get a new object on every OTHER card's
+    // mutation, defeating the point of this memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context?.setLineQuantity, context?.removeLine, context?.pending, line?.id, line?.quantity])
 }

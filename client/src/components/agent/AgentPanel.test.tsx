@@ -42,6 +42,8 @@ function productDto(overrides: Partial<CatalogProductDto> = {}): CatalogProductD
     stockQuantity: 12,
     lowStockThreshold: 5,
     imageFile: null,
+  shortDescriptionHe: 'תקציר בדיקה',
+  shortDescriptionEn: 'Fixture short description',
     ...overrides,
   }
 }

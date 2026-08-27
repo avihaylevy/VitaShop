@@ -291,13 +291,21 @@ describe('GET /api/products', () => {
     }
   })
 
-  it('never includes description, ingredients, warnings, targetAudience, id, or timestamps', async () => {
+  it('never includes full description, ingredients, warnings, targetAudience, id, or timestamps — and DOES carry the SHORT description pair (DEC-111)', async () => {
+    // DEC-111: the card teaser is its own authored field. The FULL
+    // description stays detail-only (the original payload-trim pin);
+    // shortDescriptionHe/En are the list DTO's addition.
     const res = await fetch(`${baseUrl}/api/products`)
     const body = (await res.json()) as ProductsEnvelope
     for (const item of body.items) {
       expect(item).not.toHaveProperty('id')
       expect(item).not.toHaveProperty('descriptionHe')
       expect(item).not.toHaveProperty('descriptionEn')
+      const record = item as unknown as Record<string, unknown>
+      expect(typeof record.shortDescriptionHe).toBe('string')
+      expect((record.shortDescriptionHe as string).length).toBeGreaterThan(0)
+      expect(typeof record.shortDescriptionEn).toBe('string')
+      expect((record.shortDescriptionEn as string).length).toBeGreaterThan(0)
       expect(item).not.toHaveProperty('warningsAllergens')
       expect(item).not.toHaveProperty('targetAudience')
       expect(item).not.toHaveProperty('createdAt')

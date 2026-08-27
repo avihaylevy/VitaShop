@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -295,8 +295,9 @@ describe('the shared add-to-cart choreography', () => {
     expect(screen.getByTestId('drawer-state').textContent).toBe('closed')
 
     // Second add: QUIET — announced (the region updates with the new count),
-    // never re-opened.
-    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    // never re-opened. DEC-110: after the first add the card shows the
+    // cart-line stepper, and its + IS the second add (same choreography).
+    fireEvent.click(within(screen.getAllByRole('article')[0]).getByRole('button', { name: /increase quantity/i }))
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('announced probiotic 1'))
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 60)) // same budget as the D1 test
@@ -329,15 +330,19 @@ describe('the shared add-to-cart choreography', () => {
     await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
     fireEvent.click(screen.getByTestId('close-drawer'))
 
-    // The clamped re-add must NOT stay quiet.
-    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    // The clamped re-add must NOT stay quiet. (DEC-110: the re-add is the
+    // stepper's +, which routes through the same choreography.)
+    fireEvent.click(within(screen.getAllByRole('article')[0]).getByRole('button', { name: /increase quantity/i }))
     await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
   })
 
-  it('🔴 review finding — a REFUSED add keeps the chosen quantity; the stepper resets only on a FULL take', async () => {
-    // The Promise<boolean> gate exists for exactly this: the server took
-    // NOTHING (alreadyAtMaximum), so the shopper's chosen 3 must survive
-    // for the retry the re-opened drawer invites — never snap back to 1.
+  it('🔴 DEC-110 — a REFUSED add still hands the card to the stepper at the SERVER\'s quantity', async () => {
+    // The pre-add quantity chooser left the card (it lives on the detail
+    // page; its keep-the-chosen-number contract is tested there). What the
+    // card must get right instead: even when the server takes NOTHING
+    // (alreadyAtMaximum), the response cart is the truth — the line exists
+    // at the server's number, so the stepper shows THAT, and the clamp
+    // re-opens the drawer to say so.
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string, init?: RequestInit) =>
@@ -351,14 +356,14 @@ describe('the shared add-to-cart choreography', () => {
     )
     renderSurface()
 
-    const increase = await screen.findByRole('button', { name: /increase quantity/i })
-    fireEvent.click(increase)
-    fireEvent.click(increase)
-    expect(screen.getByText('3')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /add to cart/i }))
     await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
-    expect(screen.getByText('3')).toBeTruthy()
+    // The pill is gone; the CARD's stepper is there (scoped to the card
+    // article — the open drawer renders its own stepper with the same
+    // accessible names).
+    expect(screen.queryByRole('button', { name: /add to cart/i })).toBeNull()
+    const card = screen.getAllByRole('article')[0]
+    expect(within(card).getByRole('button', { name: /increase quantity/i })).toBeTruthy()
   })
 
   it('DEC-073 — an add while the drawer is ALREADY open keeps it open (D8: content only)', async () => {
@@ -375,7 +380,9 @@ describe('the shared add-to-cart choreography', () => {
     fireEvent.click(await screen.findByRole('button', { name: /add to cart/i }))
     await waitFor(() => expect(screen.getByTestId('drawer-state').textContent).toBe('open'))
 
-    fireEvent.click(screen.getByRole('button', { name: /add to cart/i }))
+    // DEC-110: the while-open re-add is the CARD stepper's + (scoped to
+    // the card article — the open drawer has a same-named stepper).
+    fireEvent.click(within(screen.getAllByRole('article')[0]).getByRole('button', { name: /increase quantity/i }))
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('announced probiotic 2'))
     expect(screen.getByTestId('drawer-state').textContent).toBe('open')
   })

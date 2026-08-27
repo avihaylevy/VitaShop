@@ -34,7 +34,7 @@ const DEFAULT_LOW_STOCK_THRESHOLD = 5
 export const VERIFIED_PRODUCT_FIXTURES: readonly RawFixture[] = [
   {
     slug: 'solgar-omega-3',
-    imageFile: 'אומגה 3 של חברת סולגאר.jpg',
+    imageFile: 'אומגה 3 של חברת סולגאר.webp',
     nameHe: 'אומגה 3',
     nameEn: 'Omega 3',
     categoryNameHe: 'אומגה ושומנים',
@@ -49,7 +49,7 @@ export const VERIFIED_PRODUCT_FIXTURES: readonly RawFixture[] = [
   },
   {
     slug: 'solgar-vitamin-c-berry',
-    imageFile: 'ויטמין C בטעם פטל חמוציות של חברת סולגאר.jpg',
+    imageFile: 'ויטמין C בטעם פטל חמוציות של חברת סולגאר.webp',
     nameHe: 'ויטמין C בטעם פטל חמוציות',
     nameEn: 'Vitamin C Raspberry Cranberry',
     categoryNameHe: 'ויטמינים',
@@ -64,7 +64,7 @@ export const VERIFIED_PRODUCT_FIXTURES: readonly RawFixture[] = [
   },
   {
     slug: 'superherb-vitamin-d',
-    imageFile: 'טבליות ויטמין D של חברת סופרהרב.jpg',
+    imageFile: 'טבליות ויטמין D של חברת סופרהרב.webp',
     nameHe: 'ויטמין D במינון 1,000 יחב"ל',
     nameEn: 'Vitamin D 1000 IU',
     categoryNameHe: 'ויטמינים',
@@ -79,7 +79,7 @@ export const VERIFIED_PRODUCT_FIXTURES: readonly RawFixture[] = [
   },
   {
     slug: 'superherb-magnesium-max-550',
-    imageFile: 'מגנזיות מקס 550 של חברת סופרהרב.jpg',
+    imageFile: 'מגנזיות מקס 550 של חברת סופרהרב.webp',
     nameHe: 'מגנזיום מקס 550',
     nameEn: 'Magnesium Max 550',
     categoryNameHe: 'מינרלים',
@@ -94,7 +94,7 @@ export const VERIFIED_PRODUCT_FIXTURES: readonly RawFixture[] = [
   },
   {
     slug: 'solgar-b12',
-    imageFile: 'סולגר טבליות ויטמין B12.jpg',
+    imageFile: 'סולגר טבליות ויטמין B12.webp',
     nameHe: 'ויטמין B12 לבליעה במינון 100 מק"ג',
     nameEn: 'Vitamin B12 100 mcg (Swallow Tablets)',
     categoryNameHe: 'ויטמינים',
@@ -109,7 +109,7 @@ export const VERIFIED_PRODUCT_FIXTURES: readonly RawFixture[] = [
   },
   {
     slug: 'solgar-cal-mag-d3',
-    imageFile: 'סולגר טבליות סידן ומגנזיום בתוספת ויטמין D3.jpg',
+    imageFile: 'סולגר טבליות סידן ומגנזיום בתוספת ויטמין D3.webp',
     nameHe: 'סידן ומגנזיום בתוספת ויטמין D3',
     nameEn: 'Calcium Magnesium with Vitamin D3',
     categoryNameHe: 'מינרלים',

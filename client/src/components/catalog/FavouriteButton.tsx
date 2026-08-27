@@ -39,7 +39,12 @@ export function FavouriteButton({ slug, className = '', onToggled }: FavouriteBu
 
   return (
     <IconButton
-      icon={<HeartIcon filled={favourited} />}
+      // Pass 131, the user's call: the FILLED heart is red, not ink. The
+      // class rides the svg itself so it beats IconButton's inherited
+      // text-text-ink without a specificity fight. --fav-heart is its own token (a true bright red — error red is
+      // darkened for text contrast, which a glyph fill does not need); aria-pressed remains the semantic signal
+      // (colour is never the sole indicator).
+      icon={<HeartIcon filled={favourited} className={favourited ? 'text-fav-heart' : undefined} />}
       aria-pressed={favourited}
       aria-label={favourited ? t('favourite.remove') : t('favourite.add')}
       variant="ghost"

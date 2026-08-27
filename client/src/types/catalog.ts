@@ -28,6 +28,10 @@ export interface CatalogProductDto {
   stockQuantity: number
   lowStockThreshold: number
   imageFile: string | null
+  /** DEC-111 — the card's authored SHORT description pair ("what it is
+   *  for and why"); the full pair stays detail-only. */
+  shortDescriptionHe: string
+  shortDescriptionEn: string
 }
 
 /**

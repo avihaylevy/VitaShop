@@ -20,6 +20,8 @@ function product(overrides: Partial<PublicCatalogProduct>): PublicCatalogProduct
     stockQuantity: 10,
     lowStockThreshold: 5,
     imageFile: null,
+    shortDescriptionHe: 'תקציר בדיקה',
+    shortDescriptionEn: 'Fixture short description',
     ...overrides,
   }
 }

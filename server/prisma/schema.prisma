@@ -226,6 +226,13 @@ model Product {
   stockQuantity          Int        @default(0) @map("stock_quantity") // field 09, >= 0
   descriptionHe          String     @map("description_he") @db.Text // field 11 — DEC-017, paired
   descriptionEn          String     @map("description_en") @db.Text
+  // Pass 131 (DEC-111, the user's ask): the CARD's one-to-two-line teaser —
+  // "what the product is for, and why" — separate from the detail page's
+  // full description. Paired like it (DEC-017). Default '' so existing
+  // rows migrate clean; the catalog DTO falls back to the description's
+  // first sentence while empty.
+  shortDescriptionHe     String     @default("") @map("short_description_he") @db.Text
+  shortDescriptionEn     String     @default("") @map("short_description_en") @db.Text
   warningsAllergens      String     @map("warnings_allergens") @db.Text // field 12 — Hebrew only, manufacturer text
   // DEC-032 DECISION B (Accepted 2026-08-12). 🔴 PROVENANCE, NOT ABSENCE: this
   // is a claim about the SOURCE, not about the product. True means the

@@ -111,6 +111,12 @@
   --state-commerce: #9E4E14;
   --state-lowstock: #6B5A16;
   --state-oos: #66625A;
+  /* Pass 131 (the user: the filled heart should "look like a real red
+     symbol") — the favourites heart's fill, and nothing else. Brighter
+     than --state-error on purpose: error text must sit at 4.5:1 on light
+     surfaces, a filled heart glyph does not. One meaning, like every
+     colour above: FAVOURITED. */
+  --fav-heart: #E0352B;
 
   /*
    * The agent accent — ISSUE-144 (the eighth list): the assistant must be
@@ -187,6 +193,7 @@
   --color-brand-teal: var(--brand-teal);
   --color-brand-teal-strong: var(--brand-teal-strong);
   --color-state-error: var(--state-error);
+  --color-fav-heart: var(--fav-heart);
   --color-state-commerce: var(--state-commerce);
   --color-state-lowstock: var(--state-lowstock);
   --color-state-oos: var(--state-oos);
@@ -384,14 +391,14 @@ textarea {
    per component. Currently the catalog page's h1 only. */
 .heading-hero {
   font-family: var(--font-display);
-  font-size: 36px;
+  font-size: 40px;
   font-weight: 500;
   letter-spacing: -0.02em;
   color: var(--text-ink);
 }
 @media (min-width: 768px) {
   .heading-hero {
-    font-size: 42px;
+    font-size: 48px;
   }
 }
 

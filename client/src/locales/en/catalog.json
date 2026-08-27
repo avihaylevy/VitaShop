@@ -1,4 +1,10 @@
 {
+  "card": {
+    "add": "Add",
+    "addSrSuffix": "to cart, {{name}}",
+    "quantityInCart": "Quantity in cart: {{quantity}}",
+    "removedFromCart": "{{name}} removed from cart"
+  },
   "addToCart": "Add to cart",
   "quantity": {
     "label": "Quantity",

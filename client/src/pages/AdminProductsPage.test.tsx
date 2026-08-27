@@ -32,7 +32,7 @@ function row(overrides: Partial<AdminProductRow> = {}): AdminProductRow {
     usageInstructions: 'בדיקה',
     descriptionHe: 'תיאור',
     descriptionEn: 'description',
-    warningsAllergens: '',
+    shortDescriptionHe: 'תקציר', shortDescriptionEn: 'Short', warningsAllergens: '',
     isKosher: null,
     isGlutenFree: null,
     isVegan: null,

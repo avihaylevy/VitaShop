@@ -20,6 +20,9 @@ import { UPLOAD_REF_PATTERN } from './uploadPaths.js'
  */
 export const DOSAGE_FORMS = DOSAGE_FORM_VALUES
 
+/** Exported so catalogMapper's first-sentence fallback can't outgrow the authored field's own cap. */
+export const SHORT_DESCRIPTION_MAX_LENGTH = 160
+
 /**
  * Canonical two-decimal money, strictly positive, bounded to the column.
  * A string end to end — Prisma Decimal accepts it; a float never appears
@@ -87,6 +90,17 @@ const FIELD_SCHEMAS = {
     .string({ message: 'DESCRIPTION_EN_REQUIRED' })
     .trim()
     .min(1, 'DESCRIPTION_EN_REQUIRED'),
+  // DEC-111 — the card's short-description pair: optional (an empty value
+  // rides the catalog DTO's first-sentence fallback), bounded so the
+  // teaser stays a teaser.
+  shortDescriptionHe: z
+    .string({ message: 'SHORT_DESCRIPTION_HE_INVALID' })
+    .trim()
+    .max(SHORT_DESCRIPTION_MAX_LENGTH, 'SHORT_DESCRIPTION_HE_TOO_LONG'),
+  shortDescriptionEn: z
+    .string({ message: 'SHORT_DESCRIPTION_EN_INVALID' })
+    .trim()
+    .max(SHORT_DESCRIPTION_MAX_LENGTH, 'SHORT_DESCRIPTION_EN_TOO_LONG'),
   usageInstructions: z.string({ message: 'USAGE_REQUIRED' }).trim().min(1, 'USAGE_REQUIRED'),
   // Empty is a VALUE here (no declared warnings), so no min(1) — see the
   // allergenInfoIncomplete provenance comment on the schema.
@@ -181,6 +195,8 @@ export const productCreateSchema = z.strictObject({
   lowStockThreshold: lowStockThresholdSchema.optional(),
   descriptionHe: FIELD_SCHEMAS.descriptionHe,
   descriptionEn: FIELD_SCHEMAS.descriptionEn,
+  shortDescriptionHe: FIELD_SCHEMAS.shortDescriptionHe.default(''),
+  shortDescriptionEn: FIELD_SCHEMAS.shortDescriptionEn.default(''),
   warningsAllergens: FIELD_SCHEMAS.warningsAllergens.default(''),
   // The admin's dietary claims (DEC-083 amended) — absent means null,
   // which is exactly "no claim" in the column's own vocabulary.

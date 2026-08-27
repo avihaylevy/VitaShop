@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import { findCanonicalCategoryByNameHe } from './catalogCategories.js'
 import { isUploadRef } from './uploadPaths.js'
+import { SHORT_DESCRIPTION_MAX_LENGTH } from './adminProductForm.js'
 
 // Thrown when an active product's category is not one of the six REQ-F-001
 // canonical categories. The route layer catches this and returns
@@ -40,6 +41,15 @@ export interface PublicCatalogProduct {
   stockQuantity: number
   lowStockThreshold: number
   imageFile: string | null
+  /**
+   * Pass 131 (DEC-111): the card's SHORT description — "what it is for and
+   * why", one to two lines, written as such (CSV short_description /
+   * the admin form), never a clamped slice of the full text. Paired
+   * (DEC-017). Falls back to the full description's first sentence for
+   * rows that predate the field.
+   */
+  shortDescriptionHe: string
+  shortDescriptionEn: string
 }
 
 /**
@@ -89,7 +99,7 @@ export interface PublicProductDetail extends PublicCatalogProduct {
   usageInstructions: string
   /** Field 10 — 1..4 image basenames, ordered. The list DTO gives only the first. */
   images: string[]
-  /** Field 11 — paired, DEC-017. */
+  /** Field 11 — the FULL pair, paired (DEC-017). The base carries the SHORT pair. */
   descriptionHe: string
   descriptionEn: string
   /** Field 12 — Hebrew-only manufacturer text (schema: not paired). */
@@ -176,7 +186,23 @@ export function mapProductToPublicCatalog(product: ProductWithCatalogRelations):
     stockQuantity: product.stockQuantity,
     lowStockThreshold: product.lowStockThreshold,
     imageFile: firstImageFile(product.images),
+    shortDescriptionHe: product.shortDescriptionHe || firstSentenceOf(product.descriptionHe),
+    shortDescriptionEn: product.shortDescriptionEn || firstSentenceOf(product.descriptionEn),
   }
+}
+
+/** The pre-DEC-111 fallback: rows with no authored short description show
+ *  the full description's first sentence rather than nothing. Capped at
+ *  the same length as the authored field (adminProductForm.ts) — an
+ *  unbounded fallback would defeat "the teaser stays a teaser": line-clamp
+ *  only hides the overflow visually, a screen reader still reads it whole. */
+function firstSentenceOf(text: string): string {
+  const normalized = text.trim()
+  const idx = normalized.indexOf('. ')
+  const sentence = idx > 0 ? normalized.slice(0, idx + 1) : normalized
+  return sentence.length > SHORT_DESCRIPTION_MAX_LENGTH
+    ? `${sentence.slice(0, SHORT_DESCRIPTION_MAX_LENGTH - 1).trimEnd()}…`
+    : sentence
 }
 
 /**

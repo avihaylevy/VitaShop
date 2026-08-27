@@ -60,6 +60,9 @@ vi.mock('../hooks/useCatalogCategories', () => ({
 const mockUseCart = vi.fn()
 vi.mock('../state/CartContext', () => ({
   useCart: () => mockUseCart(),
+  // DEC-110 — the card's null-tolerant line hook: 'not in cart' keeps
+  // these suites on the add-pill shape they assert.
+  useOptionalCartLine: () => null,
 }))
 
 // ISSUE-115 — the card reads favourites from context; inert here.

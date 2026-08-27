@@ -28,7 +28,9 @@ function detailDto(overrides: Partial<ProductDetailDto> = {}): ProductDetailDto 
     serialNumber: 'uuid-1',
     usageInstructions: 'כמוסה אחת ביום',
     images: ['omega.jpg', 'omega-back.jpg'],
-    descriptionHe: 'תיאור בעברית',
+    shortDescriptionHe: 'תקציר בעברית',
+  shortDescriptionEn: 'Short in English',
+  descriptionHe: 'תיאור בעברית',
     descriptionEn: 'English description',
     warningsAllergens: 'מכיל דגים',
     allergenInfoIncomplete: false,
@@ -55,6 +57,10 @@ describe('mapProductDetail', () => {
       const card = mapCatalogProduct(dto, language)
       const detail = mapProductDetail(dto, language)
       for (const [key, value] of Object.entries(card)) {
+        // DEC-111 — the ONE deliberate divergence: the card's `description`
+        // is the SHORT teaser, the detail page's is the FULL text. Every
+        // other shared field must still agree.
+        if (key === 'description') continue
         expect(detail[key as keyof typeof card]).toEqual(value)
       }
     }

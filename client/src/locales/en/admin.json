@@ -124,7 +124,10 @@
       "submit": "Create product",
       "submitting": "Creating…",
       "lowStockThreshold": "Low-stock alert threshold",
-      "lowStockThresholdHint": "Default 5 — the dashboard alerts when stock reaches or falls under it"
+      "lowStockThresholdHint": "Default 5 — the dashboard alerts when stock reaches or falls under it",
+      "shortDescriptionHe": "Short description (Hebrew, for the card)",
+      "shortDescriptionEn": "Short description (English)",
+      "shortDescriptionHint": "One or two sentences: what the product is for and why. Shown on the catalog card; when empty the description's first sentence is shown."
     },
     "duplicate": {
       "message": "A similarly named product already exists under this brand: \"{{name}}\" ({{slug}}).",

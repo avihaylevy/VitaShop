@@ -54,6 +54,10 @@ const EMPTY_FORM = {
   lowStockThreshold: '',
   descriptionHe: '',
   descriptionEn: '',
+  // DEC-111 — the card's short-description teaser (optional; empty rides
+  // the server's first-sentence fallback).
+  shortDescriptionHe: '',
+  shortDescriptionEn: '',
   warningsAllergens: '',
   imageUrl: '',
   // DEC-083 amended — tri-state dietary claims: '' = no claim (null),
@@ -222,6 +226,8 @@ export function AdminProductNewPage() {
         : { lowStockThreshold: asNumber(form.lowStockThreshold) }),
       descriptionHe: form.descriptionHe,
       descriptionEn: form.descriptionEn,
+      shortDescriptionHe: form.shortDescriptionHe,
+      shortDescriptionEn: form.shortDescriptionEn,
       warningsAllergens: form.warningsAllergens,
       // Tri-state claims: '' (no claim) is OMITTED — the column's null is
       // the server-side default, never a value this client invents.
@@ -509,6 +515,31 @@ export function AdminProductNewPage() {
               value={form.descriptionEn}
               onChange={(e) => set('descriptionEn', e.target.value)}
               className={areaClass}
+              dir="ltr"
+            />
+          </FieldRow>
+          <FieldRow
+            id="np-short-desc-he"
+            label={t('products.form.shortDescriptionHe')}
+            hint={t('products.form.shortDescriptionHint')}
+          >
+            <input
+              id="np-short-desc-he"
+              type="text"
+              maxLength={160}
+              value={form.shortDescriptionHe}
+              onChange={(e) => set('shortDescriptionHe', e.target.value)}
+              className={inputClass}
+            />
+          </FieldRow>
+          <FieldRow id="np-short-desc-en" label={t('products.form.shortDescriptionEn')}>
+            <input
+              id="np-short-desc-en"
+              type="text"
+              maxLength={160}
+              value={form.shortDescriptionEn}
+              onChange={(e) => set('shortDescriptionEn', e.target.value)}
+              className={inputClass}
               dir="ltr"
             />
           </FieldRow>

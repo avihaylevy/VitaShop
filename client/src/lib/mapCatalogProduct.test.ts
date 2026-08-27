@@ -18,6 +18,8 @@ function buildDto(overrides: Partial<CatalogProductDto> = {}): CatalogProductDto
     stockQuantity: 60,
     lowStockThreshold: 5,
     imageFile: 'solgar-omega-3.jpg',
+  shortDescriptionHe: 'תקציר בדיקה',
+  shortDescriptionEn: 'Fixture short description',
     ...overrides,
   }
 }

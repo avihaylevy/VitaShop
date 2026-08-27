@@ -30,6 +30,12 @@ export type ProductCardModel = {
    */
   packageUnit?: string
   imageFile: string | null
+  /**
+   * Pass 131 (DEC-110 area 1) — the two-line description teaser under the
+   * name (the user's reference card). Language-resolved at mapping time;
+   * optional so navigational fixtures and older callers stay valid.
+   */
+  description?: string
 }
 
 /**

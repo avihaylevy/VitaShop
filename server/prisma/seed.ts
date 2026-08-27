@@ -142,6 +142,8 @@ interface ValidatedProductRow {
   price: string
   stockQuantity: number
   descriptionHe: string
+  shortDescriptionHe: string
+  shortDescriptionEn: string
   healthGoals: string[]
   dosageForm: DosageForm
   packageQuantity: number
@@ -280,6 +282,10 @@ function validateProductRow(row: Record<string, string>): ValidatedProductRow {
     price: requirePrice(row.price ?? '', slug),
     stockQuantity: requirePositiveInt(row.stock_quantity ?? '', 'stock_quantity', slug),
     descriptionHe: requireNonEmpty(row.description ?? '', 'description', slug),
+    // Pass 131 (DEC-111): the card's teaser — "what it is for and why".
+    // Required like the description it summarises.
+    shortDescriptionHe: requireNonEmpty(row.short_description ?? '', 'short_description', slug),
+    shortDescriptionEn: requireNonEmpty(row.short_description_en ?? '', 'short_description_en', slug),
     healthGoals: (row.health_goals ?? '')
       .split('|')
       .map((s) => s.trim())
@@ -382,6 +388,8 @@ async function seedProduct(db: Db, row: ValidatedProductRow, ingredients: Valida
     stockQuantity: row.stockQuantity,
     descriptionHe: row.descriptionHe,
     descriptionEn,
+    shortDescriptionHe: row.shortDescriptionHe,
+    shortDescriptionEn: row.shortDescriptionEn,
     warningsAllergens: row.warningsAllergens,
     allergenInfoIncomplete: row.allergenInfoIncomplete,
     targetAudience: row.targetAudience,

@@ -70,3 +70,8 @@ server/prisma/*.db-journal
 # ── Uploads ──────────────────────────────────
 # runtime uploads are not versioned; seed images in assets/ are
 uploads/
+
+# ── Python tooling ───────────────────────────
+# scripts/measure-image-framing.py's bytecode cache
+__pycache__/
+*.pyc

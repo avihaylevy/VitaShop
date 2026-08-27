@@ -70,5 +70,6 @@ export function mapCatalogProduct(dto: CatalogProductDto, language: SupportedLan
     packageQuantity: dto.packageQuantity,
     packageUnit: PACKAGE_UNIT_LABELS[language][dto.dosageForm],
     imageFile: dto.imageFile,
+    description: language === 'he' ? dto.shortDescriptionHe : dto.shortDescriptionEn,
   }
 }

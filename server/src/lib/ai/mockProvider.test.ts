@@ -128,6 +128,8 @@ describe('MockProvider.explainProducts', () => {
     stockQuantity: 12,
     lowStockThreshold: 5,
     imageFile: null,
+    shortDescriptionHe: 'תקציר בדיקה',
+    shortDescriptionEn: 'Fixture short description',
   }
 
   it('builds one explanation per product, from DTO fields only, per language', async () => {
