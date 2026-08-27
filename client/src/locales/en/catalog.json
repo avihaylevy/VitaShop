@@ -24,6 +24,8 @@
     "emptyHeading": "No favourites yet",
     "empty": "No favourites yet. Press the heart on a product card to add it here.",
     "emptyCta": "Browse all products",
+    "count_one": "1 product in favourites",
+    "count_other": "<n>{{count}}</n> products in favourites",
     "removed": "{{product}} removed from favourites."
   },
   "stock": {

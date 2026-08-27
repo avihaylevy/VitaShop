@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { fetchFavourites } from '../lib/favouritesApi'
 import { mapCatalogProduct } from '../lib/mapCatalogProduct'
 import { useFavourites, type FavouriteToggleResult } from '../state/FavouritesContext'
@@ -12,6 +11,7 @@ import { CartDrawer } from '../components/cart/CartDrawer'
 import { AddedToCartToast } from '../components/cart/AddedToCartToast'
 import { Button } from '../components/ui/Button'
 import { FOCUS_RING } from '../components/ui/focusRing'
+import { HeartIcon } from '../components/icons'
 import type { CatalogProductDto } from '../types/catalog'
 import type { SupportedLanguage } from '../i18n'
 
@@ -33,7 +33,6 @@ import type { SupportedLanguage } from '../i18n'
 export function FavouritesPage() {
   const { t, i18n } = useTranslation('catalog')
   const language = i18n.language as SupportedLanguage
-  const navigate = useNavigate()
   const { isFavourite, replaceAll } = useFavourites()
   const [state, setState] = useState<
     { status: 'loading' } | { status: 'ready'; items: CatalogProductDto[] } | { status: 'failed' }
@@ -144,7 +143,9 @@ export function FavouritesPage() {
 
       {state.status === 'loading' && (
         <div className="mt-6">
-          <CatalogLoadingState />
+          {/* capped, like the ready grid — skeleton/grid parity: without it
+              the 4-up skeletons snap into card-sized tracks on arrival. */}
+          <CatalogLoadingState capped />
         </div>
       )}
 
@@ -161,22 +162,46 @@ export function FavouritesPage() {
 
       {state.status === 'ready' && products.length === 0 && (
         <div className="mt-2">
+          {/* Area 6 — the real empty state: heart + one line + a LINK to the
+              catalog (navigation is a link, never a button pretending; the
+              navigate() button this replaced predated the rule). The bare
+              icon element: CatalogEmptyState sizes it through ui/Icon, and
+              the stroke stays the icon set's one BASE weight. */}
           <CatalogEmptyState
+            centered
+            icon={<HeartIcon />}
             heading={t('favouritesPage.emptyHeading')}
             message={t('favouritesPage.empty')}
-            action={{ label: t('favouritesPage.emptyCta'), onClick: () => navigate('/catalog') }}
+            action={{ label: t('favouritesPage.emptyCta'), to: '/catalog' }}
           />
         </div>
       )}
 
       {state.status === 'ready' && products.length > 0 && (
-        <div ref={gridRef} className="mt-6">
-          <ProductGrid
-            products={products}
-            onAddToCart={handleAddToCart}
-            onFavouriteToggled={handleFavouriteToggled}
-          />
-        </div>
+        <>
+          {/* Area 6 — the count line. Plain text, not a live region: the
+              removal ANNOUNCEMENT above already narrates changes; a live
+              count would double-speak every un-heart. Trans + the LTR span
+              is §10's numeric isolation — the CatalogPage count's own 🔴
+              correction: a bare numeral in an RTL run holds only until the
+              copy grows punctuation or a range. */}
+          <p className="mt-2 text-[13px] text-text-muted">
+            <Trans
+              i18nKey="favouritesPage.count"
+              ns="catalog"
+              count={products.length}
+              components={{ n: <span dir="ltr" /> }}
+            />
+          </p>
+          <div ref={gridRef} className="mt-6">
+            <ProductGrid
+              capped
+              products={products}
+              onAddToCart={handleAddToCart}
+              onFavouriteToggled={handleFavouriteToggled}
+            />
+          </div>
+        </>
       )}
 
       <CartDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={returnFocusRef} openedByAdd />

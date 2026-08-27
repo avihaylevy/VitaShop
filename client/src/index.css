@@ -351,6 +351,20 @@ textarea {
 }
 
 /*
+ * Area 6 — the CAPPED product-grid track (favourites): the card width a
+ * sparse page renders at, mock-approved as 250–290px. One home for the
+ * pair (the sticky-header rule above: measured layout values live here,
+ * not as arbitrary literals at call sites); ProductGrid's capped branch
+ * and any future sparse grid read these. The consumer wraps the min in
+ * min(var(--card-track-min), 100%) so a padded container narrower than
+ * one track can never overflow horizontally (the ISSUE-024 class).
+ */
+:root {
+  --card-track-min: 250px;
+  --card-track-max: 290px;
+}
+
+/*
  * Shared focus-visible treatment — DESIGN_SYSTEM.md §4, one treatment
  * everywhere (UI_IMPLEMENTATION_PLAN.md §11). Implemented once here and
  * applied via the `focus-ring` class from every interactive primitive,
