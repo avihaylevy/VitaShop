@@ -199,6 +199,8 @@ npm run dev:client   # http://localhost:5173  (second terminal)
 
 Prerequisites: Node.js 24 and a local PostgreSQL instance (install options in SETUP.md). Every environment variable is documented in `server/.env.example` and `client/.env.example`.
 
+**Admin access for reviewers.** There are no default passwords anywhere in the repo. The admin account is created by `npm run seed` from the email and password *you* put in `server/.env` (`SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` — the seeder refuses to run without them). Log in with that pair and the admin menu (products, orders, dashboard) appears. A second `SEED_SHOPPER_*` pair gives you an ordinary customer account for the shopping flow.
+
 ---
 
 ## Scope
