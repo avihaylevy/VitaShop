@@ -171,3 +171,42 @@ describe('🔴 the misuse guard — a dead fallback fails loudly instead of sile
     expect(isUniqueViolationOn(messageOnlyError, ['email', 'users_email_key'])).toBe(true)
   })
 })
+
+describe('🔴 the third shape — @prisma/adapter-pg 7.10 reports the constraint NAME, not fields', () => {
+  // Probed 2026-08-27 against 7.10.0: no `fields`, a `constraint.index`
+  // carrying the full constraint name. Caught by CI on Dependabot's bump.
+  const adapter710Error = (index: string) => ({
+    code: 'P2002',
+    meta: {
+      modelName: 'User',
+      driverAdapterError: {
+        cause: {
+          originalCode: '23505',
+          originalMessage: `duplicate key value violates unique constraint "${index}"`,
+          kind: 'UniqueConstraintViolation',
+          constraint: { index },
+          table: 'users',
+        },
+      },
+    },
+  })
+
+  it('matches by full constraint name, as both real call sites list it', () => {
+    expect(isUniqueViolationOn(adapter710Error('users_email_key'), ['email', 'users_email_key'])).toBe(true)
+  })
+
+  it('🔴 STAYS NARROW — a different constraint name is not swallowed', () => {
+    expect(isUniqueViolationOn(adapter710Error('users_email_key'), ['phone', 'users_phone_key'])).toBe(false)
+    expect(isUniqueViolationOn(adapter710Error('users_pending_email_key'), ['email', 'users_email_key'])).toBe(false)
+  })
+
+  it('🔴 a FIELD-ONLY caller fails LOUDLY — a name-only source can never match it', () => {
+    expect(() => isUniqueViolationOn(adapter710Error('users_email_key'), ['email'])).toThrow(/no full constraint name/)
+  })
+
+  it('the name path is served BEFORE the message fallback — a lying message does not override it', () => {
+    const error = adapter710Error('users_email_key')
+    error.meta.driverAdapterError.cause.originalMessage = 'duplicate key value violates unique constraint "users_phone_key"'
+    expect(isUniqueViolationOn(error, ['email', 'users_email_key'])).toBe(true)
+  })
+})

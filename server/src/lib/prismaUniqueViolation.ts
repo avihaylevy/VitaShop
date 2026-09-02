@@ -32,7 +32,7 @@ export function isUniqueViolationOn(error: unknown, accepted: readonly string[])
     meta?: {
       target?: unknown
       driverAdapterError?: {
-        cause?: { originalMessage?: unknown; constraint?: { fields?: unknown } }
+        cause?: { originalMessage?: unknown; constraint?: { fields?: unknown; index?: unknown } }
       }
     }
   }
@@ -48,6 +48,23 @@ export function isUniqueViolationOn(error: unknown, accepted: readonly string[])
       : Array.isArray(meta.target)
         ? meta.target.map(String)
         : []
+  // 🔴 THE THIRD SHAPE — @prisma/adapter-pg 7.10 (probed 2026-08-27; caught
+  // by CI on Dependabot's bump, one test red): `constraint.fields` is GONE
+  // and the adapter reports the constraint NAME instead:
+  //
+  //   cause: { originalCode: '23505', kind: 'UniqueConstraintViolation',
+  //            originalMessage: '... unique constraint "users_email_key"',
+  //            constraint: { index: 'users_email_key' }, table: 'users' }
+  //
+  // A structured constraint name is as definitive as a structured field
+  // list. It is matched by FULL NAME, exactly like the message fallback, and
+  // served before it — so 7.10 never reaches the text path at all. Both
+  // callers already list their constraint names (see the fallback note
+  // below); under 7.10 that is the path they take. A caller listing only
+  // field names gets the same loud misuse error the fallback throws, for the
+  // same reason: a name-only source can never match a field-only list.
+  const constraintIndex =
+    typeof cause?.constraint?.index === 'string' ? [cause.constraint.index] : []
   const message = String(cause?.originalMessage ?? '')
 
   // 🔴 TWO NORMALISERS, because one was doing two incompatible jobs.
@@ -69,6 +86,16 @@ export function isUniqueViolationOn(error: unknown, accepted: readonly string[])
     // `users_pending_email_key` reports fields ['pending_email'], which
     // correctly does not match 'email'.
     return accepted.some((value) => structured.includes(normaliseField(value)))
+  }
+
+  if (constraintIndex.length > 0) {
+    // 7.10's name-only source. The misuse check below is the fallback's,
+    // applied here for the same reason it exists there: `['email']` alone
+    // could never match `users_email_key`, and a silent false is the
+    // silent-failure shape this file exists to prevent.
+    assertListsAConstraintName(accepted)
+    const known = constraintIndex.map(normaliseConstraint)
+    return accepted.some((value) => known.includes(normaliseConstraint(value)))
   }
 
   // ── The fallback: ONLY when neither structured source yielded anything ──
@@ -100,16 +127,26 @@ export function isUniqueViolationOn(error: unknown, accepted: readonly string[])
   // Without this, a third call site written as ['email'] would get a fallback
   // that can never match, with every test still green — the same silent-failure
   // shape this file has now produced three times.
-  if (!accepted.some((value) => /_key$/i.test(value))) {
-    throw new Error(
-      'isUniqueViolationOn: the structured error data was empty, so the message fallback ran, ' +
-        'but `accepted` lists no full constraint name (e.g. users_email_key) for it to match. ' +
-        `Got: ${JSON.stringify(accepted)}`,
-    )
-  }
+  assertListsAConstraintName(accepted)
 
   const quoted = /unique constraint "([^"]+)"/i.exec(message)?.[1]
   if (!quoted) return false
   const quotedName = normaliseConstraint(quoted)
   return accepted.some((value) => normaliseConstraint(value) === quotedName)
+}
+
+/**
+ * The name-only paths (7.10's `constraint.index`, and the message fallback)
+ * can match ONLY a full constraint name. A caller that lists none has
+ * written a check that can never fire — so it fails here, loudly, instead
+ * of returning a quiet false forever.
+ */
+function assertListsAConstraintName(accepted: readonly string[]): void {
+  if (!accepted.some((value) => /_key$/i.test(value))) {
+    throw new Error(
+      'isUniqueViolationOn: no structured field list was available (only a constraint name ' +
+        'or the message), but `accepted` lists no full constraint name (e.g. users_email_key) ' +
+        `for it to match. Got: ${JSON.stringify(accepted)}`,
+    )
+  }
 }

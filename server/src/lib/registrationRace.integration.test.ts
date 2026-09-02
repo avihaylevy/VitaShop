@@ -93,7 +93,11 @@ describe('the duplicate-email P2002, as the database actually raises it', () => 
     // catch turns a database outage into a fake success and loses the
     // registration silently — worse than the 500 it replaces.
     expect(isUniqueViolationOn(caught, ['carts_session_id_key'])).toBe(false)
-    expect(isUniqueViolationOn(caught, ['phone'])).toBe(false)
+    // A field name is listed WITH its constraint name, as every real caller
+    // does — under adapter-pg 7.10 the driver reports only the constraint
+    // name, and a bare field list is a misuse the matcher refuses loudly
+    // (prismaUniqueViolation.test.ts pins that), not a quiet false.
+    expect(isUniqueViolationOn(caught, ['phone', 'users_phone_key'])).toBe(false)
   })
 
   it('a non-P2002 error is never matched', () => {
