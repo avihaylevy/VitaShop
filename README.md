@@ -1,38 +1,22 @@
 # VitaShop
 
-An e-commerce store for vitamins and dietary supplements, built as a coursework project for **Digital Systems Planning and Development**, Ramat Gan Academic College.
+## About
 
+**VitaShop is an academic project, not a real product.** It is a complete
+e-commerce web application for vitamins and dietary supplements, built by
+Avihay Levy as the course project for **Digital Systems Planning and
+Development** (תכנון ופיתוח מערכות דיגיטאליות), Ramat Gan Academic College,
+second year, summer semester 2026.
 
-
----
-
-## Project documentation
-
-The functional requirements, the decision log, and the session-by-session
-status live in a private Markdown knowledge base the author maintains
-alongside the code — which is why commit messages cite identifiers like
-`DEC-107` (a recorded decision) and `ISSUE-124` (a tracked issue). Keeping
-that process documentation external keeps the repository focused on what a
-reviewer needs: the code, the data, and how to run it. The course
-deliverable that summarises the system is the submission document.
-
----
-
-## Status
-
-**Fully implemented and running locally, end to end.**
-
-```
-✅  Catalogue — 50 real products, 8 brands, search/filter/sort/paging, all server-side
-✅  Cart, checkout, orders — guest + registered, atomic stock, simulated payment, cancellation window
-✅  Auth — email verification, lockout, password reset, Argon2id hashing
-✅  Personal area — history, reorder, profile, address book, favourites, customer club
-✅  Admin module — products, inventory, orders, analytics dashboard (KPIs, funnel, low stock)
-✅  AI shopping assistant — catalogue-only, medical-safety rules, mock provider by default
-✅  Bilingual Hebrew/English with full RTL/LTR
-✅  2,190+ automated tests (server + client), mutation-tested guarantees
-⬜  Cloud deployment — the planned next step
-```
+The system implements the course specification end to end: a bilingual
+Hebrew/English store with a searchable catalogue, cart and checkout, user
+accounts with a personal area, a customer club, an administration module
+with an analytics dashboard, and an AI shopping assistant — with every
+price, stock and permission decision made on the server. It runs locally
+(no cloud deployment is part of the deliverable), and the shop is a
+simulation throughout: no orders are fulfilled and no payments are
+processed. Product photographs and safety data belong to real branded
+products and are used for academic demonstration only.
 
 ---
 
@@ -55,9 +39,6 @@ VitaShop/
 ├── README.md              you are here
 ├── SETUP.md               reviewer walkthrough: clone → running store
 ├── package.json           root convenience scripts (setup / db / seed / dev / test)
-├── CLAUDE.md              instructions for Claude Code
-├── AGENTS.md              instructions for Codex
-├── CODEX.md               pointer to AGENTS.md
 ├── assets/
 │   ├── brand/             logo artwork — source/ originals, web/ derived exports
 │   ├── products/          product images + seed data
@@ -82,25 +63,6 @@ VitaShop/
 | **Must be accurate** | active ingredients · warnings and allergens · usage instructions · package quantity | These describe **real products**. A wrong allergen is a safety problem, not a cosmetic one |
 
 The catalogue uses photographs of real branded products for academic purposes. A made-up price reads as obviously fictional; a made-up allergen list does not. See `assets/products/REFERENCE.md`.
-
----
-
-## Agent instructions
-
-Three files at the repository root, loaded automatically by filename:
-
-| File | Loaded by | Purpose |
-|---|---|---|
-| `CLAUDE.md` | Claude Code | Lead developer — builds features, writes code and tests |
-| `AGENTS.md` | Codex | Reviewer and second developer |
-| `CODEX.md` | nobody | A pointer, so the name is not searched for in vain |
-
-**Codex runs in one of two modes, selected explicitly by the user:**
-
-- **REVIEW** (default) — finds and fixes bugs and security problems. Adds nothing.
-- **BUILD** (on request) — continues the work plan as lead developer, bound by the same rules as Claude.
-
-The second mode exists so development can continue when one agent's budget runs out, without the knowledge base losing coherence.
 
 ---
 
@@ -159,27 +121,6 @@ The Hebrew (RTL) interface; every screen also ships in English (LTR).
 
 ---
 
-## 🔴 Security
-
-This project handles authentication, pricing and stock. A few rules are non-negotiable and are enforced in review:
-
-- **All price calculation, stock checking and permission verification happen server-side.** The client is never a source of truth
-- **No secrets in the repository.** API keys, database passwords and session secrets live only in `.env`, which is git-ignored
-- **No agent obtains or configures an API key.** The AI provider defaults to a mock implementation; switching to a real provider requires an explicit human decision each time
-- **Payment is simulated.** The card form validates format client-side only (Luhn, expiry, CVV); card details are never transmitted to the server and never stored
-
-These rules are enforced where they matter — in the server code and its test suite (rate limiting in `server/src/lib/rateLimit.ts`, session/auth flows in `server/src/routes/auth.ts`, admin checks per-request in the route guards) — not merely documented.
-
-⚠️ **A key committed to a remote repository is compromised on arrival** — automated scanners crawl public commits, and git history retains the value after the file is deleted. Revocation is the fix; rewriting history is not.
-
----
-
-## Maintenance agent
-
-**Dependabot** (`.github/dependabot.yml`) watches the three npm roots — workspace, `client/`, `server/` — and opens pull requests for outdated and vulnerable dependencies (minor/patch bumps grouped weekly per root; majors and security advisories arrive individually). Nothing it proposes lands on its own: `CODEOWNERS` routes every PR to the project author, and branch protection requires that review. This is the mechanism the specification describes in §4.11 — an agent proposes, a human approves, no agent holds write access.
-
----
-
 ## Getting started
 
 **The system is fully implemented and runs locally end to end.**
@@ -201,6 +142,27 @@ Prerequisites: Node.js 24 and a local PostgreSQL instance (install options in SE
 
 **Admin access for reviewers.** There are no default passwords anywhere in the repo. The admin account is created by `npm run seed` from the email and password *you* put in `server/.env` (`SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` — the seeder refuses to run without them). Log in with that pair and the admin menu (products, orders, dashboard) appears. A second `SEED_SHOPPER_*` pair gives you an ordinary customer account for the shopping flow.
 
+**Tests.** `npm test` runs both suites — over 2,200 automated tests across server and client, including the invariants the specification calls out (no overselling, frozen order prices, soft delete only, server-side pricing).
+
+---
+
+## 🔴 Security
+
+This project handles authentication, pricing and stock. A few rules are non-negotiable:
+
+- **All price calculation, stock checking and permission verification happen server-side.** The client is never a source of truth
+- **No secrets in the repository.** API keys, database passwords and session secrets live only in `.env`, which is git-ignored
+- **No real AI key is needed.** The AI assistant runs on a built-in mock provider by default; a real provider is an explicit, optional configuration
+- **Payment is simulated.** The card form validates format client-side only (Luhn, expiry, CVV); card details are never transmitted to the server and never stored
+
+These rules are enforced where they matter — in the server code and its test suite (rate limiting in `server/src/lib/rateLimit.ts`, session/auth flows in `server/src/routes/auth.ts`, admin checks per-request in the route guards) — not merely documented.
+
+---
+
+## Maintenance agent
+
+**Dependabot** (`.github/dependabot.yml`) watches the three npm roots — workspace, `client/`, `server/` — and opens pull requests for outdated and vulnerable dependencies (minor/patch bumps grouped weekly per root; majors and security advisories arrive individually). Nothing it proposes lands on its own: `CODEOWNERS` routes every PR to the project author, and branch protection requires that review. This is the mechanism the specification describes in §4.11 — an agent proposes, a human approves, no agent holds write access.
+
 ---
 
 ## Scope
@@ -212,7 +174,7 @@ Prerequisites: Node.js 24 and a local PostgreSQL instance (install options in SE
 
 **Deliberately out of scope:** real payment processing, product reviews, loyalty programmes, multi-warehouse inventory, VAT and invoicing, personalised nutritional advice.
 
-**Runs locally today.** Cloud deployment is the planned next step; the code is written deployment-ready — environment variables throughout, no hardcoded paths, no secrets.
+**Runs locally, by design.** Cloud deployment is not part of the course deliverable; the code is nonetheless written deployment-ready — environment variables throughout, no hardcoded paths, no secrets.
 
 ---
 
@@ -232,4 +194,4 @@ An academic project. Not a real store — no orders are fulfilled and no payment
 
 ---
 
-Last updated: 2026-08-26
+Last updated: 2026-08-27
