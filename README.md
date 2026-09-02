@@ -174,7 +174,7 @@ The mechanism the specification describes in §4.11 — an agent proposes, autom
 **Simulated, by design:**
 
 - **Payment** — the specification defines a simulation with no real charge
-- **Email delivery** — account verification, password reset and order confirmation are fully implemented (single-use tokens, 24-hour expiry, orders blocked until verified); only the transport prints to the server console instead of sending. Notifications on order-status changes (shipped, cancelled) are not included; the customer follows the status in the personal area
+- **Email** — no email is actually sent. Account verification, password reset and order confirmation are implemented end to end (single-use tokens, 24-hour expiry, orders blocked until verified), but the message is written to the server console instead of being delivered; a reviewer copies the verification link from the terminal (see SETUP.md). Notifications on order-status changes (shipped, cancelled) are not included; the customer follows the status in the personal area
 
 **Deliberately out of scope:** real payment processing, product reviews and ratings, promotions and user management in the admin module, multi-warehouse inventory, VAT and invoicing, personalised nutritional advice. The customer club (a flat 10% member discount, computed server-side) is in scope and implemented.
 
