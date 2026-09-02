@@ -53,9 +53,29 @@ async function readStatus(prisma: PrismaClient, userId: unknown): Promise<Status
 }
 
 /**
+ * 🔴 THE 401 WAITS FOR THE SESSION ROW TO BE GONE. `req.session.destroy` is
+ * a store write (a DELETE on the session table); the first cut fired it and
+ * answered in the same tick. A client that receives the 401 and immediately
+ * sends its next request could still find the row — the refusal's whole
+ * point ("one refused request ends the session everywhere") held only when
+ * the delete happened to win the race. Caught by CI on a dependency bump
+ * that shifted the timing (Dependabot PR #3, 2026-08-27): ordersRead's
+ * DEC-074 test saw a 200 after the 401. A destroy error is deliberately
+ * swallowed — the refusal is still the right answer, and there is nothing
+ * a caller could do with the failure.
+ */
+function destroySession(req: { session?: { destroy: (cb: (err?: unknown) => void) => void } }): Promise<void> {
+  return new Promise((resolve) => {
+    if (!req.session) return resolve()
+    req.session.destroy(() => resolve())
+  })
+}
+
+/**
  * Signed in, and the account is not disabled.
  *
- * 🔴 A REFUSAL HERE DESTROYS THE SESSION. Answering 401 while leaving the
+ * 🔴 A REFUSAL HERE DESTROYS THE SESSION — and awaits the destruction
+ * before answering (see destroySession). Answering 401 while leaving the
  * cookie valid is what let a disabled account keep working everywhere the
  * guard was not mounted; destroying it means one refused request ends the
  * session everywhere at once.
@@ -73,7 +93,7 @@ export function createRequireActiveShopper(prisma: PrismaClient): RequestHandler
       }
       // `gone` and `anonymous` answer identically: the session names nobody who
       // can act, and the response reveals nothing about which case it was.
-      if (verdict.kind === 'gone') req.session?.destroy(() => {})
+      if (verdict.kind === 'gone') await destroySession(req)
       res.status(401).json({
         error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in to continue.' },
       })
@@ -81,7 +101,7 @@ export function createRequireActiveShopper(prisma: PrismaClient): RequestHandler
     }
 
     if (verdict.status === 'disabled') {
-      req.session?.destroy(() => {})
+      await destroySession(req)
       res.status(401).json({
         error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in to continue.' },
       })
@@ -114,7 +134,7 @@ export function createRequireShopperAccount(prisma: PrismaClient): RequestHandle
         })
         return
       }
-      if (verdict.kind === 'gone') req.session?.destroy(() => {})
+      if (verdict.kind === 'gone') await destroySession(req)
       res.status(401).json({
         error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in to continue.' },
       })
@@ -163,7 +183,7 @@ export function createRequireVerifiedShopper(prisma: PrismaClient): RequestHandl
         })
         return
       }
-      if (verdict.kind === 'gone') req.session?.destroy(() => {})
+      if (verdict.kind === 'gone') await destroySession(req)
       res.status(401).json({
         error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in to continue.' },
       })
@@ -171,7 +191,7 @@ export function createRequireVerifiedShopper(prisma: PrismaClient): RequestHandl
     }
 
     if (verdict.status === 'disabled') {
-      req.session?.destroy(() => {})
+      await destroySession(req)
       res.status(401).json({
         error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in to continue.' },
       })
