@@ -60,7 +60,7 @@ jobs:
       # catalogueFacts.integration.test.ts shells out to `python` for the
       # catalogue-facts checker; with VITASHOP_MEMORY_DIR unset the script
       # skips loudly and exits 0 — it only needs the interpreter to exist.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: npm ci
