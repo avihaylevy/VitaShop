@@ -28,7 +28,10 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: vitashop_ci
+          # The seeder's guard (prisma/assertLocalDevTarget.ts) accepts ONLY a
+          # localhost database named vitashop_dev — the same name a developer
+          # uses. Here it is an ephemeral service container, nothing else.
+          POSTGRES_DB: vitashop_dev
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
@@ -36,7 +39,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vitashop_ci?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vitashop_dev?schema=public
       CLIENT_ORIGIN: http://localhost:5173
       PORT: "3000"
       # Throwaway, CI-only. Not a secret: the database it signs for is
@@ -51,8 +54,8 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -60,7 +63,7 @@ jobs:
       # catalogueFacts.integration.test.ts shells out to `python` for the
       # catalogue-facts checker; with VITASHOP_MEMORY_DIR unset the script
       # skips loudly and exits 0 — it only needs the interpreter to exist.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: npm ci
@@ -80,8 +83,8 @@ jobs:
       run:
         working-directory: client
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
