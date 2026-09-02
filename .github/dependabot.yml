@@ -1,0 +1,43 @@
+# Dependabot — the maintenance agent the specification promises (אפיון §4.11):
+# it proposes dependency and security updates as pull requests; nothing
+# lands without the owner's review (CODEOWNERS + branch protection).
+#
+# Three npm roots: the workspace root (scripts only), the client, and the
+# server. Minor + patch bumps are grouped into one PR per root per week so
+# the queue stays readable; majors arrive on their own so a breaking bump
+# is never buried in a group. Security advisories are not scheduled —
+# GitHub raises those immediately regardless of this file.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/client"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "client"]
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "server"]
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]

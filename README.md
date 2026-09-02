@@ -174,6 +174,12 @@ These rules are enforced where they matter — in the server code and its test s
 
 ---
 
+## Maintenance agent
+
+**Dependabot** (`.github/dependabot.yml`) watches the three npm roots — workspace, `client/`, `server/` — and opens pull requests for outdated and vulnerable dependencies (minor/patch bumps grouped weekly per root; majors and security advisories arrive individually). Nothing it proposes lands on its own: `CODEOWNERS` routes every PR to the project author, and branch protection requires that review. This is the mechanism the specification describes in §4.11 — an agent proposes, a human approves, no agent holds write access.
+
+---
+
 ## Getting started
 
 **The system is fully implemented and runs locally end to end.**
