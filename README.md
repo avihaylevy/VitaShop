@@ -25,6 +25,8 @@ products and are used for academic demonstration only.
 Client    React 18 · Vite · TypeScript · Tailwind CSS · React Router
 Server    Express · TypeScript · Prisma
 Database  PostgreSQL
+Run       Docker Compose (Postgres 16 + both servers, one command)
+          or Node 24 + a local PostgreSQL (SETUP.md)
 ```
 
 **Why client and server are separate projects rather than a unified framework:** the specification defines three layers communicating by request/response, with the server as the sole source of truth for prices, stock and permissions. Physical separation makes that property demonstrable rather than merely claimed, and keeps the API surface small enough to audit.

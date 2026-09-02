@@ -6,7 +6,10 @@ complete store with no external downloads and no shared credentials.
 
 ## Reviewer quick start (Docker)
 
-If you have **Docker Desktop** and nothing else, this is the whole setup:
+Two ways to run the store. **If you have Docker Desktop, use it**: the
+four commands below are the whole setup, no Node or PostgreSQL install.
+Otherwise the manual path further down needs Node 24 and PostgreSQL and
+downloads about 400 MB less (no Docker Desktop, no base images).
 
 ```bash
 git clone <repo-url>
