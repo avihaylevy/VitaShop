@@ -161,7 +161,11 @@ These rules are enforced where they matter — in the server code and its test s
 
 ## Maintenance agent
 
-**Dependabot** (`.github/dependabot.yml`) watches the three npm roots — workspace, `client/`, `server/` — and opens pull requests for outdated and vulnerable dependencies (minor/patch bumps grouped weekly per root; majors and security advisories arrive individually). Nothing it proposes lands on its own: `CODEOWNERS` routes every PR to the project author, and branch protection requires that review. This is the mechanism the specification describes in §4.11 — an agent proposes, a human approves, no agent holds write access.
+The mechanism the specification describes in §4.11 — an agent proposes, automated checks verify, a human approves, no agent holds write access — is three files under `.github/`:
+
+- **Dependabot** (`dependabot.yml`) watches `client/` and `server/` and opens pull requests for outdated and vulnerable dependencies (minor/patch bumps grouped weekly per root; majors and security advisories arrive individually). It keeps the CI workflow's own actions current the same way.
+- **CI** (`workflows/ci.yml`) runs on every pull request and every push to `master`: the server is built, migrated and seeded against a fresh PostgreSQL, then both test suites run. A dependency bump that breaks anything is red before anyone reads it.
+- **CODEOWNERS** routes every PR to the project author; with branch protection enabled on `master` (a repository setting), that review is mandatory and nothing merges without it.
 
 ---
 

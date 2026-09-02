@@ -1,0 +1,91 @@
+# CI — the verification half of the maintenance mechanism (אפיון §4.11).
+# Dependabot proposes; this workflow proves the proposal still builds and
+# passes both suites; a human merges. Runs on every pull request and on
+# pushes to master.
+#
+# The server suite needs a real PostgreSQL with the catalogue SEEDED — the
+# integration tests read seeded products (DEC-063: fixtures remove only the
+# rows they create). The seeder refuses non-localhost targets and demands
+# explicit account passwords, so the job sets throwaway ones: they exist
+# for the lifetime of this runner and nothing else.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: server — build, seed, test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vitashop_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vitashop_ci?schema=public
+      CLIENT_ORIGIN: http://localhost:5173
+      PORT: "3000"
+      # Throwaway, CI-only. Not a secret: the database it signs for is
+      # destroyed with the runner. Real deployments set their own.
+      SESSION_SECRET: ci-only-session-secret-not-used-anywhere-else
+      AI_PROVIDER: mock
+      SEED_ADMIN_EMAIL: admin@vitashop.local
+      SEED_ADMIN_PASSWORD: ci-admin-password
+      SEED_SHOPPER_EMAIL: shopper@vitashop.local
+      SEED_SHOPPER_PASSWORD: ci-shopper-password
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      # catalogueFacts.integration.test.ts shells out to `python` for the
+      # catalogue-facts checker; with VITASHOP_MEMORY_DIR unset the script
+      # skips loudly and exits 0 — it only needs the interpreter to exist.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run seed
+      - run: npm run seed:accounts
+      - run: npm run build
+      - run: npm test
+
+  client:
+    name: client — typecheck, build, test
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_BASE_URL: http://localhost:3000
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run
