@@ -169,7 +169,8 @@ a quick review use those.
 npm test                   # both suites, from the repo root
 ```
 
-(The server's integration tests need the database up.)
+(The server's integration tests need the database up and seeded, as in
+step 5.)
 
 ## Troubleshooting
 
@@ -179,8 +180,7 @@ npm test                   # both suites, from the repo root
   build, which is the only step that downloads anything, then turn it back on.
 - **Docker Desktop crashes at start with "remove … .sock: The file cannot be
   accessed by the system"** → a stale socket file from an earlier crash.
-  Rename the folder it names (e.g. `%LOCALAPPDATA%\Docker
-un`) and start
+  Rename the folder it names (e.g. `%LOCALAPPDATA%\Dockerun`) and start
   Docker Desktop again; it recreates the folder.
 - **Server refuses to start** → `SESSION_SECRET` is missing; that refusal is
   by design.
