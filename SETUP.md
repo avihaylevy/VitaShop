@@ -114,6 +114,12 @@ in step 3 (`SEED_ADMIN_EMAIL` defaults to `admin@vitashop.local`, etc.).
 The admin menu (products, orders, dashboard) appears for the admin and
 reviewer accounts.
 
+**Registering a brand-new account?** The verification email is not sent
+anywhere: the server prints it, link included, in the terminal that runs
+`npm run dev:server`. Open that link to verify the account; until then it
+cannot check out. The seeded accounts above are already verified, so for
+a quick review use those.
+
 ## Tests
 
 ```bash
