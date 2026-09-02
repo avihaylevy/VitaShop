@@ -3,10 +3,9 @@
 ## About
 
 **VitaShop is an academic project, not a real product.** It is a complete
-e-commerce web application for vitamins and dietary supplements, built by
-Avihay Levy as the course project for **Digital Systems Planning and
-Development** (תכנון ופיתוח מערכות דיגיטאליות), Ramat Gan Academic College,
-second year, summer semester 2026.
+e-commerce web application for vitamins and dietary supplements, built as
+a group course project for **Digital Systems Planning and Development**,
+Ramat Gan Academic College, second year, summer semester 2026.
 
 The system implements the course specification end to end: a bilingual
 Hebrew/English store with a searchable catalogue, cart and checkout, user
