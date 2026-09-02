@@ -200,6 +200,12 @@ function jar() {
  * fix it: it is a write-timing race INSIDE one request sequence, not between
  * workers. Waiting for the observable precondition is the honest fix — the
  * claim under test is the journey, never how fast the session store flushes.
+ *
+ * ⚠️ AND IT CANNOT RESCUE A LOST RACE: once the second line has landed in a
+ * different cart, no amount of polling makes the first cart hold two. The
+ * PRIMARY defence is upstream — every request in a sequence drains the
+ * previous response's BODY (see the add loop), because express-session
+ * sends the body only after the store write. This poll is the backstop.
  */
 async function cartHoldsLines(cookie: string, expected: number) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -492,6 +498,15 @@ describe('🔴 DEC-058 — the shipping basis excludes withdrawn lines, over the
       })
       cookies.capture(res)
       expect(res.status).toBe(200)
+      // 🔴 DRAIN THE BODY BEFORE THE NEXT REQUEST. express-session flushes
+      // the response HEADERS first and writes the session row before sending
+      // the BODY — so `await fetch` resolving is not "persisted", but the
+      // body arriving is. Firing the second POST on headers alone let it
+      // reach the server before `guestCartId` was durable, and it minted a
+      // SECOND cart (CI, Dependabot PR #3, third run: "never reached 2
+      // lines"). Real clients await the JSON, so this is the test matching
+      // what a client does — not a workaround.
+      await res.arrayBuffer()
     }
     await cartHoldsLines(cookies.header, 2)
 
