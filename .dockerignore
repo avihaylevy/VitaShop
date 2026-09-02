@@ -1,0 +1,28 @@
+# Build context = repo root (see Dockerfile). Keep it small and secret-free.
+
+# 🔴 never bake an env file into an image — compose.yaml injects the values
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/coverage
+server/uploads
+
+.git
+.github
+.claude
+.playwright-cli
+.playwright
+graphify-out
+docs
+scripts
+README.md
+SETUP.md
+AGENTS.md
+CLAUDE.md
+CODEX.md

@@ -1,0 +1,115 @@
+# VitaShop — one command for the reviewer:  docker compose up
+#
+# Brings up PostgreSQL, applies the migrations, seeds the catalogue and
+# the login accounts, then starts the API (:3000) and the app (:5173).
+# Prerequisites: Docker Desktop, and a root `.env` copied from
+# `.env.example` with the passwords filled in — there are NO defaults,
+# the same contract SETUP.md states for the manual path.
+#
+# 🔴 THE SEED GUARD IS KEPT, NOT WORKED AROUND. `prisma/assertLocalDevTarget.ts`
+# accepts only a localhost database named vitashop_dev. Inside a Compose
+# network the database is reachable as `db`, which the guard would refuse —
+# so the one-shot `seed` service joins the database container's network
+# namespace (`network_mode: service:db`) and genuinely reaches it at
+# localhost:5432. The API itself has no such guard and connects by name.
+#
+# Port 5432 is deliberately NOT published: a reviewer with their own
+# PostgreSQL on 5432 would otherwise collide with it.
+
+name: vitashop
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vitashop_dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # -h localhost forces TCP. Without it pg_isready probes the unix
+      # socket, which the image's TEMPORARY init-time server (first run,
+      # empty volume) also answers — before anything listens on 5432.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U postgres -d vitashop_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # One-shot, runs on every `up`, in three parts:
+  #   migrate deploy   always (idempotent)
+  #   catalogue seed   ONCE per database — the seed converges every CSV
+  #                    product back to the CSV, which would silently undo a
+  #                    reviewer's admin edits and order stock decrements on
+  #                    every restart. A marker in the `seed-state` volume
+  #                    remembers it ran; `docker compose down -v` clears both
+  #                    volumes together, so a fresh database seeds again.
+  #   account seed     always — re-hashing from .env is the documented way
+  #                    to change a password (SETUP.md step 3).
+  seed:
+    build:
+      context: .
+      target: server-tools
+    image: vitashop-server-tools
+    network_mode: "service:db"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vitashop_dev?schema=public
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@vitashop.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD in .env (copy .env.example)}
+      SEED_SHOPPER_EMAIL: ${SEED_SHOPPER_EMAIL:-shopper@vitashop.local}
+      SEED_SHOPPER_PASSWORD: ${SEED_SHOPPER_PASSWORD:?set SEED_SHOPPER_PASSWORD in .env (copy .env.example)}
+      SEED_REVIEWER_EMAIL: ${SEED_REVIEWER_EMAIL:-}
+      SEED_REVIEWER_PASSWORD: ${SEED_REVIEWER_PASSWORD:-}
+    volumes:
+      - seed-state:/seed-state
+    command:
+      - sh
+      - -ec
+      - |
+        npx prisma migrate deploy
+        if [ -f /seed-state/catalogue-seeded ]; then
+          echo "Catalogue already seeded for this database; skipping (docker compose down -v to start over)."
+        else
+          npm run seed
+          touch /seed-state/catalogue-seeded
+        fi
+        npm run seed:accounts
+
+  server:
+    build:
+      context: .
+      target: server
+    image: vitashop-server
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/vitashop_dev?schema=public
+      CLIENT_ORIGIN: http://localhost:5173
+      PORT: "3000"
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env (copy .env.example)}
+      AI_PROVIDER: mock
+      # DEC-089c: uploads are cwd-anchored; pinned explicitly and persisted.
+      UPLOADS_DIR: /app/server/uploads
+    volumes:
+      - uploads:/app/server/uploads
+
+  client:
+    build:
+      context: .
+      target: client
+    image: vitashop-client
+    depends_on:
+      - server
+    ports:
+      - "5173:5173"
+
+volumes:
+  pgdata:
+  seed-state:
+  uploads:

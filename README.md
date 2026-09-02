@@ -31,12 +31,26 @@ Database  PostgreSQL
 
 ---
 
+## Running it
+
+Two ways, both local (no cloud deployment is part of the deliverable):
+
+- **Docker Desktop only:** `cp .env.example .env`, fill in the three
+  required values, `docker compose up`. PostgreSQL, migrations, seed, API and app
+  come up together; the store is at <http://localhost:5173>.
+- **Node 24 + your own PostgreSQL:** the step-by-step walkthrough in
+  [SETUP.md](SETUP.md).
+
+---
+
 ## Repository structure
 
 ```
 VitaShop/
 ├── README.md              you are here
 ├── SETUP.md               reviewer walkthrough: clone → running store
+├── compose.yaml           one-command reviewer setup (Docker Desktop)
+├── Dockerfile             server + client images for compose.yaml
 ├── package.json           root convenience scripts (setup / db / seed / dev / test)
 ├── assets/
 │   ├── brand/             logo artwork — source/ originals, web/ derived exports

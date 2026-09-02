@@ -4,6 +4,46 @@ Everything runs locally: the full product catalogue (data **and** images)
 ships inside the repo under `assets/products/`, so a fresh clone seeds a
 complete store with no external downloads and no shared credentials.
 
+## Reviewer quick start (Docker)
+
+If you have **Docker Desktop** and nothing else, this is the whole setup:
+
+```bash
+git clone <repo-url>
+cd VitaShop
+cp .env.example .env      # then fill in the three required values (see below)
+docker compose up
+```
+
+`.env` needs a `SESSION_SECRET` (a long random string) and the two
+passwords you want for `SEED_ADMIN_PASSWORD` and `SEED_SHOPPER_PASSWORD`.
+There are no defaults: Compose refuses to start with any of them empty,
+exactly as the manual path does. Stick to letters and digits: Compose
+treats `$` inside a value as a variable reference and drops it.
+
+The first run builds the images and takes a few minutes; it starts
+PostgreSQL, applies the migrations, seeds the full catalogue and your
+accounts, then serves the API on <http://localhost:3000> and the app on
+<http://localhost:5173>. Both ports must be free, and the app is built for
+exactly those two `localhost` addresses. Log in with `admin@vitashop.local`
+/ `shopper@vitashop.local` and the passwords you chose.
+
+Stop with Ctrl+C. A later `docker compose up` keeps your data: the
+catalogue is seeded once per database, so admin edits and orders survive a
+restart (the accounts are re-hashed from `.env` each time, which is how you
+change a password). `docker compose down -v` deletes the volumes and starts
+over from a clean, re-seeded database.
+
+A brand-new account's verification email is printed in the `server`
+container's log (`docker compose logs server`), link included.
+
+The rest of this document is the manual path (Node 24 + your own
+PostgreSQL). The Compose setup runs the same migrations, seed and servers,
+but as a production build (`vite preview`, compiled server) rather than the
+dev servers below, so the dev-only diagnostics are absent there.
+
+---
+
 ## Prerequisites
 
 | Tool | Version | Notes |
@@ -130,6 +170,15 @@ npm test                   # both suites, from the repo root
 
 ## Troubleshooting
 
+- **Docker build fails in `npm ci` with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`** →
+  an antivirus or proxy on your machine is intercepting HTTPS (AVG/Avast
+  "Web Shield" HTTPS scanning does this). Pause that scanning for the first
+  build, which is the only step that downloads anything, then turn it back on.
+- **Docker Desktop crashes at start with "remove … .sock: The file cannot be
+  accessed by the system"** → a stale socket file from an earlier crash.
+  Rename the folder it names (e.g. `%LOCALAPPDATA%\Docker
+un`) and start
+  Docker Desktop again; it recreates the folder.
 - **Server refuses to start** → `SESSION_SECRET` is missing; that refusal is
   by design.
 - **`seed:accounts` refuses to run** → one of the `SEED_*_PASSWORD` values is
