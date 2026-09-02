@@ -26,7 +26,7 @@ The course evaluates **architecture, structure, and operation** — not visual p
 **Truth for what is implemented:** this code.
 
 ```
-Client:   React 18 + Vite + TypeScript + Tailwind
+Client:   React 19 + Vite + TypeScript + Tailwind
 Server:   Express + TypeScript + Prisma
 Database: PostgreSQL
 ```

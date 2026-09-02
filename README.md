@@ -22,7 +22,7 @@ products and are used for academic demonstration only.
 ## Tech stack
 
 ```
-Client    React 18 · Vite · TypeScript · Tailwind CSS · React Router
+Client    React 19 · Vite · TypeScript · Tailwind CSS · React Router
 Server    Express · TypeScript · Prisma
 Database  PostgreSQL
 Run       Docker Compose (Postgres 16 + both servers, one command)
