@@ -165,7 +165,7 @@ The mechanism the specification describes in §4.11 — an agent proposes, autom
 
 - **Dependabot** (`dependabot.yml`) watches `client/` and `server/` and opens pull requests for outdated and vulnerable dependencies (minor/patch bumps grouped weekly per root; majors and security advisories arrive individually). It keeps the CI workflow's own actions current the same way.
 - **CI** (`workflows/ci.yml`) runs on every pull request and every push to `master`: the server is built, migrated and seeded against a fresh PostgreSQL, then both test suites run. A dependency bump that breaks anything is red before anyone reads it.
-- **CODEOWNERS** routes every PR to the project author; with branch protection enabled on `master` (a repository setting), that review is mandatory and nothing merges without it.
+- **CODEOWNERS** routes every PR to the project author, and branch protection on `master` makes that review and a green CI run mandatory — nothing merges without both. Force-pushes and branch deletion are blocked.
 
 ---
 
