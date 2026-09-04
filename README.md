@@ -12,9 +12,9 @@ Hebrew/English store with a searchable catalogue, cart and checkout, user
 accounts with a personal area, a customer club, an administration module
 with an analytics dashboard, and an AI shopping assistant — with every
 price, stock and permission decision made on the server. It runs locally
-(no cloud deployment is part of the deliverable), and the shop is a
-simulation throughout: no orders are fulfilled and no payments are
-processed. Product photographs and safety data belong to real branded
+from a clone, and a live copy is hosted at <https://vitashop.onrender.com>.
+The shop is a simulation throughout: no orders are fulfilled and no
+payments are processed. Product photographs and safety data belong to real branded
 products and are used for academic demonstration only.
 
 ---
@@ -39,8 +39,7 @@ Live      Render (web service) · Neon (PostgreSQL) · Brevo (email) ·
 
 **Live copy:** <https://vitashop.onrender.com> (free tier: the first request
 after 15 idle minutes takes about a minute while the service wakes).
-Two ways to run it yourself, both local (the course deliverable is the
-local run):
+Two ways to run it yourself, both local:
 
 - **Docker Desktop only:** `cp .env.example .env`, fill in the three
   required values, `docker compose up`. PostgreSQL, migrations, seed, API and app
@@ -58,6 +57,8 @@ VitaShop/
 ├── SETUP.md               reviewer walkthrough: clone → running store
 ├── compose.yaml           one-command reviewer setup (Docker Desktop)
 ├── Dockerfile             server + client images for compose.yaml
+├── .env.example           the three values compose.yaml asks for
+├── render.yaml            the live copy's blueprint (Render + Neon)
 ├── package.json           root convenience scripts (setup / db / seed / dev / test)
 ├── assets/
 │   ├── brand/             logo artwork — source/ originals, web/ derived exports
@@ -116,7 +117,7 @@ The Hebrew (RTL) interface; every screen also ships in English (LTR).
   <img src="docs/screenshots/checkout.png" width="49%" alt="Checkout — delivery method">
   <img src="docs/screenshots/payment.png" width="49%" alt="Payment — simulated">
 </p>
-<p align="center"><sub><b>Delivery</b> — pickup, home delivery, or a pickup point&emsp;·&emsp;<b>Payment (simulated)</b> — the card form validates client-side only; details are never transmitted or stored</sub></p>
+<p align="center"><sub><b>Delivery</b> — pickup, home delivery, or a pickup point&emsp;·&emsp;<b>Payment (simulated)</b> — the card form validates client-side only; details are never transmitted or stored. The test card 4000 0000 0000 0002 exercises the declined path</sub></p>
 
 ### Accounts and AI
 
@@ -143,9 +144,10 @@ The Hebrew (RTL) interface; every screen also ships in English (LTR).
 
 ## Getting started
 
-**The system is fully implemented and runs locally end to end.**
-The complete walkthrough — PostgreSQL install options, environment files,
-seeding, login accounts, tests — is in **[SETUP.md](SETUP.md)**.
+**The system is fully implemented and runs end to end, locally or on the
+live copy.** The complete walkthrough — Docker quick start, PostgreSQL
+install options, environment files, seeding, login accounts, tests, and
+how the live copy is deployed — is in **[SETUP.md](SETUP.md)**.
 
 The short version, from the repo root:
 
@@ -160,7 +162,7 @@ npm run dev:client   # http://localhost:5173  (second terminal)
 
 Prerequisites: Node.js 24 and a local PostgreSQL instance (install options in SETUP.md). Every environment variable is documented in `server/.env.example` and `client/.env.example`.
 
-**Admin access for reviewers.** There are no default passwords anywhere in the repo. The admin account is created by `npm run seed` from the email and password *you* put in `server/.env` (`SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` — the seeder refuses to run without them). Log in with that pair and the admin menu (products, orders, dashboard) appears. A second `SEED_SHOPPER_*` pair gives you an ordinary customer account for the shopping flow.
+**Admin access for reviewers.** There are no default passwords anywhere in the repo. The admin account is created by `npm run seed` from the email and password *you* put in `server/.env` (`SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` — the seeder refuses to run without them). Log in with that pair and the admin menu (products, orders, dashboard) appears. A second `SEED_SHOPPER_*` pair gives you an ordinary customer account for the shopping flow. On the live copy the same two accounts exist; their passwords are handed to reviewers privately, never published.
 
 **Tests.** `npm test` runs both suites — over 2,200 automated tests across server and client, including the invariants the specification calls out (no overselling, frozen order prices, soft delete only, server-side pricing).
 
@@ -173,7 +175,7 @@ This project handles authentication, pricing and stock. A few rules are non-nego
 - **All price calculation, stock checking and permission verification happen server-side.** The client is never a source of truth
 - **No secrets in the repository.** API keys, database passwords and session secrets live only in `.env`, which is git-ignored
 - **No real AI key is needed.** The AI assistant runs on a built-in mock provider by default; a real provider is an explicit, optional configuration
-- **Payment is simulated.** The card form validates format client-side only (Luhn, expiry, CVV); card details are never transmitted to the server and never stored
+- **Payment is simulated.** The card form validates format client-side only (Luhn, expiry, CVV); card details are never transmitted to the server and never stored. Only the outcome travels: the test card ending 0002 requests the declined path, anything else pays
 
 These rules are enforced where they matter — in the server code and its test suite (rate limiting in `server/src/lib/rateLimit.ts`, session/auth flows in `server/src/routes/auth.ts`, admin checks per-request in the route guards) — not merely documented.
 
@@ -187,6 +189,8 @@ The mechanism the specification describes in §4.11 — an agent proposes, autom
 - **CI** (`workflows/ci.yml`) runs on every pull request and every push to `master`: the server is built, migrated and seeded against a fresh PostgreSQL, then both test suites run. A dependency bump that breaks anything is red before anyone reads it.
 - **CODEOWNERS** routes every PR to the project author, and branch protection on `master` makes that review and a green CI run mandatory — nothing merges without both. Force-pushes and branch deletion are blocked.
 
+Outside the repository, an uptime monitor (UptimeRobot) requests the live copy's `/api/health` every five minutes, which keeps the free instance awake and records any outage.
+
 ---
 
 ## Scope
@@ -194,11 +198,11 @@ The mechanism the specification describes in §4.11 — an agent proposes, autom
 **Simulated, by design:**
 
 - **Payment** — the specification defines a simulation with no real charge
-- **Email** — no email is actually sent. Account verification, password reset and order confirmation are implemented end to end (single-use tokens, 24-hour expiry, orders blocked until verified), but the message is written to the server console instead of being delivered; a reviewer copies the verification link from the terminal (see SETUP.md). Notifications on order-status changes (shipped, cancelled) are not included; the customer follows the status in the personal area
+- **Email** — account verification, password reset and order confirmation are implemented end to end (single-use tokens, 24-hour expiry, orders blocked until verified). The live copy delivers them through Brevo; a local run writes the message to the server console instead, and a reviewer copies the verification link from the terminal (see SETUP.md). The switch between the two is one environment variable. Notifications on order-status changes (shipped, cancelled) are not included; the customer follows the status in the personal area
 
 **Deliberately out of scope:** real payment processing, product reviews and ratings, promotions and user management in the admin module, multi-warehouse inventory, VAT and invoicing, personalised nutritional advice. The customer club (a flat 10% member discount, computed server-side) is in scope and implemented.
 
-**Runs locally, by design.** Cloud deployment is not part of the course deliverable; the code is nonetheless written deployment-ready — environment variables throughout, no hardcoded paths, no secrets.
+**Local first, hosted second.** The course deliverable is the local run, and the code is written to deploy unchanged — environment variables throughout, no hardcoded paths, no secrets. The live copy on Render (web service serving API and app from one origin) with a Neon database is that same code with a handful of environment variables; the blueprint is `render.yaml` and the steps are in SETUP.md.
 
 ---
 
@@ -218,4 +222,4 @@ An academic project. Not a real store — no orders are fulfilled and no payment
 
 ---
 
-Last updated: 2026-09-02
+Last updated: 2026-09-04

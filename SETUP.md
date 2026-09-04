@@ -1,8 +1,10 @@
 # VitaShop — Setup for Reviewers
 
-Everything runs locally: the full product catalogue (data **and** images)
-ships inside the repo under `assets/products/`, so a fresh clone seeds a
-complete store with no external downloads and no shared credentials.
+Everything runs from a clone: the full product catalogue (data **and**
+images) ships inside the repo under `assets/products/`, so a fresh clone
+seeds a complete store with no external downloads and no shared
+credentials. A live copy is at <https://vitashop.onrender.com>; how it is
+deployed is the last section of this file.
 
 ## Reviewer quick start (Docker)
 
