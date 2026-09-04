@@ -123,9 +123,11 @@ Fill in `.env` (never committed — see `.gitignore`):
   with these unset rather than invent one.
 
 Everything else in `.env.example` already carries the right local value
-(`CLIENT_ORIGIN`, `PORT`, `AI_PROVIDER=mock`). Leave `GROQ_API_KEY` empty —
-the AI agent then runs against the built-in deterministic mock provider,
-which is the supported review configuration.
+(`CLIENT_ORIGIN`, `PORT`, `AI_PROVIDER=mock`, `EMAIL_PROVIDER=console`;
+`TRUST_PROXY` and `CLIENT_DIST_DIR` stay empty, they exist for the hosted
+copy). Leave `GROQ_API_KEY` empty — the AI agent then runs against the
+built-in deterministic mock provider, which is the supported review
+configuration.
 
 ## 4. Configure the client
 
@@ -176,10 +178,11 @@ step 5.)
 
 ## Deploying a live copy (Render + Neon, both free)
 
-Optional. The course deliverable runs locally; this puts the same build on
-a public URL for classmates. One Render web service serves the API and the
-built app from one origin; the database is a Neon project (Render's own
-free Postgres is deleted after 30 days, Neon's is not).
+Optional. The course deliverable runs locally; this is how the live copy at
+<https://vitashop.onrender.com> was set up, and how to make your own. One
+Render web service serves the API and the built app from one origin; the
+database is a Neon project (Render's own free Postgres is deleted after 30
+days, Neon's is not).
 
 1. **Neon**: create a project (region Frankfurt). In **Connect**, copy the
    **direct** connection string (connection pooling OFF; the host has no
@@ -191,6 +194,10 @@ free Postgres is deleted after 30 days, Neon's is not).
    ```bash
    pg_dump --no-owner --no-privileges --format=custom --dbname "postgresql://postgres:<local-password>@localhost:5432/vitashop_dev" --file vitashop.dump
    ```
+   The `--dbname` value is exactly your `DATABASE_URL` from `server/.env`
+   (minus `?schema=public`), so copy it from there: the role may not be
+   `postgres`. On Windows the tools sit in
+   `C:\Program Files\PostgreSQL\<version>\bin\` if they are not on PATH.
    ```bash
    pg_restore --no-owner --no-privileges --dbname "<neon-direct-connection-string>" vitashop.dump
    ```
@@ -198,10 +205,16 @@ free Postgres is deleted after 30 days, Neon's is not).
    accounts (their passwords stay the ones in your `server/.env`).
 3. **Render**: New → Blueprint → pick this repository. `render.yaml` defines
    the service; the dashboard asks for `DATABASE_URL` (paste the Neon
-   string) and generates `SESSION_SECRET` itself. Optional:
-   `GROQ_API_KEY` + `AI_PROVIDER=groq` for the real AI agent.
+   string) and generates `SESSION_SECRET` itself. `CLIENT_ORIGIN` is a
+   literal in `render.yaml` (`https://vitashop.onrender.com`); if Render
+   gives your service a different subdomain, edit that value first.
 4. First deploy takes a few minutes. The URL is
    `https://<service-name>.onrender.com`.
+5. **Dashboard-only variables** (Environment tab, not in the blueprint, so
+   a blueprint sync never touches them): `AI_PROVIDER=groq` +
+   `GROQ_API_KEY` for the real AI agent, and the email variables below.
+   Save them when no deploy is in progress; a value saved mid-build is not
+   seen by the process that build starts, and a **Manual Deploy** fixes it.
 
 **Email on the live copy.** By default the transport is still the console,
 so a *new* registration's verification link lands in the Render log (Logs
@@ -234,10 +247,10 @@ What is different from local, on purpose: `TRUST_PROXY=1` (Render sits
 behind a proxy; without it every visitor shares one rate-limit bucket),
 `CLIENT_DIST_DIR` (Express serves the built client, so the session cookie
 stays same-site), `VITE_API_BASE_URL=same-origin` (the app calls `/api`
-relatively). Free-tier facts: the service sleeps after 15 idle minutes and
-wakes in about a minute; images uploaded through the admin panel live on
-an ephemeral disk and vanish on the next deploy (the seeded catalogue's
-images ship in the repo and are unaffected).
+relatively). Free-tier facts: without the monitor above the service sleeps
+after 15 idle minutes and wakes in about a minute; images uploaded through
+the admin panel live on an ephemeral disk and vanish on the next deploy
+(the seeded catalogue's images ship in the repo and are unaffected).
 
 ## Troubleshooting
 
@@ -250,7 +263,11 @@ images ship in the repo and are unaffected).
   Rename the folder it names (e.g. `%LOCALAPPDATA%\Docker\run`) and start
   Docker Desktop again; it recreates the folder.
 - **Server refuses to start** → `SESSION_SECRET` is missing; that refusal is
-  by design.
+  by design. On Render the same shape with `CLIENT_ORIGIN is not set` means
+  the blueprint's literal was removed or the service was created outside
+  the blueprint.
+- **Saved a variable in Render but nothing changed** → the running process
+  started before the save. Manual Deploy → Deploy latest commit.
 - **`seed:accounts` refuses to run** → one of the `SEED_*_PASSWORD` values is
   empty, or `DATABASE_URL` points at something other than localhost
   `vitashop_dev`.
