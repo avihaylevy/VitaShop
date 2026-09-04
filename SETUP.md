@@ -201,11 +201,16 @@ free Postgres is deleted after 30 days, Neon's is not).
 4. First deploy takes a few minutes. The URL is
    `https://<service-name>.onrender.com`.
 
-**Who can sign in on the live copy**: the accounts carried over by the
-dump. Email is still the console transport there too, so a *new*
-registration's verification link lands in the Render log
-(Logs tab), not in anyone's inbox; share the seeded logins with your
-classmates instead, or open the link from the log for them.
+**Email on the live copy.** By default the transport is still the console,
+so a *new* registration's verification link lands in the Render log (Logs
+tab, search `EMAIL`), not in an inbox. For real delivery, free and with no
+domain to own: create a Brevo account, add and verify a sender address
+(your own email works), create an API key (SMTP & API), then in Render's
+Environment tab set `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`,
+`EMAIL_FROM_ADDRESS` (the verified sender) and optionally
+`EMAIL_FROM_NAME`. Verification, password-reset and order-confirmation
+mails then arrive by email. A wrong or missing key falls back to the
+console transport and says so in the log.
 
 What is different from local, on purpose: `TRUST_PROXY=1` (Render sits
 behind a proxy; without it every visitor shares one rate-limit bucket),

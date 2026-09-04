@@ -78,3 +78,5 @@ __pycache__/
 
 # database dumps (DEC-116 restore into Neon) — carry real account hashes, never committed
 *.dump
+# account-hash sync for the live DB (DEC-116) — never committed
+/neon-accounts.sql

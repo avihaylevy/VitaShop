@@ -56,8 +56,9 @@ services:
         value: ../client/dist
       - key: VITE_API_BASE_URL
         value: same-origin
-      - key: AI_PROVIDER
-        value: mock
+      # AI_PROVIDER is deliberately NOT here: unset means the mock (the
+      # server's default), and a value set in the dashboard (groq + the
+      # user's own GROQ_API_KEY) must survive every blueprint sync.
       # The app's own public URL, for CORS (DEC-010: one exact origin) and
       # the links in verification emails. A literal: `fromService` with
       # envVarKey cannot expose Render's default RENDER_EXTERNAL_URL (tried,

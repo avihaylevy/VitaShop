@@ -2,7 +2,7 @@ import 'dotenv/config'
 import { pathToFileURL } from 'node:url'
 import cors from 'cors'
 import express from 'express'
-import { ConsoleEmailProvider } from './lib/emailService.js'
+import { resolveEmailProvider } from './lib/emailProvider.js'
 import { prewarmDummyHash } from './lib/loginService.js'
 import { prisma } from './lib/prisma.js'
 import { createSessionMiddleware } from './lib/session.js'
@@ -112,7 +112,12 @@ app.use('/api/cart', cartRouter)
 // 🔴 Mounted AFTER the session middleware, like the cart: both routes are
 // authenticated-only (§8.2) and their limiters key on the shopper (DEC-061),
 // so `req.session` must already be populated when they run.
-app.use('/api/checkout', createCheckoutRouter({ prisma, emailService: new ConsoleEmailProvider() }))
+// DEC-117 — ONE transport for every mail (verification, reset, order
+// confirmation), selected by EMAIL_PROVIDER: console by default, Brevo on
+// the live copy. Never refuses to boot over an email config.
+const emailService = resolveEmailProvider()
+
+app.use('/api/checkout', createCheckoutRouter({ prisma, emailService }))
 
 // MILESTONE-008 Checkpoint E3 — POST /api/orders/:id/cancel.
 // 🔴 Shopper-only. §8.9's four ADMIN transitions are enforced at the service
@@ -175,12 +180,12 @@ const dummyHashReady = prewarmDummyHash().catch((error: unknown) => {
 })
 
 // MILESTONE-006 Checkpoints D and E — registration, verification, login.
-// DEC-007: ConsoleEmailProvider is the transport; all token logic is real.
+// DEC-007: delivery is the transport's concern; all token logic is real.
 app.use(
   '/api',
   createAuthRouter({
     prisma,
-    emailService: new ConsoleEmailProvider(),
+    emailService,
     appBaseUrl: clientOrigin,
   }),
 )
