@@ -59,11 +59,9 @@ services:
       - key: AI_PROVIDER
         value: mock
       # The app's own public URL, for CORS (DEC-010: one exact origin) and
-      # the links in verification emails. Self-reference exposes Render's
-      # default variable under the name the server expects, so the code
-      # stays vendor-neutral. For a custom domain, replace with a value.
+      # the links in verification emails. A literal: `fromService` with
+      # envVarKey cannot expose Render's default RENDER_EXTERNAL_URL (tried,
+      # first deploy failed at boot). If Render gave the service a suffixed
+      # subdomain, or for a custom domain, edit this value.
       - key: CLIENT_ORIGIN
-        fromService:
-          type: web
-          name: vitashop
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://vitashop.onrender.com
