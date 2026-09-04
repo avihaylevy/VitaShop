@@ -35,7 +35,10 @@ Run       Docker Compose (Postgres 16 + both servers, one command)
 
 ## Running it
 
-Two ways, both local (no cloud deployment is part of the deliverable):
+**Live copy:** <https://vitashop.onrender.com> (free tier: the first request
+after 15 idle minutes takes about a minute while the service wakes).
+Two ways to run it yourself, both local (the course deliverable is the
+local run):
 
 - **Docker Desktop only:** `cp .env.example .env`, fill in the three
   required values, `docker compose up`. PostgreSQL, migrations, seed, API and app
