@@ -1,5 +1,8 @@
 import type { DeliveryEstimate } from './deliveryEstimate.js'
 
+/** The brand as it appears in mail subjects and as the sender's display name. One literal. */
+export const BRAND_NAME = 'VitaShop'
+
 /**
  * Every server-generated user-facing string in the application.
  *
@@ -50,7 +53,7 @@ export const emailStringsHe = {
   /** REQ-F-031 — verification link, 24 hours, single use. */
   verification(link: string): EmailContent {
     return {
-      subject: 'VitaShop — אימות כתובת המייל',
+      subject: `${BRAND_NAME} — אימות כתובת המייל`,
       body: joinBody([
         'ברוכים הבאים ל-VitaShop.',
         '',
@@ -70,7 +73,7 @@ export const emailStringsHe = {
    */
   existingAccountRegistrationAttempt(): EmailContent {
     return {
-      subject: 'VitaShop — ניסיון הרשמה עם כתובת המייל שלך',
+      subject: `${BRAND_NAME} — ניסיון הרשמה עם כתובת המייל שלך`,
       body: joinBody([
         'מישהו ניסה להירשם ל-VitaShop עם כתובת המייל הזו, שכבר רשומה במערכת.',
         '',
@@ -84,7 +87,7 @@ export const emailStringsHe = {
   /** REQ-F-032 — the password-reset link. Single use, one hour. */
   passwordReset(link: string, ttlHours: number): EmailContent {
     return {
-      subject: 'VitaShop — איפוס סיסמה',
+      subject: `${BRAND_NAME} — איפוס סיסמה`,
       body: joinBody([
         'התקבלה בקשה לאיפוס הסיסמה בחשבון VitaShop שלך.',
         '',
@@ -104,7 +107,7 @@ export const emailStringsHe = {
    */
   passwordResetCompleted(): EmailContent {
     return {
-      subject: 'VitaShop — הסיסמה שונתה',
+      subject: `${BRAND_NAME} — הסיסמה שונתה`,
       body: joinBody([
         'הסיסמה בחשבון VitaShop שלך שונתה זה עתה.',
         '',

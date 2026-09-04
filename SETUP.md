@@ -209,8 +209,17 @@ domain to own: create a Brevo account, add and verify a sender address
 Environment tab set `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`,
 `EMAIL_FROM_ADDRESS` (the verified sender) and optionally
 `EMAIL_FROM_NAME`. Verification, password-reset and order-confirmation
-mails then arrive by email. A wrong or missing key falls back to the
-console transport and says so in the log.
+mails then arrive by email. A *missing or malformed* key falls back to the
+console transport and says so in the log; a well-formed but wrong key does
+not: each send then fails with `HTTP 401 (unauthorized)` in the log and the
+mail is lost, so test one real registration right after saving the
+variables. Three Brevo facts worth knowing: a brand-new account may be
+held for validation for a few hours (sends answer
+`account_under_validation` until then); with a free-mail sender Brevo may
+rewrite the visible From, so check one delivery to a Gmail inbox and one
+to another provider; and the seeded `@vitashop.local` accounts have no
+real mailbox, so their order confirmations log a harmless
+`invalid_parameter` failure.
 
 What is different from local, on purpose: `TRUST_PROXY=1` (Render sits
 behind a proxy; without it every visitor shares one rate-limit bucket),

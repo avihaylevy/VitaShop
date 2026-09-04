@@ -1,5 +1,8 @@
+import { z } from 'zod'
 import { BrevoEmailProvider } from './brevoEmailProvider.js'
 import { ConsoleEmailProvider, type EmailService } from './emailService.js'
+import { BRAND_NAME } from './emailStrings.js'
+import { isHeaderSafeSecret } from './headerSafeSecret.js'
 
 /**
  * DEC-117 — EMAIL_PROVIDER selects the transport at startup, the way
@@ -20,21 +23,21 @@ export function resolveEmailProvider(env: NodeJS.ProcessEnv = process.env): Emai
     case 'brevo': {
       const apiKey = (env.BREVO_API_KEY ?? '').trim()
       const fromEmail = (env.EMAIL_FROM_ADDRESS ?? '').trim()
-      const fromName = (env.EMAIL_FROM_NAME ?? '').trim() || 'VitaShop'
+      const fromName = (env.EMAIL_FROM_NAME ?? '').trim() || BRAND_NAME
       if (apiKey === '') {
         console.error('[email] EMAIL_PROVIDER=brevo but BREVO_API_KEY is not set — falling back to the console transport')
         break
       }
-      // Same shape guard as the Groq key (lib/ai/provider.ts): a stray
-      // control or non-ASCII character makes the Headers constructor throw
-      // with the VALUE in the message, which a caller would then log.
-      if (!/^[\x21-\x7e]+$/.test(apiKey)) {
+      // The shared shape guard (lib/headerSafeSecret.ts): a value that
+      // cannot travel in a header must never reach the Headers constructor.
+      if (!isHeaderSafeSecret(apiKey)) {
         console.error(
           '[email] EMAIL_PROVIDER=brevo but BREVO_API_KEY contains characters that cannot travel in an HTTP header (re-paste it without quotes or line breaks) — falling back to the console transport',
         )
         break
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromEmail)) {
+      // The project's one definition of "an email address" (registrationForm).
+      if (!z.string().email().safeParse(fromEmail).success) {
         console.error(
           '[email] EMAIL_PROVIDER=brevo but EMAIL_FROM_ADDRESS is not an email address — falling back to the console transport',
         )

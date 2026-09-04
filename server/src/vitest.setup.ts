@@ -7,3 +7,7 @@
 // Pinning the mock HERE (not in one suite's beforeAll) covers every
 // current and FUTURE test file that imports the app.
 process.env.AI_PROVIDER = 'mock'
+// 🔴 SAME SCAR, ONE SEAM OVER (DEC-117): index.js resolves the EMAIL
+// transport at import time too. A developer's .env may say brevo with a
+// real key; the suite must never send real mail to a fixture address.
+process.env.EMAIL_PROVIDER = 'console'

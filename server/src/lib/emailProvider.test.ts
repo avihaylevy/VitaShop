@@ -37,10 +37,11 @@ describe('resolveEmailProvider', () => {
       BREVO_API_KEY: 'xkeysib-abc\n',
       EMAIL_FROM_ADDRESS: 'sender@example.com',
     })
-    // trim() removes the trailing newline, so an INNER control char is the real case:
+    // trim() removes the trailing newline, so an INNER non-ASCII character
+    // (a zero-width space, written as an escape so it stays visible) is the real case:
     const innerBad = resolveEmailProvider({
       EMAIL_PROVIDER: 'brevo',
-      BREVO_API_KEY: 'xkeysib​abc',
+      BREVO_API_KEY: 'xkeysib\u200babc',
       EMAIL_FROM_ADDRESS: 'sender@example.com',
     })
     const badFrom = resolveEmailProvider({

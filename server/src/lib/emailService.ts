@@ -19,6 +19,13 @@ export interface EmailMessage {
 }
 
 export interface EmailService {
+  /**
+   * Resolves when the transport accepted the message; rejects otherwise.
+   * 🔴 A transport BOUNDS ITS OWN CALL (BrevoEmailProvider: 10 s) — the
+   * checkout route keeps a larger backstop race for a transport that
+   * forgets, but the transport is the layer that can actually cancel the
+   * socket. Callers swallow and log failures (INV-04: the commit is done).
+   */
   send(message: EmailMessage): Promise<void>
 }
 

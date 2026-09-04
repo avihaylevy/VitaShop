@@ -25,6 +25,22 @@ import type { EmailMessage, EmailService } from './emailService.js'
 
 export const BREVO_SEND_ENDPOINT = 'https://api.brevo.com/v3/smtp/email'
 
+/**
+ * A refusal from Brevo, typed like GroqApiError so a caller (or a future
+ * boot-time probe) can tell a permanent 401 `unauthorized` from a
+ * transient 5xx. The message carries the status and Brevo's fixed error
+ * code only — never the key, the recipient or the body.
+ */
+export class BrevoApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(`Brevo refused the message: HTTP ${status} (${code})`)
+    this.name = 'BrevoApiError'
+  }
+}
+
 /** Brevo answers in well under a second; anything longer is a stuck call. */
 export const BREVO_TIMEOUT_MS = 10_000
 
@@ -78,6 +94,6 @@ export class BrevoEmailProvider implements EmailService {
     } catch {
       // a non-JSON error body: the status alone is the diagnosis
     }
-    throw new Error(`Brevo refused the message: HTTP ${response.status} (${code})`)
+    throw new BrevoApiError(response.status, code)
   }
 }

@@ -56,9 +56,12 @@ services:
         value: ../client/dist
       - key: VITE_API_BASE_URL
         value: same-origin
-      # AI_PROVIDER is deliberately NOT here: unset means the mock (the
-      # server's default), and a value set in the dashboard (groq + the
-      # user's own GROQ_API_KEY) must survive every blueprint sync.
+      # AI_PROVIDER and the EMAIL_* variables are deliberately NOT here:
+      # unset means the mock / the console transport (the server's
+      # defaults), and values set in the dashboard (groq + the user's own
+      # GROQ_API_KEY; brevo + BREVO_API_KEY) are not blueprint-managed, so
+      # a sync leaves them alone. After the first sync that dropped
+      # AI_PROVIDER from this file, confirm the dashboard value survived.
       # The app's own public URL, for CORS (DEC-010: one exact origin) and
       # the links in verification emails. A literal: `fromService` with
       # envVarKey cannot expose Render's default RENDER_EXTERNAL_URL (tried,

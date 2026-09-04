@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BREVO_SEND_ENDPOINT, BrevoEmailProvider } from './brevoEmailProvider.js'
+import { BREVO_SEND_ENDPOINT, BrevoApiError, BrevoEmailProvider } from './brevoEmailProvider.js'
 
 const message = {
   to: 'someone@example.com',
@@ -46,7 +46,9 @@ describe('BrevoEmailProvider', () => {
     } catch (error) {
       thrown = error
     }
-    expect(thrown).toBeInstanceOf(Error)
+    expect(thrown).toBeInstanceOf(BrevoApiError)
+    expect((thrown as BrevoApiError).status).toBe(401)
+    expect((thrown as BrevoApiError).code).toBe('unauthorized')
     const text = String((thrown as Error).message)
     expect(text).toMatch(/HTTP 401 \(unauthorized\)/)
     expect(text).not.toMatch(/xkeysib|someone@|PLAINTEXT-TOKEN|Key not found/)

@@ -13,6 +13,7 @@
 // the interface, so nothing else can leak.
 
 import type { PublicCatalogProduct } from '../catalogMapper.js'
+import { isHeaderSafeSecret } from '../headerSafeSecret.js'
 import type { AgentLang } from './notices.js'
 
 export interface ChatTurn {
@@ -125,14 +126,9 @@ export async function resolveAIProvider(): Promise<AIProvider> {
           )
           break
         }
-        // 🔴 SHAPE GUARD (review — a real leak path): a key carrying a
-        // stray control/non-ASCII character (a CRLF paste artefact, a
-        // smart quote) makes Node's Headers constructor THROW with the
-        // header VALUE inside the TypeError message — which the route
-        // would then console.error, putting the key in the logs. Validate
-        // to printable ASCII here and fall back loudly WITHOUT ever
-        // printing the value.
-        if (!/^[\x21-\x7e]+$/.test(apiKey)) {
+        // 🔴 SHAPE GUARD — see lib/headerSafeSecret.ts for the leak path
+        // it closes; shared with the email transport's key.
+        if (!isHeaderSafeSecret(apiKey)) {
           console.error(
             '[ai] AI_PROVIDER=groq but GROQ_API_KEY contains characters that cannot travel in an HTTP header (re-paste it without quotes or line breaks) — falling back to MockProvider',
           )
