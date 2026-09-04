@@ -22,7 +22,13 @@ import { newIdempotencyKey } from '../lib/idempotencyKey'
 import { useCartRefresh } from '../state/CartContext'
 import { orderStatusLabelKey } from '../lib/orderStatus'
 import { PICKUP_POINTS, pickupPointAddress } from '../lib/pickupPoints'
-import { cardNumberProblem, cvvProblem, expiryProblem, holderProblem } from '../lib/cardValidation'
+import {
+  cardNumberProblem,
+  cvvProblem,
+  expiryProblem,
+  holderProblem,
+  simulatedOutcomeForCard,
+} from '../lib/cardValidation'
 import { requestAddressBook, requestShopperProfile } from '../lib/accountApi'
 import type { ManagedAddress, ShopperProfile } from '../types/account'
 import {
@@ -378,11 +384,12 @@ export function CheckoutPage() {
               )
             : { ...address, zipCode: address.zipCode || null },
       idempotencyKey: idempotencyKey.current,
-      // ISSUE-174 (the eleventh list, the user's own spec deviation from
-      // REQ-F-043's selector): the outcome control is gone from the UI —
-      // the client always requests success. The declined branch stays
-      // fully supported server-side (and still renders here on a 402).
-      simulatedOutcome: 'success',
+      // ISSUE-174 removed the outcome radios (the user's deviation from
+      // REQ-F-043's selector). 2026-09-02: the outcome is now DERIVED from
+      // the card number instead — the decline test card (…0002) requests
+      // the server's failure path, everything else pays. The card number
+      // itself still never leaves the page; only this word does.
+      simulatedOutcome: simulatedOutcomeForCard(card.number),
       // Belt to the checkbox gate: consent is only meaningful for 'new'.
       saveAddress: saveAddress && pickedAddressId === 'new' && quote.deliveryMethod === 'courier',
     })
@@ -849,6 +856,13 @@ export function CheckoutPage() {
                   />
                   <p id="pay-card-number-error" className="mt-1 min-h-4 text-xs text-state-error">
                     {cardTouched && cardProblems.number ? t(`pay.card.errors.${cardProblems.number}`) : ''}
+                  </p>
+                  <p className="mt-1 text-xs text-text-muted">
+                    <Trans
+                      i18nKey="pay.card.declineHint"
+                      ns="checkout"
+                      components={{ n: <span dir="ltr" className="font-medium" /> }}
+                    />
                   </p>
                 </div>
                 <div>

@@ -75,6 +75,7 @@
       "cvv": "CVV",
       "holder": "Cardholder name",
       "notStored": "Card details are checked for validity only — they are never sent or stored anywhere.",
+      "declineHint": "To see a declined payment, use the test card <n>4000 0000 0000 0002</n>. Any other valid number pays.",
       "errors": {
         "CARD_NUMBER_REQUIRED": "Required",
         "CARD_NUMBER_INVALID": "Card number is not valid",

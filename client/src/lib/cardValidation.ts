@@ -63,3 +63,18 @@ export function cvvProblem(raw: string): 'CVV_REQUIRED' | 'CVV_INVALID' | null {
 export function holderProblem(raw: string): 'HOLDER_REQUIRED' | null {
   return raw.trim() === '' ? 'HOLDER_REQUIRED' : null
 }
+
+/**
+ * The DECLINE test card (2026-09-02, the user's decision after the PRD
+ * audit): a Luhn-valid number ending in these digits asks the server for
+ * its simulated FAILURE path, so a reviewer can see a declined payment
+ * from the screen. Everything else pays. The number itself still goes
+ * nowhere — only the OUTCOME word travels (`payForCheckout` takes no card).
+ * The suffix follows the common test-card convention (4000 0000 0000 0002).
+ */
+export const DECLINE_TEST_CARD_SUFFIX = '0002'
+
+export function simulatedOutcomeForCard(raw: string): 'success' | 'failure' {
+  const digits = raw.replace(/[\s-]/g, '')
+  return digits.endsWith(DECLINE_TEST_CARD_SUFFIX) ? 'failure' : 'success'
+}

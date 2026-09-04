@@ -593,7 +593,24 @@ describe('F2c — confirming and paying', () => {
     expect(JSON.parse(String(calls[0]!.body)).saveAddress).toBe(true)
   })
 
-  it('ISSUE-174 (REQ-F-043 amended by the user): no outcome selector exists; the client always requests success, and a server 402 still renders the declined state', async () => {
+  it('🔴 THE DECLINE TEST CARD (…0002) requests the FAILURE outcome, the card number stays on the page, and the 402 renders the declined state', async () => {
+    const calls = payRoute(402, { error: { code: 'PAYMENT_DECLINED' } })
+    renderPage()
+    await screen.findByRole('button', { name: /pay/i })
+    const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
+    fireEvent.change(line1, { target: { value: 'רחוב 1' } })
+    fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
+    fillCard()
+    fireEvent.change(screen.getByLabelText(/card number/i), { target: { value: '4000 0000 0000 0002' } })
+    fireEvent.click(await screen.findByRole('button', { name: /confirm and pay/i }))
+    await waitFor(() => expect(calls).toHaveLength(1))
+    const body = String(calls[0]!.body)
+    expect(JSON.parse(body).simulatedOutcome).toBe('failure')
+    expect(body).not.toMatch(/0002|4000/)
+    expect(await screen.findByText(/no order was placed/i)).toBeTruthy()
+  })
+
+  it('ISSUE-174 (REQ-F-043 amended by the user): no outcome selector exists; an ordinary card requests success, and a server 402 still renders the declined state', async () => {
     const calls = payRoute(402, { error: { code: 'PAYMENT_DECLINED' } })
     renderPage()
     // The OUTCOME control is GONE — the deviation the user asked for.

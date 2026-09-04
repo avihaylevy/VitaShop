@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { cardNumberProblem, cvvProblem, expiryProblem, holderProblem } from './cardValidation'
+import {
+  cardNumberProblem,
+  cvvProblem,
+  expiryProblem,
+  holderProblem,
+  simulatedOutcomeForCard,
+} from './cardValidation'
 
 /**
  * Both controls per rule (browser-verification.md's screen rule): every
@@ -17,6 +23,18 @@ describe('cardNumberProblem', () => {
     expect(cardNumberProblem('4580')).toBe('CARD_NUMBER_INVALID')
     expect(cardNumberProblem('4580-4580-4580-abcd')).toBe('CARD_NUMBER_INVALID')
     expect(cardNumberProblem('')).toBe('CARD_NUMBER_REQUIRED')
+  })
+})
+
+describe('simulatedOutcomeForCard', () => {
+  it('the decline test card (ending 0002, spaces tolerated) asks for FAILURE; it is also Luhn-valid so it reaches the pay call', () => {
+    expect(simulatedOutcomeForCard('4000 0000 0000 0002')).toBe('failure')
+    expect(simulatedOutcomeForCard('4000000000000002')).toBe('failure')
+    expect(cardNumberProblem('4000 0000 0000 0002')).toBeNull()
+  })
+  it('any other card asks for SUCCESS (the control: a number ending 0001 pays)', () => {
+    expect(simulatedOutcomeForCard('4111 1111 1111 1111')).toBe('success')
+    expect(simulatedOutcomeForCard('4000 0000 0000 0001')).toBe('success')
   })
 })
 
