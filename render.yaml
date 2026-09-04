@@ -39,7 +39,8 @@ services:
     # resolve relative to it, exactly like every local script.
     startCommand: npm start --prefix server
     # /api/health touches nothing: a Neon compute waking from idle must
-    # not read as an unhealthy web service.
+    # not read as an unhealthy web service. The same path is what an
+    # external uptime monitor pings to keep the free instance awake.
     healthCheckPath: /api/health
     envVars:
       # Node version comes from .nvmrc / engines (both pinned to 24);

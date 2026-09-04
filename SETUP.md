@@ -221,6 +221,13 @@ to another provider; and the seeded `@vitashop.local` accounts have no
 real mailbox, so their order confirmations log a harmless
 `invalid_parameter` failure.
 
+**Keeping it awake.** Render's free instance sleeps after 15 idle minutes
+and the next visitor waits up to a minute. A free uptime monitor
+(UptimeRobot, cron-job.org) requesting `https://vitashop.onrender.com/api/health`
+every 5 minutes prevents that; `/api/health` touches no database, so Neon
+still idles between real visits, and one always-awake service fits inside
+Render's 750 free instance-hours a month.
+
 What is different from local, on purpose: `TRUST_PROXY=1` (Render sits
 behind a proxy; without it every visitor shares one rate-limit bucket),
 `CLIENT_DIST_DIR` (Express serves the built client, so the session cookie

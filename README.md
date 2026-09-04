@@ -27,6 +27,8 @@ Server    Express · TypeScript · Prisma
 Database  PostgreSQL
 Run       Docker Compose (Postgres 16 + both servers, one command)
           or Node 24 + a local PostgreSQL (SETUP.md)
+Live      Render (web service) · Neon (PostgreSQL) · Brevo (email) ·
+          UptimeRobot (keeps the free instance awake)
 ```
 
 **Why client and server are separate projects rather than a unified framework:** the specification defines three layers communicating by request/response, with the server as the sole source of truth for prices, stock and permissions. Physical separation makes that property demonstrable rather than merely claimed, and keeps the API surface small enough to audit.
