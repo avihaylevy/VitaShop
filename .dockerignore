@@ -26,3 +26,5 @@ SETUP.md
 AGENTS.md
 CLAUDE.md
 CODEX.md
+# database dumps (DEC-116) — real account hashes, never in an image
+*.dump

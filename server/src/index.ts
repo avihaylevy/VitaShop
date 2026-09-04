@@ -18,6 +18,8 @@ import { PRODUCTS_UPLOAD_DIR } from './lib/uploadPaths.js'
 import { createAccountRouter } from './routes/account.js'
 import { createAiChatRouter } from './routes/aiChat.js'
 import { resolveAIProvider } from './lib/ai/provider.js'
+import { parseTrustProxy } from './lib/trustProxy.js'
+import { createClientAssetsRouter, createSpaFallback, resolveClientDistDir } from './lib/clientStatic.js'
 
 export const app = express()
 
@@ -42,7 +44,11 @@ export const app = express()
 // express-rate-limit will warn about this if a forwarded header ever appears.
 // 🔴 If that warning shows up, it means a proxy is present and this decision
 // must be revisited — do NOT silence the warning.
-app.set('trust proxy', false)
+//
+// DEC-116 (2026-09-04): the decision is now taken PER ENVIRONMENT through
+// TRUST_PROXY (the proxy depth, never `true`; see lib/trustProxy.ts). Unset
+// keeps the local default above. Render sets it to 1 in render.yaml.
+app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY))
 
 const clientOrigin = process.env.CLIENT_ORIGIN
 if (!clientOrigin) {
@@ -75,6 +81,16 @@ app.use((_req, res, next) => {
   res.setHeader('Referrer-Policy', 'no-referrer')
   next()
 })
+
+// DEC-116 — the built client's FILES, served from this origin when
+// CLIENT_DIST_DIR is set (Render). Mounted here, BEFORE the session
+// middleware: a bundle or a product image must not cost a session-store
+// round-trip. The SPA fallback is mounted last, after every API router.
+// Unset locally, so nothing changes for dev.
+const clientDistDir = resolveClientDistDir(process.env.CLIENT_DIST_DIR)
+if (clientDistDir) {
+  app.use(createClientAssetsRouter(clientDistDir))
+}
 
 app.use(express.json())
 
@@ -168,6 +184,12 @@ app.use(
     appBaseUrl: clientOrigin,
   }),
 )
+
+// DEC-116 — the SPA fallback (client routes → index.html; unknown /api or
+// /uploads paths → JSON 404). Last, after every API router.
+if (clientDistDir) {
+  app.use(createSpaFallback(clientDistDir))
+}
 
 // The LAST middleware — Express 5 forwards a rejected async handler here.
 // Without it, the default handler answers text/html: a stack trace in

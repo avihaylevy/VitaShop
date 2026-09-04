@@ -172,6 +172,50 @@ npm test                   # both suites, from the repo root
 (The server's integration tests need the database up and seeded, as in
 step 5.)
 
+## Deploying a live copy (Render + Neon, both free)
+
+Optional. The course deliverable runs locally; this puts the same build on
+a public URL for classmates. One Render web service serves the API and the
+built app from one origin; the database is a Neon project (Render's own
+free Postgres is deleted after 30 days, Neon's is not).
+
+1. **Neon**: create a project (region Frankfurt). In **Connect**, copy the
+   **direct** connection string (connection pooling OFF; the host has no
+   `-pooler`). Migrations and `pg_restore` need a direct connection, and
+   the app's own pool is small enough not to need Neon's.
+2. **Load the data** from your local database, once, before the first
+   deploy (the seed scripts refuse non-local targets by design, so the
+   catalogue travels as a dump):
+   ```bash
+   pg_dump --no-owner --no-privileges --format=custom --dbname "postgresql://postgres:<local-password>@localhost:5432/vitashop_dev" --file vitashop.dump
+   ```
+   ```bash
+   pg_restore --no-owner --no-privileges --dbname "<neon-direct-connection-string>" vitashop.dump
+   ```
+   This carries the products, the images' file names and your seeded
+   accounts (their passwords stay the ones in your `server/.env`).
+3. **Render**: New → Blueprint → pick this repository. `render.yaml` defines
+   the service; the dashboard asks for `DATABASE_URL` (paste the Neon
+   string) and generates `SESSION_SECRET` itself. Optional:
+   `GROQ_API_KEY` + `AI_PROVIDER=groq` for the real AI agent.
+4. First deploy takes a few minutes. The URL is
+   `https://<service-name>.onrender.com`.
+
+**Who can sign in on the live copy**: the accounts carried over by the
+dump. Email is still the console transport there too, so a *new*
+registration's verification link lands in the Render log
+(Logs tab), not in anyone's inbox; share the seeded logins with your
+classmates instead, or open the link from the log for them.
+
+What is different from local, on purpose: `TRUST_PROXY=1` (Render sits
+behind a proxy; without it every visitor shares one rate-limit bucket),
+`CLIENT_DIST_DIR` (Express serves the built client, so the session cookie
+stays same-site), `VITE_API_BASE_URL=same-origin` (the app calls `/api`
+relatively). Free-tier facts: the service sleeps after 15 idle minutes and
+wakes in about a minute; images uploaded through the admin panel live on
+an ephemeral disk and vanish on the next deploy (the seeded catalogue's
+images ship in the repo and are unaffected).
+
 ## Troubleshooting
 
 - **Docker build fails in `npm ci` with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`** →

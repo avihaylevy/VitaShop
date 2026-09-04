@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getApiBaseUrl } from './apiBaseUrl.js'
+import { getApiBaseUrl, SAME_ORIGIN } from './apiBaseUrl.js'
 
 describe('getApiBaseUrl', () => {
   afterEach(() => {
@@ -9,6 +9,11 @@ describe('getApiBaseUrl', () => {
   it('returns ok:true with the configured value', () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:3000')
     expect(getApiBaseUrl()).toEqual({ ok: true, value: 'http://localhost:3000' })
+  })
+
+  it('DEC-116: "same-origin" resolves to an EMPTY base, so `${base}/api/x` is a relative /api/x', () => {
+    vi.stubEnv('VITE_API_BASE_URL', SAME_ORIGIN)
+    expect(getApiBaseUrl()).toEqual({ ok: true, value: '' })
   })
 
   it('returns ok:false with reason "missing-config" when unset', () => {

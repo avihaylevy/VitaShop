@@ -75,3 +75,6 @@ uploads/
 # scripts/measure-image-framing.py's bytecode cache
 __pycache__/
 *.pyc
+
+# database dumps (DEC-116 restore into Neon) — carry real account hashes, never committed
+*.dump

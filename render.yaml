@@ -1,0 +1,69 @@
+# VitaShop on Render — DEC-116 (2026-09-04). One free web service serves
+# the API AND the built React app from one origin; the database is Neon
+# (free, does not expire — Render's own free Postgres is deleted after
+# 30 days). Deploy: Render dashboard → New → Blueprint → this repo.
+#
+# Things the dashboard still needs from a human, once:
+#   DATABASE_URL   the Neon DIRECT (non-pooled) connection string. The
+#                  same URL serves `prisma migrate deploy` at build time,
+#                  which needs a direct connection (advisory locks do not
+#                  survive transaction-mode pooling), and the app's own
+#                  small pool at run time. `sync: false` = "ask me in the
+#                  dashboard, never store it here".
+#   GROQ_API_KEY   optional; leave unset and the AI agent runs on the mock
+#
+# Known free-tier behaviour: the service sleeps after 15 idle minutes and
+# takes ~1 minute to wake; uploads written by the admin panel live on an
+# ephemeral disk and vanish on the next deploy (the 50 seeded products'
+# images ship in the repo and are unaffected).
+
+services:
+  - type: web
+    name: vitashop
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: master
+    # Client first (needs VITE_API_BASE_URL=same-origin at build), then the
+    # server: generate the Prisma client, compile, apply migrations.
+    # --include=dev: NODE_ENV=production is exported into this shell too,
+    # and npm then omits devDependencies — which is where tsc, vite and the
+    # prisma CLI live. Without the flag the very first build fails on
+    # "tsc: not found".
+    buildCommand: >-
+      npm ci --include=dev --prefix client &&
+      npm run build --prefix client &&
+      npm ci --include=dev --prefix server &&
+      cd server && npx prisma generate && npm run build && npx prisma migrate deploy
+    # cwd is server/ under --prefix, so CLIENT_DIST_DIR and UPLOADS_DIR
+    # resolve relative to it, exactly like every local script.
+    startCommand: npm start --prefix server
+    # /api/health touches nothing: a Neon compute waking from idle must
+    # not read as an unhealthy web service.
+    healthCheckPath: /api/health
+    envVars:
+      # Node version comes from .nvmrc / engines (both pinned to 24);
+      # an env override here would silently win over a future bump.
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: TRUST_PROXY
+        value: "1"
+      - key: CLIENT_DIST_DIR
+        value: ../client/dist
+      - key: VITE_API_BASE_URL
+        value: same-origin
+      - key: AI_PROVIDER
+        value: mock
+      # The app's own public URL, for CORS (DEC-010: one exact origin) and
+      # the links in verification emails. Self-reference exposes Render's
+      # default variable under the name the server expects, so the code
+      # stays vendor-neutral. For a custom domain, replace with a value.
+      - key: CLIENT_ORIGIN
+        fromService:
+          type: web
+          name: vitashop
+          envVarKey: RENDER_EXTERNAL_URL
