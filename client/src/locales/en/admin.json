@@ -4,13 +4,22 @@
     "empty": "No orders to show.",
     "count_one": "One order",
     "count_other": "{{count}} orders",
-    "refresh": "Refresh the list"
+    "refresh": "Refresh the list",
+    "refreshing": "Refreshing…",
+    "refreshed": "The list is up to date."
   },
   "row": {
     "placed": "Placed {{date}}",
     "items": "Products: {{count}}",
     "noActions": "No moves available",
     "move": "Move to {{status}}",
+    "action": {
+      "paid": "Mark as paid",
+      "processing": "Start picking",
+      "shipped": "Mark as shipped",
+      "delivered": "Mark as delivered",
+      "cancelled": "Cancel order"
+    },
     "cancelAsk": "Cancel this order? This cannot be undone, and the stock is returned.",
     "cancelConfirm": "Yes, cancel it",
     "cancelAbort": "No",

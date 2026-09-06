@@ -208,7 +208,7 @@ export function AdminOrdersPage() {
     }
   }
 
-  const load = useCallback(async (next: number, options?: { quiet?: boolean }) => {
+  const load = useCallback(async (next: number, options?: { quiet?: boolean }): Promise<boolean> => {
     // The same staleness rule the checkout screen settled: the last REQUEST
     // wins, not the last response.
     const id = ++requestId.current
@@ -220,9 +220,28 @@ export function AdminOrdersPage() {
      */
     if (!options?.quiet) setState({ status: 'loading' })
     const result = await requestAdminOrders(next)
-    if (id !== requestId.current) return
+    if (id !== requestId.current) return false
     setState(result.ok ? { status: 'ready', page: result.page } : { status: 'failed', failure: result.failure })
+    return result.ok
   }, [])
+
+  /**
+   * The user's fixes docx (2026-09-06): the quiet refresh gave NO sign of
+   * life, so the button read as dead. It stays quiet for the list (focus is
+   * kept) but the button itself shows busy, and the outcome is SAID: in the
+   * visible line beside the button and through the existing live region.
+   */
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshedAt, setRefreshedAt] = useState<number | null>(null)
+  async function refresh() {
+    setRefreshing(true)
+    const ok = await load(page, { quiet: true })
+    setRefreshing(false)
+    if (ok) {
+      setRefreshedAt(Date.now())
+      setAnnouncement((current) => ({ text: t('page.refreshed'), nonce: current.nonce + 1 }))
+    }
+  }
 
   useEffect(() => {
     void load(page)
@@ -231,6 +250,17 @@ export function AdminOrdersPage() {
   function statusLabel(status: OrderStatusName): string {
     const key = orderStatusLabelKey(status)
     return key ? statusT(key) : status
+  }
+
+  /**
+   * The user's fixes docx (2026-09-06): "העברה לנשלחה" glued a status NAME
+   * onto one template and read wrong. Each move is now a VERB ("סמן
+   * כנשלחה", "התחל ליקוט", "בטל הזמנה"); the template stays only as the
+   * fallback for a status the table gains later.
+   */
+  function actionLabel(target: OrderStatusName): string {
+    const key = `row.action.${target}`
+    return i18n.exists(key, { ns: 'admin' }) ? t(key) : t('row.move', { status: statusLabel(target) })
   }
 
   function outcomeText(outcome: RowOutcome): string {
@@ -398,7 +428,14 @@ export function AdminOrdersPage() {
               only when the initial load had failed. They were being told to do
               something only the browser's reload button could.
             */}
-            <Button onClick={() => void load(page, { quiet: true })}>{t('page.refresh')}</Button>
+            <Button loading={refreshing} disabled={refreshing} onClick={() => void refresh()}>
+              {refreshing ? t('page.refreshing') : t('page.refresh')}
+            </Button>
+            {refreshedAt !== null && !refreshing && (
+              <span data-testid="refreshed-note" className="text-sm text-text-muted">
+                {t('page.refreshed')}
+              </span>
+            )}
           </div>
 
           {state.page.orders.length === 0 ? (
@@ -500,7 +537,7 @@ export function AdminOrdersPage() {
                               void move(order.id, 'shipped', trackingDraft)
                             }}
                           >
-                            {t('row.move', { status: statusLabel('shipped') })}
+                            {actionLabel('shipped')}
                           </Button>
                           <Button
                             onClick={() => {
@@ -545,7 +582,7 @@ export function AdminOrdersPage() {
                                 }
                               }}
                             >
-                              {t('row.move', { status: statusLabel(target) })}
+                              {actionLabel(target)}
                             </Button>
                           ))
                         )}

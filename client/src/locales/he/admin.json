@@ -5,13 +5,22 @@
     "count_one": "הזמנה אחת",
     "count_two": "שתי הזמנות",
     "count_other": "{{count}} הזמנות",
-    "refresh": "רענון הרשימה"
+    "refresh": "רענון הרשימה",
+    "refreshing": "מרענן…",
+    "refreshed": "הרשימה עודכנה."
   },
   "row": {
     "placed": "נוצרה ב־{{date}}",
     "items": "מוצרים: {{count}}",
     "noActions": "אין פעולות אפשריות",
     "move": "העברה ל{{status}}",
+    "action": {
+      "paid": "סמן כשולמה",
+      "processing": "התחל ליקוט",
+      "shipped": "סמן כנשלחה",
+      "delivered": "סמן כסופקה",
+      "cancelled": "בטל הזמנה"
+    },
     "cancelAsk": "לבטל את ההזמנה? הפעולה אינה הפיכה והמלאי יוחזר.",
     "cancelConfirm": "כן, לבטל",
     "cancelAbort": "לא",

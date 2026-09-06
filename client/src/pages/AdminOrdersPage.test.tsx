@@ -83,12 +83,23 @@ describe('the list', () => {
     expect(screen.getByText('shopper@example.test')).toBeTruthy()
   })
 
+  it('2026-09-06: the refresh button SHOWS it worked — busy while loading, then "up to date" (control: nothing before the click)', async () => {
+    routed(page([row()]))
+    renderPage()
+    const button = await screen.findByRole('button', { name: /refresh the list/i })
+    expect(screen.queryByTestId('refreshed-note')).toBeNull()
+    fireEvent.click(button)
+    expect(await screen.findByTestId('refreshed-note')).toBeTruthy()
+    expect(screen.getByTestId('refreshed-note').textContent).toMatch(/up to date/i)
+    expect(screen.getByRole('status').textContent).toMatch(/up to date/i)
+  })
+
   it('🔴 offers exactly the moves the SERVER said are legal', async () => {
     routed(page([row({ status: 'shipped', allowedTransitions: ['delivered'] })]))
     renderPage()
-    expect(await screen.findByRole('button', { name: /move to delivered/i })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /mark as delivered/i })).toBeTruthy()
     // §8.9 has no shipped -> cancelled, and the screen must not invent one.
-    expect(screen.queryByRole('button', { name: /move to cancelled/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /cancel order/i })).toBeNull()
   })
 
   it('a TERMINAL order says so instead of rendering an empty row', async () => {
@@ -140,7 +151,7 @@ describe('moving an order', () => {
   it('PATCHes the target the button names', async () => {
     const patches = routed(page([row()]))
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /move to picking/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start picking/i }))
     await waitFor(() => expect(patches).toHaveLength(1))
     expect(JSON.parse(String(patches[0]!.init.body))).toEqual({ status: 'processing' })
   })
@@ -151,7 +162,7 @@ describe('moving an order', () => {
       body: { orderId: 'o1', status: 'cancelled', changed: true, restoredStock: true },
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /move to cancelled/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cancel order/i }))
     fireEvent.click(await screen.findByRole('button', { name: /yes, cancel it/i }))
     expect(await rowText(/stock was returned/i)).toBeTruthy()
   })
@@ -160,7 +171,7 @@ describe('moving an order', () => {
     it('does NOT send the PATCH on the first click', async () => {
       const patches = routed(page([row()]))
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to cancelled/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /cancel order/i }))
 
       // `cancelled` is terminal in §8.9 and restores stock. There is no undo
       // anywhere in this system, and it sat beside "move to picking" at the
@@ -175,7 +186,7 @@ describe('moving an order', () => {
         body: { orderId: 'o1', status: 'cancelled', changed: true, restoredStock: true },
       })
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to cancelled/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /cancel order/i }))
       fireEvent.click(await screen.findByRole('button', { name: /yes, cancel it/i }))
       await waitFor(() => expect(patches).toHaveLength(1))
       expect(JSON.parse(String(patches[0]!.init.body))).toEqual({ status: 'cancelled' })
@@ -184,10 +195,10 @@ describe('moving an order', () => {
     it('backing out sends nothing and restores the buttons', async () => {
       const patches = routed(page([row()]))
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to cancelled/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /cancel order/i }))
       fireEvent.click(await screen.findByRole('button', { name: /^no$/i }))
 
-      expect(await screen.findByRole('button', { name: /move to picking/i })).toBeTruthy()
+      expect(await screen.findByRole('button', { name: /start picking/i })).toBeTruthy()
       expect(patches).toHaveLength(0)
     })
 
@@ -196,7 +207,7 @@ describe('moving an order', () => {
       // a confirmation step for every button.
       const patches = routed(page([row()]))
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to picking/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /start picking/i }))
       await waitFor(() => expect(patches).toHaveLength(1))
     })
   })
@@ -207,7 +218,7 @@ describe('moving an order', () => {
     it('does NOT send the PATCH on the first click — it opens the tracking question', async () => {
       const patches = routed(page([processingRow()]))
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /mark as shipped/i }))
 
       expect(await screen.findByLabelText(/tracking number \(optional\)/i)).toBeTruthy()
       expect(patches).toHaveLength(0)
@@ -219,11 +230,11 @@ describe('moving an order', () => {
         body: { orderId: 'o1', status: 'shipped', changed: true, restoredStock: false },
       })
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /mark as shipped/i }))
       fireEvent.change(await screen.findByLabelText(/tracking number \(optional\)/i), {
         target: { value: ' RR123456789IL ' },
       })
-      fireEvent.click(screen.getByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(screen.getByRole('button', { name: /mark as shipped/i }))
 
       await waitFor(() => expect(patches).toHaveLength(1))
       // Trimmed by the transport, so whitespace never reads as a value.
@@ -239,8 +250,8 @@ describe('moving an order', () => {
         body: { orderId: 'o1', status: 'shipped', changed: true, restoredStock: false },
       })
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
-      fireEvent.click(screen.getByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /mark as shipped/i }))
+      fireEvent.click(screen.getByRole('button', { name: /mark as shipped/i }))
 
       await waitFor(() => expect(patches).toHaveLength(1))
       // 🔴 No `trackingNumber` key AT ALL — an empty string would be a 400.
@@ -250,10 +261,10 @@ describe('moving an order', () => {
     it('backing out sends nothing and restores the buttons', async () => {
       const patches = routed(page([processingRow()]))
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /mark as shipped/i }))
       fireEvent.click(await screen.findByRole('button', { name: /^back$/i }))
 
-      expect(await screen.findByRole('button', { name: /move to cancelled/i })).toBeTruthy()
+      expect(await screen.findByRole('button', { name: /cancel order/i })).toBeTruthy()
       expect(screen.queryByLabelText(/tracking number/i)).toBeNull()
       expect(patches).toHaveLength(0)
     })
@@ -264,7 +275,7 @@ describe('moving an order', () => {
       // top of the document to reach the field they were just asked to fill.
       routed(page([processingRow()]))
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /mark as shipped/i }))
 
       const input = await screen.findByLabelText(/tracking number \(optional\)/i)
       expect(document.activeElement).toBe(input)
@@ -273,10 +284,10 @@ describe('moving an order', () => {
     it('🔴 backing out returns focus to the re-rendered ship trigger', async () => {
       routed(page([processingRow()]))
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /mark as shipped/i }))
       fireEvent.click(await screen.findByRole('button', { name: /^back$/i }))
 
-      const trigger = await screen.findByRole('button', { name: /move to shipped/i })
+      const trigger = await screen.findByRole('button', { name: /mark as shipped/i })
       expect(document.activeElement).toBe(trigger)
     })
 
@@ -286,8 +297,8 @@ describe('moving an order', () => {
         body: { orderId: 'o1', status: 'shipped', changed: true, restoredStock: false },
       })
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
-      fireEvent.click(screen.getByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /mark as shipped/i }))
+      fireEvent.click(screen.getByRole('button', { name: /mark as shipped/i }))
 
       const rows = await screen.findAllByRole('listitem')
       await waitFor(() => expect(document.activeElement).toBe(rows[0]))
@@ -296,12 +307,12 @@ describe('moving an order', () => {
     it('a STALE draft never leaks into the next order — reopening starts empty', async () => {
       const patches = routed(page([processingRow()]))
       renderPage()
-      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /mark as shipped/i }))
       fireEvent.change(await screen.findByLabelText(/tracking number \(optional\)/i), {
         target: { value: 'STALE-1' },
       })
       fireEvent.click(await screen.findByRole('button', { name: /^back$/i }))
-      fireEvent.click(await screen.findByRole('button', { name: /move to shipped/i }))
+      fireEvent.click(await screen.findByRole('button', { name: /mark as shipped/i }))
 
       const input = (await screen.findByLabelText(/tracking number \(optional\)/i)) as HTMLInputElement
       expect(input.value).toBe('')
@@ -336,13 +347,13 @@ describe('moving an order', () => {
       }),
     )
     renderPage()
-    const buttons = await screen.findAllByRole('button', { name: /move to picking/i })
+    const buttons = await screen.findAllByRole('button', { name: /start picking/i })
     fireEvent.click(buttons[1]!) // row B — its response is the slow one
     fireEvent.click(buttons[0]!) // row A — resolves first
 
     await waitFor(() => expect(patchCount).toBe(2))
     // B is still in flight, so B's button must still be disabled.
-    const after = await screen.findAllByRole('button', { name: /move to picking/i })
+    const after = await screen.findAllByRole('button', { name: /start picking/i })
     expect((after[1] as HTMLButtonElement).disabled).toBe(true)
     release.fn()
   })
@@ -388,7 +399,7 @@ describe('moving an order', () => {
 
     renderPage()
     const item = (await screen.findAllByRole('listitem'))[0]!
-    fireEvent.click(screen.getByRole('button', { name: /move to picking/i }))
+    fireEvent.click(screen.getByRole('button', { name: /start picking/i }))
 
     // The reload is now in flight and will not answer until released.
     await waitFor(() => expect(listCalls).toBe(2))
@@ -407,13 +418,13 @@ describe('moving an order', () => {
      */
     routed(page([row(), row({ id: 'o2', orderNumber: 'VS-20260813-SECOND' })]))
     renderPage()
-    const buttons = await screen.findAllByRole('button', { name: /move to picking/i })
+    const buttons = await screen.findAllByRole('button', { name: /start picking/i })
 
     fireEvent.click(buttons[0]!)
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/moved to/i))
     const first = screen.getByRole('status').textContent
 
-    fireEvent.click((await screen.findAllByRole('button', { name: /move to picking/i }))[1]!)
+    fireEvent.click((await screen.findAllByRole('button', { name: /start picking/i }))[1]!)
     // The TEXT must differ from last time, or nothing is announced.
     await waitFor(() => expect(screen.getByRole('status').textContent).not.toBe(first))
   })
@@ -433,7 +444,7 @@ describe('moving an order', () => {
   it('a 429 says to wait rather than reading as a server fault', async () => {
     routed(page([row()]), { status: 429, body: { error: { code: 'TOO_MANY_REQUESTS' } } })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /move to picking/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start picking/i }))
     expect(await rowText(/too many actions/i)).toBeTruthy()
   })
 
@@ -444,7 +455,7 @@ describe('moving an order', () => {
     // not announced at all.
     const region = screen.getByRole('status')
     expect(region.textContent).toBe('')
-    fireEvent.click(await screen.findByRole('button', { name: /move to picking/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start picking/i }))
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/moved to/i))
   })
 
@@ -473,9 +484,9 @@ describe('moving an order', () => {
       }),
     )
     renderPage()
-    await screen.findByRole('button', { name: /move to picking/i })
+    await screen.findByRole('button', { name: /start picking/i })
     expect(listCalls).toBe(1)
-    fireEvent.click(screen.getByRole('button', { name: /move to picking/i }))
+    fireEvent.click(screen.getByRole('button', { name: /start picking/i }))
     await waitFor(() => expect(listCalls).toBe(2))
   })
 
@@ -486,14 +497,14 @@ describe('moving an order', () => {
   ])('🔴 409 %s gets its own sentence', async (code, expected) => {
     routed(page([row()]), { status: 409, body: { error: { code } } })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /move to picking/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start picking/i }))
     expect(await rowText(expected)).toBeTruthy()
   })
 
   it('a 404 says the list is out of date rather than reporting a fault', async () => {
     routed(page([row()]), { status: 404, body: { error: { code: 'ORDER_NOT_FOUND' } } })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /move to picking/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start picking/i }))
     expect(await rowText(/list may be out of date/i)).toBeTruthy()
   })
 
@@ -503,7 +514,7 @@ describe('moving an order', () => {
       body: { orderId: 'o1', status: 'processing', changed: false, restoredStock: false },
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /move to picking/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /start picking/i }))
     expect(await rowText(/already in that status/i)).toBeTruthy()
   })
 })
