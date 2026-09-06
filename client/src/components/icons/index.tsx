@@ -49,8 +49,11 @@ export function SearchIcon(props: IconSvgProps) {
 }
 
 export function HeartIcon({ filled = false, ...props }: IconSvgProps & { filled?: boolean }) {
+  // Pressed = red OUTLINE plus a soft red wash (2026-09-06, the user found the
+  // solid block ugly). fill stays currentColor so the colour class on the
+  // svg drives both; fillOpacity is what turns the block into a wash.
   return (
-    <svg {...BASE} fill={filled ? 'currentColor' : 'none'} {...props}>
+    <svg {...BASE} fill={filled ? 'currentColor' : 'none'} fillOpacity={filled ? 0.28 : undefined} {...props}>
       <path d="M12 20.2c-.28 0-.55-.09-.77-.26C7.1 16.9 3.5 13.7 3.5 9.7 3.5 6.9 5.7 4.7 8.4 4.7c1.5 0 2.9.7 3.6 1.9.7-1.2 2.1-1.9 3.6-1.9 2.7 0 4.9 2.2 4.9 5 0 4-3.6 7.2-7.73 10.24-.22.17-.49.26-.77.26Z" />
     </svg>
   )

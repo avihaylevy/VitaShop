@@ -576,6 +576,25 @@ textarea {
 }
 
 /*
+ * The favourites heart (the user's fixes docx, 2026-09-06): a short pop on
+ * a CONFIRMED toggle, never on the press itself (DEC-047 D1: the state is
+ * the server's). Scale only, 220ms, ease-out-quart, no overshoot past the
+ * peak; applied via motion-safe: in FavouriteButton so reduced motion
+ * keeps the colour change and skips the movement.
+ */
+@keyframes fav-heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/*
  * ISSUE-053 — the catalogue grid fades in when a settled query renders
  * (page change, filter change, first load). Opacity only, from .3 so the
  * products are readable from the first frame; motion-safe-gated at the
