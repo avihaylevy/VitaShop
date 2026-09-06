@@ -4,7 +4,7 @@ import type {
   AdminListFailure,
   AdminOrderRow,
   AdminOrdersResult,
-  ReconcileResult,
+  ReconcileResult, StartPickingResult,
   StuckOrdersResult,
   TransitionResult,
 } from '../types/adminOrders.js'
@@ -101,6 +101,7 @@ export async function requestAdminOrders(page = 1): Promise<AdminOrdersResult> {
       page: typeof body.page === 'number' ? body.page : 1,
       totalItems: typeof body.totalItems === 'number' ? body.totalItems : 0,
       totalPages: typeof body.totalPages === 'number' ? body.totalPages : 0,
+      paidCount: typeof body.paidCount === 'number' ? body.paidCount : 0,
       orders: body.orders as AdminOrderRow[],
     },
   }
@@ -212,6 +213,35 @@ export async function requestStuckOrders(): Promise<StuckOrdersResult> {
  * the write refused, and reporting only the count would hide which ones are
  * still stuck — the whole point of the sweep's report.
  */
+/**
+ * 2026-09-06 — the bulk hand-off to fulfilment: every paid order → processing,
+ * each through the table's own guard on the server. The screen asks first.
+ */
+export async function startPickingAll(): Promise<StartPickingResult> {
+  const raw = await call('/api/admin/orders/start-picking', { method: 'POST', body: {} })
+  if (raw === null) return { ok: false, failure: { kind: 'offline' } }
+  if (raw.status !== 200) return { ok: false, failure: reconcileFailure(raw.status) }
+  const body = raw.body
+  if (
+    !isPlainObject(body) ||
+    typeof body.examined !== 'number' ||
+    typeof body.moved !== 'number' ||
+    typeof body.remaining !== 'number' ||
+    !Array.isArray(body.failed)
+  ) {
+    return { ok: false, failure: { kind: 'unavailable' } }
+  }
+  return {
+    ok: true,
+    report: {
+      examined: body.examined,
+      moved: body.moved,
+      failed: body.failed as { orderNumber: string; reason: string }[],
+      remaining: body.remaining,
+    },
+  }
+}
+
 export async function reconcileStuckOrders(): Promise<ReconcileResult> {
   const raw = await call('/api/admin/orders/reconcile', { method: 'POST', body: {} })
   if (raw === null) return { ok: false, failure: { kind: 'offline' } }

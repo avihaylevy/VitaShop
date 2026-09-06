@@ -25,6 +25,8 @@ export type AdminOrdersPage = {
   page: number
   totalItems: number
   totalPages: number
+  /** Paid orders across ALL pages — what the bulk "start picking" control offers to move. */
+  paidCount: number
   orders: readonly AdminOrderRow[]
 }
 
@@ -96,4 +98,17 @@ export type ReconcileReport = {
 
 export type ReconcileResult =
   | { ok: true; report: ReconcileReport }
+  | { ok: false; failure: AdminListFailure }
+
+/** 2026-09-06 — the bulk paid → processing sweep's report; a partial move is the normal shape. */
+export type StartPickingReport = {
+  examined: number
+  moved: number
+  failed: { orderNumber: string; reason: string }[]
+  /** Paid orders still waiting after this run (the batch is bounded). */
+  remaining: number
+}
+
+export type StartPickingResult =
+  | { ok: true; report: StartPickingReport }
   | { ok: false; failure: AdminListFailure }

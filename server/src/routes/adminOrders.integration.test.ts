@@ -336,6 +336,60 @@ describe('the transitions an admin may ask for', () => {
  * shipped since ISSUE-083's guard half, so an admin could change an order they
  * already knew the id of — and there was no way to learn an id.
  */
+describe('POST /api/admin/orders/start-picking — the bulk hand-off to fulfilment', () => {
+  function startPicking(cookie?: string) {
+    return fetch(`${baseUrl}/api/admin/orders/start-picking`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+      // Scoped to the fixture shopper (DEC-063): a test must never move
+      // orders it did not create — the same seam the reconcile sweep has.
+      body: JSON.stringify({ userId: shopperId }),
+    })
+  }
+
+  it('refuses anonymous with 401 and a shopper with 403', async () => {
+    expect((await startPicking()).status).toBe(401)
+    expect((await startPicking(await signIn(SHOPPER))).status).toBe(403)
+  })
+
+  it('🔴 moves EVERY paid order to processing, recorded with the admin as actor; leaves the others alone; a second run moves nothing (both controls)', async () => {
+    const a = await placeOrder('bulk-a', 1)
+    const b = await placeOrder('bulk-b', 1)
+    const c = await placeOrder('bulk-c', 1)
+    await setStatus(a, 'paid')
+    await setStatus(b, 'paid')
+    await setStatus(c, 'processing')
+    const cookie = await signIn(ADMIN)
+
+    const first = await startPicking(cookie)
+    expect(first.status).toBe(200)
+    const report = (await first.json()) as { examined: number; moved: number; failed: unknown[]; remaining: number }
+    expect(report).toEqual({ examined: 2, moved: 2, failed: [], remaining: 0 })
+
+    const statuses = await prisma.order.findMany({
+      where: { id: { in: [a, b, c] } }, select: { id: true, status: true },
+    })
+    expect(statuses.map((o) => o.status).sort()).toEqual(['processing', 'processing', 'processing'])
+    const history = await prisma.orderStatusHistory.findMany({
+      where: { orderId: { in: [a, b] }, status: 'processing' }, select: { changedByUserId: true },
+    })
+    expect(history).toHaveLength(2)
+    expect(history.every((h) => h.changedByUserId === adminId)).toBe(true)
+
+    // The control: nothing is paid any more, so the sweep finds nothing.
+    const second = await startPicking(cookie)
+    expect(await second.json()).toEqual({ examined: 0, moved: 0, failed: [], remaining: 0 })
+  })
+
+  it('the list carries paidCount, the number the screen shows before offering the sweep', async () => {
+    const a = await placeOrder('bulk-count', 1)
+    await setStatus(a, 'paid')
+    const r = await fetch(`${baseUrl}/api/admin/orders`, { headers: { cookie: await signIn(ADMIN) } })
+    const body = (await r.json()) as { paidCount: number }
+    expect(body.paidCount).toBeGreaterThanOrEqual(1)
+  })
+})
+
 describe('GET /api/admin/orders', () => {
   function list(query: string, cookie?: string) {
     return fetch(`${baseUrl}/api/admin/orders${query}`, {

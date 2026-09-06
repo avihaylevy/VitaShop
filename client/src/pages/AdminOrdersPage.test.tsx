@@ -94,6 +94,41 @@ describe('the list', () => {
     expect(screen.getByRole('status').textContent).toMatch(/up to date/i)
   })
 
+  it('2026-09-06: the bulk "move all to picking" control — offered only when paid orders exist, asks first, POSTs once, reports, and the report stays on screen after the count drops to zero', async () => {
+    const posts: string[] = []
+    let paidCount = 2
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'POST' && String(url).includes('/start-picking')) {
+          posts.push(String(url))
+          paidCount = 0
+          return { status: 200, json: async () => ({ examined: 2, moved: 2, failed: [], remaining: 0 }) } as unknown as Response
+        }
+        if (String(url).includes('/stuck')) return { status: 200, json: async () => ({ count: 0, orders: [] }) } as unknown as Response
+        return { status: 200, json: async () => page([row()], { paidCount }) } as unknown as Response
+      }),
+    )
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /^move all to picking$/i }))
+    expect(screen.getByText(/moves every paid order to picking/i)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /yes, move them/i }))
+    await waitFor(() => expect(posts).toHaveLength(1))
+    // The report appears twice on purpose: visibly in the panel and in the sr-only live region.
+    expect((await screen.findAllByText(/2 orders moved to picking/i)).length).toBeGreaterThanOrEqual(1)
+    // 🔴 The panel survives the quiet reload that reports zero paid orders.
+    await waitFor(() => expect(screen.queryByText(/2 paid orders are waiting/i)).toBeNull())
+    expect(screen.getAllByText(/2 orders moved to picking/i).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByRole('status').textContent).toMatch(/2 orders moved to picking/i)
+  })
+
+  it('🔴 THE CONTROL — with no paid orders the bulk control is not offered at all', async () => {
+    routed(page([row({ status: 'shipped', allowedTransitions: ['delivered'] })], { paidCount: 0 }))
+    renderPage()
+    await screen.findByText('VS-20260813-ABC123')
+    expect(screen.queryByRole('button', { name: /move all to picking/i })).toBeNull()
+  })
+
   it('🔴 offers exactly the moves the SERVER said are legal', async () => {
     routed(page([row({ status: 'shipped', allowedTransitions: ['delivered'] })]))
     renderPage()

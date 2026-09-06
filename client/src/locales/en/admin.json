@@ -197,6 +197,24 @@
     "brandLabel": "Brand",
     "brandAll": "All brands"
   },
+  "bulk": {
+    "title": "Move all to picking",
+    "found_one": "One paid order is waiting for picking.",
+    "found_other": "{{count}} paid orders are waiting for picking.",
+    "action": "Move all to picking",
+    "ask": "This moves every paid order to picking at once. Continue?",
+    "confirm": "Yes, move them",
+    "abort": "Cancel",
+    "outcome": {
+      "moved_one": "One order moved to picking.",
+      "moved_other": "{{count}} orders moved to picking.",
+      "partial": "{{moved}} moved to picking, {{failed}} failed.",
+      "none": "There were no orders to move."
+    },
+    "remaining_one": "One order is still waiting.",
+    "remaining_other": "{{count}} orders are still waiting.",
+    "unavailable": "The move cannot run right now. Try again shortly."
+  },
   "reconcile": {
     "title": "Stuck orders",
     "found_one": "1 order has been awaiting payment for an unusual length of time.",

@@ -212,7 +212,7 @@ beforeAll(async () => {
     '/api/admin/orders',
     createAdminOrderRouter({
       prisma,
-      rateLimiters: { status: permissive, list: permissive, reconcile: permissive },
+      rateLimiters: { status: permissive, list: permissive, reconcile: permissive, bulk: permissive },
     }),
   )
   server = app.listen(0)

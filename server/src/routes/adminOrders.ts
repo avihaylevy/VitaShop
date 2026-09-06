@@ -78,6 +78,13 @@ const TRACKING_NUMBER_MAX_LENGTH = 64
 const STUCK_SAMPLE_SIZE = 20
 const REPAIR_BATCH_SIZE = 20
 
+/**
+ * 2026-09-06 (the user's fixes docx, item 2): the bulk paid → processing
+ * sweep moves at most this many orders per call, oldest first, and reports
+ * how many are left, so a run that hit the cap never reads as complete.
+ */
+export const BULK_TRANSITION_BATCH = 100
+
 export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<typeof Router> {
   const { prisma } = deps
   const limiters = deps.rateLimiters ?? createAdminRateLimiters()
@@ -134,8 +141,12 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
     const where = status ? { status } : {}
 
     try {
-      const [totalItems, orders] = await Promise.all([
+      const [totalItems, paidCount, orders] = await Promise.all([
         prisma.order.count({ where }),
+        // The bulk "start picking" control shows this before it is offered —
+        // the same rule as the reconcile count: never ask an admin to run a
+        // batch write to find out whether it was needed.
+        prisma.order.count({ where: { status: 'paid' } }),
         prisma.order.findMany({
           where,
           /*
@@ -176,6 +187,7 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
         page,
         totalItems,
         totalPages: adminOrdersTotalPages(totalItems),
+        paidCount,
         orders: orders.map((order) => ({
           id: order.id,
           orderNumber: order.orderNumber,
@@ -295,6 +307,60 @@ export function createAdminOrderRouter(deps: AdminOrderRouterDeps): ReturnType<t
       console.error('[admin] reconciliation failed', error)
       res.status(503).json({
         error: { code: 'RECONCILE_UNAVAILABLE', message: 'Try again shortly.' },
+      })
+    }
+  })
+
+  /**
+   * 2026-09-06 (the user's fixes docx, item 2) — BULK paid → processing.
+   *
+   * One click instead of one per order. Each order still goes through
+   * `applyTransition` in its OWN transaction with the table's rules and the
+   * concurrency guard: an order a shopper cancels at the same moment is
+   * REPORTED as failed, never forced. Partial success is the normal shape of
+   * the answer, so the report names every failure and how many paid orders
+   * remain (the batch is bounded).
+   *
+   * Only this one move is offered in bulk: "paid → processing" is the
+   * routine hand-off to fulfilment; shipping needs a tracking number per
+   * order and cancelling restores stock, neither belongs in a sweep.
+   */
+  router.post('/start-picking', limiters.bulk, requireShopper, requireAdmin, async (req, res) => {
+    const adminId = req.session!.userId!
+    // Optional scope — the same seam the reconcile sweep exposes, so a test
+    // can run the sweep against its own fixtures only (DEC-063). The screen
+    // never sends it.
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const userId = typeof body.userId === 'string' ? body.userId : undefined
+    const scope = { status: 'paid' as const, ...(userId ? { userId } : {}) }
+    try {
+      const paid = await prisma.order.findMany({
+        where: scope,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: BULK_TRANSITION_BATCH,
+        select: { id: true, orderNumber: true },
+      })
+      let moved = 0
+      const failed: { orderNumber: string; reason: string }[] = []
+      for (const order of paid) {
+        const result = await applyTransition(prisma, {
+          orderId: order.id,
+          to: 'processing',
+          actor: 'admin',
+          actorUserId: adminId,
+        })
+        if (result.ok) {
+          if (result.moved) moved += 1
+        } else {
+          failed.push({ orderNumber: order.orderNumber, reason: result.reason })
+        }
+      }
+      const remaining = await prisma.order.count({ where: scope })
+      res.json({ examined: paid.length, moved, failed, remaining })
+    } catch (error) {
+      console.error('[admin] bulk start-picking failed', error)
+      res.status(503).json({
+        error: { code: 'BULK_TRANSITION_UNAVAILABLE', message: 'Try again shortly.' },
       })
     }
   })

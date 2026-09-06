@@ -7,6 +7,7 @@ import { Pager } from '../components/ui/Pager'
 import { PriceBlock } from '../components/catalog/PriceBlock'
 import {
   reconcileStuckOrders as reconcileApi,
+  startPickingAll,
   requestAdminOrders,
   requestStuckOrders,
   transitionOrder,
@@ -130,6 +131,43 @@ export function AdminOrdersPage() {
   const [confirmingReconcile, setConfirmingReconcile] = useState(false)
   const [reconciling, setReconciling] = useState(false)
   const [reconcileOutcome, setReconcileOutcome] = useState<string | null>(null)
+
+  /**
+   * 2026-09-06 (the user's fixes docx, item 2) — the bulk hand-off. The same
+   * shape as the reconcile panel and for the same reasons: shown while there
+   * is something to move OR an outcome is unread (a control that unmounts on
+   * success takes focus with it), a confirm inline, the report from a region
+   * that was already mounted, focus moved somewhere deliberate afterwards.
+   */
+  const bulkHeadingRef = useRef<HTMLHeadingElement>(null)
+  const [confirmingBulk, setConfirmingBulk] = useState(false)
+  const [bulkRunning, setBulkRunning] = useState(false)
+  const [bulkOutcome, setBulkOutcome] = useState<string | null>(null)
+
+  async function runBulk() {
+    setBulkRunning(true)
+    const result = await startPickingAll()
+    setBulkRunning(false)
+    setConfirmingBulk(false)
+    const text = result.ok
+      ? [
+          result.report.examined === 0
+            ? t('bulk.outcome.none')
+            : result.report.failed.length > 0
+              ? t('bulk.outcome.partial', { moved: result.report.moved, failed: result.report.failed.length })
+              : t('bulk.outcome.moved', { count: result.report.moved }),
+          result.report.remaining > 0 ? t('bulk.remaining', { count: result.report.remaining }) : '',
+        ]
+          .filter((part) => part !== '')
+          .join(' ')
+      : result.failure.kind === 'unavailable'
+        ? t('bulk.unavailable')
+        : t(`state.${result.failure.kind}`)
+    setBulkOutcome(text)
+    setAnnouncement((previous) => ({ text, nonce: previous.nonce + 1 }))
+    bulkHeadingRef.current?.focus()
+    if (result.ok) void load(page, { quiet: true })
+  }
 
   const countStuck = useCallback(async () => {
     const result = await requestStuckOrders()
@@ -409,6 +447,50 @@ export function AdminOrdersPage() {
           {reconcileOutcome !== null && (
             <p className="text-sm text-text-muted">{reconcileOutcome}</p>
           )}
+        </section>
+      )}
+
+      {state.status === 'ready' && (state.page.paidCount > 0 || bulkOutcome !== null) && (
+        <section className="flex flex-col gap-2 rounded-card border border-border-card bg-well p-4">
+          <h2
+            id="bulk-heading"
+            tabIndex={-1}
+            ref={bulkHeadingRef}
+            className={`${FOCUS_RING} rounded-card text-base font-semibold text-text-ink`}
+          >
+            {t('bulk.title')}
+          </h2>
+          {state.page.paidCount > 0 && (
+            <p className="text-sm text-text-muted">{t('bulk.found', { count: state.page.paidCount })}</p>
+          )}
+          {confirmingBulk ? (
+            <div className="flex flex-col gap-2 rounded-card border border-border-control p-3">
+              <p className="text-sm text-text-ink">{t('bulk.ask')}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  loading={bulkRunning}
+                  aria-disabled={bulkRunning || undefined}
+                  onClick={() => {
+                    if (bulkRunning) return
+                    void runBulk()
+                  }}
+                >
+                  {t('bulk.confirm')}
+                </Button>
+                <Button onClick={() => setConfirmingBulk(false)}>{t('bulk.abort')}</Button>
+              </div>
+            </div>
+          ) : (
+            state.page.paidCount > 0 && (
+              <div>
+                <Button variant="secondary" onClick={() => setConfirmingBulk(true)}>
+                  {t('bulk.action')}
+                </Button>
+              </div>
+            )
+          )}
+          {bulkOutcome !== null && <p className="text-sm text-text-muted">{bulkOutcome}</p>}
         </section>
       )}
 

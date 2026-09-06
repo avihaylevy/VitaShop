@@ -326,6 +326,12 @@ export function createOrderRateLimiters(): OrderRateLimiters {
  */
 export const ADMIN_RATE_LIMITS = {
   status: { windowMs: 15 * MINUTE, limit: 60 },
+  /**
+   * 2026-09-06 (the user's fixes docx) — the bulk "start picking" sweep.
+   * One click moves up to BULK_TRANSITION_BATCH orders, so it is budgeted
+   * like the reconcile sweep, not like a single status move.
+   */
+  bulk: { windowMs: 15 * MINUTE, limit: 20 },
   /** A READ an admin refreshes while working through a queue. */
   list: { windowMs: 15 * MINUTE, limit: 240 },
   /**
@@ -523,6 +529,7 @@ export interface AdminRateLimiters {
   status: RequestHandler
   list: RequestHandler
   reconcile: RequestHandler
+  bulk: RequestHandler
 }
 
 export function createAdminRateLimiters(): AdminRateLimiters {
@@ -530,6 +537,7 @@ export function createAdminRateLimiters(): AdminRateLimiters {
     status: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.status, keyGenerator: shopperKey }),
     list: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.list, keyGenerator: shopperKey }),
     reconcile: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.reconcile, keyGenerator: shopperKey }),
+    bulk: rateLimit({ ...SHARED, ...ADMIN_RATE_LIMITS.bulk, keyGenerator: shopperKey }),
   }
 }
 
