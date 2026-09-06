@@ -104,6 +104,7 @@
     "usageNotPublished": "The manufacturer does not publish usage instructions for this product online. Follow the label on the packaging or ask a pharmacist.",
     "warningsNotPublished": "The manufacturer does not publish warnings or allergen information for this product online. Check the label on the packaging.",
     "ingredients": "Active ingredients",
+    "ingredientsNotPublished": "The manufacturer does not publish a per-serving breakdown of the active ingredients online. The full list is on the packaging label.",
     "ingredientName": "Ingredient",
     "ingredientAmount": "Amount",
     "healthGoals": "Health goals",

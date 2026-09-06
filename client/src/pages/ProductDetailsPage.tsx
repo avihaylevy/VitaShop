@@ -342,11 +342,23 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
         )}
       </section>
 
-      {product.ingredients.length > 0 && (
-        <section aria-labelledby="product-ingredients" className="mt-8">
-          <h2 id="product-ingredients" className="heading-section">
-            {t('productDetails.ingredients')}
-          </h2>
+      <section aria-labelledby="product-ingredients" className="mt-8">
+        <h2 id="product-ingredients" className="heading-section">
+          {t('productDetails.ingredients')}
+        </h2>
+        {/*
+          2026-09-06: the section is ALWAYS present. Amounts come only from
+          a label or the manufacturer's own page (DEC-032); where none is
+          published the table gives way to a note, so a product with no rows
+          reads as "not published" rather than as a different page layout.
+        */}
+        {product.ingredients.length === 0 && (
+          <p role="note" data-testid="ingredients-not-published" className="mt-2 text-sm text-text-muted">
+            {t('productDetails.ingredientsNotPublished')}
+          </p>
+        )}
+        {product.ingredients.length > 0 && (
+          <>
           {/*
             A real <table> with a <caption> and <th scope="col">: this is
             two-dimensional data (ingredient × amount), so table semantics
@@ -382,8 +394,9 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
               </tbody>
             </table>
           </div>
-        </section>
-      )}
+          </>
+        )}
+      </section>
 
       {/* Field 14 is "0 or more" — an empty set renders no section at all. */}
       {product.healthGoals.length > 0 && (

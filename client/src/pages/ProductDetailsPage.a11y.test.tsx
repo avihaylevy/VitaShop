@@ -248,13 +248,20 @@ describe('ProductDetailsPage — §7a/§7b field surface', () => {
     expect(html).not.toContain('קהל יעד')
   })
 
-  it('renders no ingredients or health-goal section when those sets are empty', async () => {
+  it('empty ingredients: the section stays, with a "not published" note and NO table; empty health goals: no section (both controls)', async () => {
     setDetail({ product: product({ ingredients: [], healthGoals: [] }) })
-    const html = await renderPage()
+    let html = await renderPage()
 
-    expect(html).not.toContain('רכיבים פעילים')
-    expect(html).not.toContain('יעדי בריאות')
+    expect(html).toContain('רכיבים פעילים')
+    expect(count(html, 'data-testid="ingredients-not-published"')).toBe(1)
+    expect(html).toContain(catalogHe.productDetails.ingredientsNotPublished)
     expect(html).not.toContain('<table')
+    expect(html).not.toContain('יעדי בריאות')
+
+    setDetail({ product: product() })
+    html = await renderPage()
+    expect(html).toContain('<table')
+    expect(html).not.toContain('data-testid="ingredients-not-published"')
   })
 })
 
