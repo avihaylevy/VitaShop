@@ -87,13 +87,14 @@ export function HomePage() {
           very wide screens, where the 3/0.9 ratio alone would grow it past
           the height the user asked to shrink. */}
       {/* 2026-09-06 (the user): on wide screens the 420px cap left the photo
-          a third of the band and a cream gap in the middle. The cap now grows
-          with the viewport (500 from xl, 620 from 2xl), and from 2xl the band
-          is 3:1 instead of 3:0.9 so the photo — natural 3:2 ratio, never
-          cropped — takes half the band instead of 45%. Not below 2xl: at
-          1280 the one-line title would run under the photo's fade (measured
-          51px of overlap). */}
-      <section className="relative overflow-hidden rounded-card bg-surface-section lg:aspect-[3/0.9] lg:max-h-[420px] xl:max-h-[500px] 2xl:aspect-[3/1] 2xl:max-h-[620px]">
+          a third of the band and a cream gap in the middle. From xl the band
+          is 3:1 instead of 3:0.9 and the cap grows (540 from xl, 620 from
+          2xl), so the photo — natural 3:2 ratio, never cropped — takes half
+          the band instead of 45%. At 1280 the one-line title reaches ~50px
+          into the photo's box, but that strip is the fade's transparent end
+          (mask 82%→100%), checked by eye. Not at lg (1024–1279): there the
+          title would cross the visible photo. */}
+      <section className="relative overflow-hidden rounded-card bg-surface-section lg:aspect-[3/0.9] lg:max-h-[420px] xl:aspect-[3/1] xl:max-h-[540px] 2xl:max-h-[620px]">
         {/* 2026-09-06 (the user): the text block is CENTRED in the band at lg
             (top-1/2 + -translate-y-1/2) instead of hanging from 10% — the
             photo sets the band's height and the lower half sat empty. The
