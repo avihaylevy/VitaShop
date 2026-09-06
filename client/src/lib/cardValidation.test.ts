@@ -4,7 +4,6 @@ import {
   cvvProblem,
   expiryProblem,
   formatCardNumberInput,
-  formatExpiryInput,
   holderProblem,
   simulatedOutcomeForCard,
 } from './cardValidation'
@@ -69,14 +68,6 @@ describe('input formatters', () => {
     expect(formatCardNumberInput('4000 0000 0000 00')).toBe('4000 0000 0000 00')
     expect(formatCardNumberInput('4a5b8')).toBe('458')
     expect(formatCardNumberInput('1'.repeat(25))).toBe('1111 1111 1111 1111 111')
-  })
-  it('inserts the slash into an expiry after the month and caps at MM/YY', () => {
-    expect(formatExpiryInput('1')).toBe('1')
-    expect(formatExpiryInput('12')).toBe('12')
-    expect(formatExpiryInput('122')).toBe('12/2')
-    expect(formatExpiryInput('1227')).toBe('12/27')
-    expect(formatExpiryInput('12/27')).toBe('12/27')
-    expect(formatExpiryInput('12279')).toBe('12/27')
   })
 })
 

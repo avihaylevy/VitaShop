@@ -440,7 +440,8 @@ describe('F2c — confirming and paying', () => {
   /** Valid card details — the 2026-08-23 gate; Luhn-valid test number. */
   function fillCard() {
     fireEvent.change(screen.getByLabelText(/card number/i), { target: { value: '4111 1111 1111 1111' } })
-    fireEvent.change(screen.getByLabelText(/expiry/i), { target: { value: '12/29' } })
+    fireEvent.change(screen.getByLabelText(/expiry month/i), { target: { value: '12' } })
+    fireEvent.change(screen.getByLabelText(/expiry year/i), { target: { value: '29' } })
     fireEvent.change(screen.getByLabelText(/cvv/i), { target: { value: '123' } })
     fireEvent.change(screen.getByLabelText(/cardholder name/i), { target: { value: 'Israel Israeli' } })
   }
@@ -462,7 +463,8 @@ describe('F2c — confirming and paying', () => {
     fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
     // Luhn-INVALID number; everything else valid.
     fireEvent.change(screen.getByLabelText(/card number/i), { target: { value: '4111 1111 1111 1112' } })
-    fireEvent.change(screen.getByLabelText(/expiry/i), { target: { value: '12/29' } })
+    fireEvent.change(screen.getByLabelText(/expiry month/i), { target: { value: '12' } })
+    fireEvent.change(screen.getByLabelText(/expiry year/i), { target: { value: '29' } })
     fireEvent.change(screen.getByLabelText(/cvv/i), { target: { value: '123' } })
     fireEvent.change(screen.getByLabelText(/cardholder name/i), { target: { value: 'Israel Israeli' } })
     fireEvent.click(await screen.findByRole('button', { name: /confirm and pay/i }))
@@ -610,21 +612,40 @@ describe('F2c — confirming and paying', () => {
     expect(await screen.findByText(/no order was placed/i)).toBeTruthy()
   })
 
-  it('2026-09-06: a card typed WITHOUT spaces and an expiry typed WITHOUT a slash are formatted on screen and pay (the live tester\'s case)', async () => {
+  it('2026-09-06: a card typed WITHOUT spaces is grouped on screen, the expiry is CHOSEN from two lists, and a made-up Luhn-valid card pays', async () => {
     const calls = payRoute(201, ORDER)
     renderPage()
     const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
     fireEvent.change(line1, { target: { value: 'רחוב 1' } })
     fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
     fireEvent.change(screen.getByLabelText(/card number/i), { target: { value: '4111111111111111' } })
-    fireEvent.change(screen.getByLabelText(/expiry/i), { target: { value: '1229' } })
+    fireEvent.change(screen.getByLabelText(/expiry month/i), { target: { value: '12' } })
+    fireEvent.change(screen.getByLabelText(/expiry year/i), { target: { value: '29' } })
     fireEvent.change(screen.getByLabelText(/cvv/i), { target: { value: '555' } })
     fireEvent.change(screen.getByLabelText(/cardholder name/i), { target: { value: 'ורד לוי' } })
     expect((screen.getByLabelText(/card number/i) as HTMLInputElement).value).toBe('4111 1111 1111 1111')
-    expect((screen.getByLabelText(/expiry/i) as HTMLInputElement).value).toBe('12/29')
+    // The lists are selects: 12 months, and years from THIS year forward only.
+    const yearSelect = screen.getByLabelText(/expiry year/i) as HTMLSelectElement
+    const firstYear = yearSelect.options[1]!.textContent
+    expect(firstYear).toBe(String(new Date().getFullYear()))
+    expect((screen.getByLabelText(/expiry month/i) as HTMLSelectElement).options).toHaveLength(13)
     fireEvent.click(await screen.findByRole('button', { name: /confirm and pay/i }))
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(JSON.parse(String(calls[0]!.body)).simulatedOutcome).toBe('success')
+  })
+
+  it('🔴 THE CONTROL — a month chosen with NO year is REQUIRED, not paid', async () => {
+    const calls = payRoute(201, ORDER)
+    renderPage()
+    const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
+    fireEvent.change(line1, { target: { value: 'רחוב 1' } })
+    fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
+    fillCard()
+    fireEvent.change(screen.getByLabelText(/expiry year/i), { target: { value: '' } })
+    fireEvent.click(await screen.findByRole('button', { name: /confirm and pay/i }))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(calls).toHaveLength(0)
+    expect(screen.getByLabelText(/expiry year/i).getAttribute('aria-invalid')).toBe('true')
   })
 
   it('ISSUE-174 (REQ-F-043 amended by the user): no outcome selector exists; an ordinary card requests success, and a server 402 still renders the declined state', async () => {
@@ -752,7 +773,8 @@ describe('F2c — confirming and paying', () => {
     await screen.findByRole('button', { name: /pay/i })
     expect(await screen.findByLabelText(/card number/i)).toBeTruthy()
     expect(screen.getByLabelText(/cvv/i)).toBeTruthy()
-    expect(screen.getByLabelText(/expiry/i)).toBeTruthy()
+    expect(screen.getByLabelText(/expiry month/i)).toBeTruthy()
+    expect(screen.getByLabelText(/expiry year/i)).toBeTruthy()
 
     await fillAndPay()
     await waitFor(() => expect(calls).toHaveLength(1))

@@ -72,6 +72,10 @@
     "card": {
       "number": "Card number",
       "expiry": "Expiry",
+      "expiryMonth": "Expiry month",
+      "expiryYear": "Expiry year",
+      "expiryMonthPlaceholder": "Month",
+      "expiryYearPlaceholder": "Year",
       "cvv": "CVV",
       "holder": "Cardholder name",
       "notStored": "Card details are checked for validity only — they are never sent or stored anywhere.",

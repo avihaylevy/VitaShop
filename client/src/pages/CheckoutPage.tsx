@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { TextLink } from '../components/ui/TextLink'
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning'
 import { Trans, useTranslation } from 'react-i18next'
@@ -27,7 +27,6 @@ import {
   cvvProblem,
   expiryProblem,
   formatCardNumberInput,
-  formatExpiryInput,
   holderProblem,
   simulatedOutcomeForCard,
 } from '../lib/cardValidation'
@@ -114,6 +113,17 @@ type LoadState =
   | { status: 'loading' }
   | { status: 'ready'; quote: CheckoutQuote }
   | { status: 'failed'; failure: CheckoutQuoteFailure }
+
+/** The month list is fixed; the year list starts at the current year (a card cannot expire in the past). */
+const EXPIRY_MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
+const EXPIRY_YEARS_AHEAD = 15
+function expiryYearOptions(now: Date = new Date()): Array<{ value: string; label: string }> {
+  const first = now.getFullYear()
+  return Array.from({ length: EXPIRY_YEARS_AHEAD + 1 }, (_, i) => {
+    const year = first + i
+    return { value: String(year).slice(-2), label: String(year) }
+  })
+}
 
 export function CheckoutPage() {
   const { t, i18n } = useTranslation('checkout')
@@ -208,7 +218,12 @@ export function CheckoutPage() {
    * component's state for validation only — payForCheckout takes no card
    * argument, nothing is stored, and the payment stays simulated.
    */
-  const [card, setCard] = useState({ number: '', expiry: '', cvv: '', holder: '' })
+  // expiry is CHOSEN, not typed (2026-09-06, the user): a month list and a
+  // year list; `expiry` is the "MM/YY" the validator has always read, composed
+  // only once both halves exist so a half-chosen date reads as REQUIRED.
+  const [card, setCard] = useState({ number: '', expiryMonth: '', expiryYear: '', cvv: '', holder: '' })
+  const expiry = card.expiryMonth && card.expiryYear ? `${card.expiryMonth}/${card.expiryYear}` : ''
+  const expiryYears = useMemo(() => expiryYearOptions(), [])
   const [cardTouched, setCardTouched] = useState(false)
   const [saveAddress, setSaveAddress] = useState(false)
   const [payState, setPayState] = useState<
@@ -345,7 +360,7 @@ export function CheckoutPage() {
 
   const cardProblems = {
     number: cardNumberProblem(card.number),
-    expiry: expiryProblem(card.expiry),
+    expiry: expiryProblem(expiry),
     cvv: cvvProblem(card.cvv),
     holder: holderProblem(card.holder),
   }
@@ -867,26 +882,58 @@ export function CheckoutPage() {
                     />
                   </p>
                 </div>
-                <div>
-                  <label htmlFor="pay-card-expiry" className="block text-sm font-medium text-text-ink">
-                    {t('pay.card.expiry')}
-                  </label>
-                  <input
-                    id="pay-card-expiry"
-                    inputMode="numeric"
-                    autoComplete="cc-exp"
-                    dir="ltr"
-                    placeholder="MM/YY"
-                    value={card.expiry}
-                    onChange={(event) => setCard((c) => ({ ...c, expiry: formatExpiryInput(event.target.value) }))}
-                    aria-invalid={cardTouched && cardProblems.expiry !== null}
-                    aria-describedby={cardTouched && cardProblems.expiry ? 'pay-card-expiry-error' : undefined}
-                    className={`${FOCUS_RING} mt-1 h-11 w-full rounded-card border bg-well px-3 text-base ${cardTouched && cardProblems.expiry ? 'border-state-error' : 'border-border-control'}`}
-                  />
+                <fieldset className="min-w-0 border-0 p-0">
+                  <legend className="block text-sm font-medium text-text-ink">{t('pay.card.expiry')}</legend>
+                  <div className="mt-1 grid grid-cols-2 gap-2">
+                    <div>
+                      <label htmlFor="pay-card-expiry-month" className="sr-only">
+                        {t('pay.card.expiryMonth')}
+                      </label>
+                      <select
+                        id="pay-card-expiry-month"
+                        autoComplete="cc-exp-month"
+                        dir="ltr"
+                        value={card.expiryMonth}
+                        onChange={(event) => setCard((c) => ({ ...c, expiryMonth: event.target.value }))}
+                        aria-invalid={cardTouched && cardProblems.expiry !== null}
+                        aria-describedby={cardTouched && cardProblems.expiry ? 'pay-card-expiry-error' : undefined}
+                        className={`${FOCUS_RING} h-11 w-full cursor-pointer rounded-card border bg-well px-3 text-base text-text-ink ${cardTouched && cardProblems.expiry ? 'border-state-error' : 'border-border-control'}`}
+                      >
+                        <option value="">{t('pay.card.expiryMonthPlaceholder')}</option>
+                        {EXPIRY_MONTHS.map((month) => (
+                          <option key={month} value={month}>
+                            {month}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="pay-card-expiry-year" className="sr-only">
+                        {t('pay.card.expiryYear')}
+                      </label>
+                      <select
+                        id="pay-card-expiry-year"
+                        autoComplete="cc-exp-year"
+                        dir="ltr"
+                        value={card.expiryYear}
+                        onChange={(event) => setCard((c) => ({ ...c, expiryYear: event.target.value }))}
+                        aria-invalid={cardTouched && cardProblems.expiry !== null}
+                        aria-describedby={cardTouched && cardProblems.expiry ? 'pay-card-expiry-error' : undefined}
+                        className={`${FOCUS_RING} h-11 w-full cursor-pointer rounded-card border bg-well px-3 text-base text-text-ink ${cardTouched && cardProblems.expiry ? 'border-state-error' : 'border-border-control'}`}
+                      >
+                        <option value="">{t('pay.card.expiryYearPlaceholder')}</option>
+                        {expiryYears.map((year) => (
+                          <option key={year.value} value={year.value}>
+                            {year.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   <p id="pay-card-expiry-error" className="mt-1 min-h-4 text-xs text-state-error">
                     {cardTouched && cardProblems.expiry ? t(`pay.card.errors.${cardProblems.expiry}`) : ''}
                   </p>
-                </div>
+                </fieldset>
                 <div>
                   <label htmlFor="pay-card-cvv" className="block text-sm font-medium text-text-ink">
                     {t('pay.card.cvv')}

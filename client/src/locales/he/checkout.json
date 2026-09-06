@@ -73,6 +73,10 @@
     "card": {
       "number": "מספר כרטיס",
       "expiry": "תוקף",
+      "expiryMonth": "חודש תוקף",
+      "expiryYear": "שנת תוקף",
+      "expiryMonthPlaceholder": "חודש",
+      "expiryYearPlaceholder": "שנה",
       "cvv": "CVV",
       "holder": "שם בעל הכרטיס",
       "notStored": "פרטי הכרטיס משמשים לבדיקת תקינות בלבד — הם לא נשלחים ולא נשמרים בשום מקום.",

@@ -67,11 +67,6 @@ export function formatCardNumberInput(raw: string): string {
   return digits.replace(/(\d{4})(?=\d)/g, '$1 ')
 }
 
-export function formatExpiryInput(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 4)
-  return digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits
-}
-
 /** Exactly 3 or 4 digits. */
 export function cvvProblem(raw: string): 'CVV_REQUIRED' | 'CVV_INVALID' | null {
   const trimmed = raw.trim()
