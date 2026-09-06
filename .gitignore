@@ -81,3 +81,4 @@ __pycache__/
 # account-hash sync for the live DB (DEC-116) — never committed
 /neon-accounts.sql
 /neon-catalogue.sql
+/neon-ingredients.sql
