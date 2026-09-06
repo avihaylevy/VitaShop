@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { CartProvider } from '../../state/CartContext'
 import { AgentWidget } from './AgentWidget'
+import { requestAgentOpen } from '../../lib/agentOpen'
 
 const BASE_URL = 'http://localhost:3000'
 
@@ -103,6 +104,14 @@ describe('AgentWidget', () => {
     expect(
       screen.getByRole('textbox', { name: i18n.t('agent:panel.placeholder') }),
     ).toBeTruthy()
+  })
+
+  it('2026-09-06: an agent-open REQUEST (the hero sticker) opens the panel; the control: nothing is open before it', async () => {
+    stubFetch(agentReply('?'))
+    renderWidget()
+    expect(screen.queryByRole('dialog', { name: i18n.t('agent:panel.title') })).toBeNull()
+    requestAgentOpen()
+    await screen.findByRole('dialog', { name: i18n.t('agent:panel.title') })
   })
 
   it('🔴 the transcript survives close and reopen (DEC-091 O1 — the widget owns it)', async () => {

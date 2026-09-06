@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { onAgentOpenRequest } from '../../lib/agentOpen'
 import { useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Icon } from '../ui/Icon'
@@ -52,6 +53,10 @@ export function AgentWidget() {
   useEffect(() => {
     if (drawerOpen) setPanelOpen(false)
   }, [drawerOpen])
+
+  // 2026-09-06 — the home hero's "Ask" sticker (lib/agentOpen.ts). The
+  // widget stays the one place that opens itself; the page only asks.
+  useEffect(() => onAgentOpenRequest(() => setPanelOpen(true)), [])
 
   // 🔴 EVERY add is announced — quiet is not silent (the useAddToCart
   // contract). The name resolves from the transcript's own DTOs, per the

@@ -15,6 +15,7 @@ import { LinkButton } from '../components/ui/LinkButton'
 import { TextLink } from '../components/ui/TextLink'
 import { FOCUS_RING } from '../components/ui/focusRing'
 import { getCategoryTone } from '../lib/categoryTone'
+import { HeroStickers } from '../components/home/HeroStickers'
 import type { SupportedLanguage } from '../i18n'
 import heroPhotoHe from '../assets/brand/home-hero-he.webp'
 import heroPhotoEn from '../assets/brand/home-hero-en.webp'
@@ -86,7 +87,11 @@ export function HomePage() {
           very wide screens, where the 3/0.9 ratio alone would grow it past
           the height the user asked to shrink. */}
       <section className="relative overflow-hidden rounded-card bg-surface-section lg:aspect-[3/0.9] lg:max-h-[420px]">
-        <div className="relative z-10 flex flex-col items-start p-6 md:p-10 lg:absolute lg:top-[10%] lg:start-[4%] lg:p-0">
+        {/* 2026-09-06 (the user): the text block is CENTRED in the band at lg
+            (top-1/2 + -translate-y-1/2) instead of hanging from 10% — the
+            photo sets the band's height and the lower half sat empty. The
+            stickers below the CTA are the second half of that fix. */}
+        <div className="relative z-10 flex flex-col items-start p-6 md:p-10 lg:absolute lg:top-1/2 lg:start-[4%] lg:-translate-y-1/2 lg:p-0">
           {/* .heading-hero-band (index.css) owns the size AND the lg one-row
               nowrap rule. It cannot be a text-[...] override on
               .heading-page: heading classes are unlayered and beat every
@@ -117,6 +122,7 @@ export function HomePage() {
               {t('home.clubCta', { ns: 'catalog' })}
             </TextLink>
           </div>
+          <HeroStickers />
         </div>
         {/* alt="" — the photo is scene-setting; every claim it makes is made
             by the real text above it. NEVER CROPPED (the user, this pass:

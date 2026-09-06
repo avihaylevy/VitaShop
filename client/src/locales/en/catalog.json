@@ -53,6 +53,12 @@
     "tagline": "A catalogue organised by categories and health goals, full info with no noise.",
     "browseCatalog": "Browse all products",
     "clubCta": "Join the club — 10% off",
+    "stickers": {
+      "groupLabel": "Why shop here",
+      "search": { "big": "Fast, easy search", "small": "by health goal, active ingredient, brand or price" },
+      "ask": { "big": "Ask", "small": "an assistant that finds products from a plain question" },
+      "brands": { "big": "The popular brands", "small": "Altman, Solgar, SupHerb and more, all in one place" }
+    },
     "categoriesTitle": "Shop by category",
     "shopByGoalTitle": "Shop by goal",
     "loading": "Loading categories…",

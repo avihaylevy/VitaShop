@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../i18n'
@@ -149,6 +149,23 @@ describe("the thirteenth list — the footer signature", () => {
     // Wait for the shelf so the page is fully settled before the negative.
     await screen.findByText('Product 1')
     expect(screen.queryByText('4242')).toBeNull()
+  })
+})
+
+describe('the hero stickers (2026-09-06)', () => {
+  it('renders three stickers — two catalogue links and an Ask button that raises the agent-open request', async () => {
+    const opened = vi.fn()
+    window.addEventListener('vitashop:agent-open', opened)
+    renderHome()
+    const group = await screen.findByRole('list', { name: /why shop here/i })
+    const links = within(group).getAllByRole('link')
+    expect(links).toHaveLength(2)
+    expect(links.every((a) => a.getAttribute('href') === '/catalog')).toBe(true)
+    expect(within(group).getByRole('link', { name: /fast, easy search/i })).toBeTruthy()
+    expect(within(group).getByRole('link', { name: /the popular brands/i })).toBeTruthy()
+    fireEvent.click(within(group).getByRole('button', { name: /^ask/i }))
+    expect(opened).toHaveBeenCalledTimes(1)
+    window.removeEventListener('vitashop:agent-open', opened)
   })
 })
 
