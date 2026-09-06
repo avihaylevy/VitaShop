@@ -610,6 +610,23 @@ describe('F2c — confirming and paying', () => {
     expect(await screen.findByText(/no order was placed/i)).toBeTruthy()
   })
 
+  it('2026-09-06: a card typed WITHOUT spaces and an expiry typed WITHOUT a slash are formatted on screen and pay (the live tester\'s case)', async () => {
+    const calls = payRoute(201, ORDER)
+    renderPage()
+    const line1 = (await screen.findByLabelText(/street and number/i)) as HTMLInputElement
+    fireEvent.change(line1, { target: { value: 'רחוב 1' } })
+    fireEvent.change(screen.getByLabelText(/^city$/i), { target: { value: 'תל אביב' } })
+    fireEvent.change(screen.getByLabelText(/card number/i), { target: { value: '4111111111111111' } })
+    fireEvent.change(screen.getByLabelText(/expiry/i), { target: { value: '1229' } })
+    fireEvent.change(screen.getByLabelText(/cvv/i), { target: { value: '555' } })
+    fireEvent.change(screen.getByLabelText(/cardholder name/i), { target: { value: 'ורד לוי' } })
+    expect((screen.getByLabelText(/card number/i) as HTMLInputElement).value).toBe('4111 1111 1111 1111')
+    expect((screen.getByLabelText(/expiry/i) as HTMLInputElement).value).toBe('12/29')
+    fireEvent.click(await screen.findByRole('button', { name: /confirm and pay/i }))
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(JSON.parse(String(calls[0]!.body)).simulatedOutcome).toBe('success')
+  })
+
   it('ISSUE-174 (REQ-F-043 amended by the user): no outcome selector exists; an ordinary card requests success, and a server 402 still renders the declined state', async () => {
     const calls = payRoute(402, { error: { code: 'PAYMENT_DECLINED' } })
     renderPage()

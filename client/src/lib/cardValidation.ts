@@ -32,9 +32,12 @@ export function cardNumberProblem(raw: string): 'CARD_NUMBER_REQUIRED' | 'CARD_N
 }
 
 /**
- * MM/YY (or MM/YYYY), must parse and must not be in the past. `now` is a
- * parameter so the boundary month is testable with exact dates — a card
- * expiring THIS month is still valid (industry convention: end of month).
+ * MM/YY, MM/YYYY, or the same digits with no separator (1227, 122027) —
+ * 2026-09-06: the live copy rejected "1227" typed the way a card reader
+ * shows it, which is a form problem, not a card problem. Must parse and
+ * must not be in the past. `now` is a parameter so the boundary month is
+ * testable with exact dates — a card expiring THIS month is still valid
+ * (industry convention: end of month).
  */
 export function expiryProblem(
   raw: string,
@@ -42,14 +45,31 @@ export function expiryProblem(
 ): 'EXPIRY_REQUIRED' | 'EXPIRY_INVALID' | 'EXPIRY_PAST' | null {
   const trimmed = raw.trim()
   if (trimmed === '') return 'EXPIRY_REQUIRED'
-  const match = /^(\d{2})\s*\/\s*(\d{2}|\d{4})$/.exec(trimmed)
-  if (!match) return 'EXPIRY_INVALID'
-  const month = Number(match[1])
+  const digits = trimmed.replace(/[\s/.-]/g, '')
+  if (!/^\d{4}$|^\d{6}$/.test(digits)) return 'EXPIRY_INVALID'
+  const month = Number(digits.slice(0, 2))
   if (month < 1 || month > 12) return 'EXPIRY_INVALID'
-  const year = match[2].length === 2 ? 2000 + Number(match[2]) : Number(match[2])
+  const yearPart = digits.slice(2)
+  const year = yearPart.length === 2 ? 2000 + Number(yearPart) : Number(yearPart)
   // Valid through the last moment of the stated month.
   const endOfMonth = new Date(year, month, 1)
   return now < endOfMonth ? null : 'EXPIRY_PAST'
+}
+
+/**
+ * Input formatters — what the field SHOWS while typing, so a missing digit
+ * is visible at a glance (the live copy's first tester typed 15 digits of
+ * a 16-digit card and could not see why it was refused). Pure; they never
+ * change what the validators accept.
+ */
+export function formatCardNumberInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 19)
+  return digits.replace(/(\d{4})(?=\d)/g, '$1 ')
+}
+
+export function formatExpiryInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4)
+  return digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits
 }
 
 /** Exactly 3 or 4 digits. */

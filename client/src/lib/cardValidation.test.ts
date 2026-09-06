@@ -3,6 +3,8 @@ import {
   cardNumberProblem,
   cvvProblem,
   expiryProblem,
+  formatCardNumberInput,
+  formatExpiryInput,
   holderProblem,
   simulatedOutcomeForCard,
 } from './cardValidation'
@@ -50,6 +52,31 @@ describe('expiryProblem', () => {
     expect(expiryProblem('13/26', now)).toBe('EXPIRY_INVALID')
     expect(expiryProblem('banana', now)).toBe('EXPIRY_INVALID')
     expect(expiryProblem('', now)).toBe('EXPIRY_REQUIRED')
+  })
+  it('2026-09-06: accepts the digits WITHOUT a separator (1227, 122027) and with a dash; rejects 3 or 5 digits (both controls)', () => {
+    expect(expiryProblem('1227', now)).toBeNull()
+    expect(expiryProblem('122027', now)).toBeNull()
+    expect(expiryProblem('12-27', now)).toBeNull()
+    expect(expiryProblem('0726', now)).toBe('EXPIRY_PAST')
+    expect(expiryProblem('127', now)).toBe('EXPIRY_INVALID')
+    expect(expiryProblem('12277', now)).toBe('EXPIRY_INVALID')
+  })
+})
+
+describe('input formatters', () => {
+  it('groups a card number in fours and caps at 19 digits; strips letters', () => {
+    expect(formatCardNumberInput('4000000000000002')).toBe('4000 0000 0000 0002')
+    expect(formatCardNumberInput('4000 0000 0000 00')).toBe('4000 0000 0000 00')
+    expect(formatCardNumberInput('4a5b8')).toBe('458')
+    expect(formatCardNumberInput('1'.repeat(25))).toBe('1111 1111 1111 1111 111')
+  })
+  it('inserts the slash into an expiry after the month and caps at MM/YY', () => {
+    expect(formatExpiryInput('1')).toBe('1')
+    expect(formatExpiryInput('12')).toBe('12')
+    expect(formatExpiryInput('122')).toBe('12/2')
+    expect(formatExpiryInput('1227')).toBe('12/27')
+    expect(formatExpiryInput('12/27')).toBe('12/27')
+    expect(formatExpiryInput('12279')).toBe('12/27')
   })
 })
 

@@ -26,6 +26,8 @@ import {
   cardNumberProblem,
   cvvProblem,
   expiryProblem,
+  formatCardNumberInput,
+  formatExpiryInput,
   holderProblem,
   simulatedOutcomeForCard,
 } from '../lib/cardValidation'
@@ -849,7 +851,7 @@ export function CheckoutPage() {
                     autoComplete="cc-number"
                     dir="ltr"
                     value={card.number}
-                    onChange={(event) => setCard((c) => ({ ...c, number: event.target.value }))}
+                    onChange={(event) => setCard((c) => ({ ...c, number: formatCardNumberInput(event.target.value) }))}
                     aria-invalid={cardTouched && cardProblems.number !== null}
                     aria-describedby={cardTouched && cardProblems.number ? 'pay-card-number-error' : undefined}
                     className={`${FOCUS_RING} mt-1 h-11 w-full rounded-card border bg-well px-3 text-base ${cardTouched && cardProblems.number ? 'border-state-error' : 'border-border-control'}`}
@@ -876,7 +878,7 @@ export function CheckoutPage() {
                     dir="ltr"
                     placeholder="MM/YY"
                     value={card.expiry}
-                    onChange={(event) => setCard((c) => ({ ...c, expiry: event.target.value }))}
+                    onChange={(event) => setCard((c) => ({ ...c, expiry: formatExpiryInput(event.target.value) }))}
                     aria-invalid={cardTouched && cardProblems.expiry !== null}
                     aria-describedby={cardTouched && cardProblems.expiry ? 'pay-card-expiry-error' : undefined}
                     className={`${FOCUS_RING} mt-1 h-11 w-full rounded-card border bg-well px-3 text-base ${cardTouched && cardProblems.expiry ? 'border-state-error' : 'border-border-control'}`}
