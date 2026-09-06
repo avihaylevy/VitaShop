@@ -101,6 +101,8 @@
     "usageInstructions": "How to use",
     "warningsAllergens": "Warnings and allergens",
     "allergenInfoIncomplete": "The manufacturer does not publish complete allergen information for this product. Check the label on the packaging.",
+    "usageNotPublished": "The manufacturer does not publish usage instructions for this product online. Follow the label on the packaging or ask a pharmacist.",
+    "warningsNotPublished": "The manufacturer does not publish warnings or allergen information for this product online. Check the label on the packaging.",
     "ingredients": "Active ingredients",
     "ingredientName": "Ingredient",
     "ingredientAmount": "Amount",

@@ -293,7 +293,16 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
         <h2 id="product-usage" className="heading-section">
           {t('productDetails.usageInstructions')}
         </h2>
-        <p className="mt-2 text-sm text-text-ink">{product.usageInstructions}</p>
+        {product.usageInstructions.trim().length > 0 ? (
+          <p className="mt-2 text-sm text-text-ink">{product.usageInstructions}</p>
+        ) : (
+          // The catalogue's label-or-empty rule (DEC-032): a manufacturer that
+          // publishes no dosage leaves the field empty, and an empty section
+          // must read as "not published", never as "nothing to know".
+          <p role="note" data-testid="usage-not-published" className="mt-2 text-sm text-text-muted">
+            {t('productDetails.usageNotPublished')}
+          </p>
+        )}
       </section>
 
       <section aria-labelledby="product-warnings" className="mt-8">
@@ -302,6 +311,14 @@ function ProductDetailView({ product, onBack, onAddToCart }: ProductDetailViewPr
         </h2>
         {product.warningsAllergens.length > 0 && (
           <p className="mt-2 text-sm text-text-ink">{product.warningsAllergens}</p>
+        )}
+        {product.warningsAllergens.length === 0 && !product.allergenInfoIncomplete && (
+          // Same rule as the usage section: empty is a statement about the
+          // manufacturer's page, not about the product. The flagged case
+          // below carries its own, stronger note.
+          <p role="note" data-testid="warnings-not-published" className="mt-2 text-sm text-text-muted">
+            {t('productDetails.warningsNotPublished')}
+          </p>
         )}
         {/*
           🔴 DEC-032 DECISION B, condition 2. The flag says the manufacturer's

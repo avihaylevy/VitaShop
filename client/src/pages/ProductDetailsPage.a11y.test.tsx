@@ -408,6 +408,33 @@ describe('ProductDetailsPage — DEC-032 decision B, the allergen-provenance not
     expect(html).not.toContain(catalogHe.productDetails.allergenInfoIncomplete)
   })
 
+  it('🔴 EMPTY usage instructions: the section says "not published" instead of rendering blank (control: text present → no note)', async () => {
+    setDetail({ product: product({ usageInstructions: '' }) })
+    let html = await renderPage()
+    expect(html).toContain(catalogHe.productDetails.usageInstructions)
+    expect(count(html, 'data-testid="usage-not-published"')).toBe(1)
+    expect(html).toContain(catalogHe.productDetails.usageNotPublished)
+    expect(html).not.toContain('<p class="mt-2 text-sm text-text-ink"></p>')
+
+    setDetail({ product: product({ usageInstructions: 'כמוסה אחת ביום עם ארוחה' }) })
+    html = await renderPage()
+    expect(html).not.toContain('data-testid="usage-not-published"')
+    expect(html).not.toContain(catalogHe.productDetails.usageNotPublished)
+  })
+
+  it('🔴 EMPTY warnings WITHOUT the flag: the generic "not published" note; WITH the flag: the stronger allergen note alone', async () => {
+    setDetail({ product: product({ warningsAllergens: '', allergenInfoIncomplete: false }) })
+    let html = await renderPage()
+    expect(count(html, 'data-testid="warnings-not-published"')).toBe(1)
+    expect(html).toContain(catalogHe.productDetails.warningsNotPublished)
+    expect(html).not.toContain('data-testid="allergen-info-incomplete"')
+
+    setDetail({ product: product({ warningsAllergens: '', allergenInfoIncomplete: true }) })
+    html = await renderPage()
+    expect(html).not.toContain('data-testid="warnings-not-published"')
+    expect(count(html, 'data-testid="allergen-info-incomplete"')).toBe(1)
+  })
+
   it('the note uses logical properties only — border-s, never border-l/border-r', async () => {
     setDetail({ product: product({ allergenInfoIncomplete: true }) })
     const html = await renderPage()
