@@ -45,8 +45,16 @@ export function CatalogSortSelect({ value, onChange, className = '' }: CatalogSo
          * behaviour for free (§10's reason survives) — dressed in the
          * secondary-button look. Compact h-9 from md up; full 44px touch
          * target below.
+         *
+         * 2026-09-08: `min-w-0 flex-1` on the SELECT fills whatever width
+         * the wrapper div above has; the wrapper's own width comes from the
+         * caller's className (CatalogPage passes `min-w-0 flex-1
+         * sm:flex-none`, so the wrapper grows only in the full-width row
+         * below sm). In a content-sized wrapper there is no spare space and
+         * the select stays its natural width. min-w-0 lets it shrink under
+         * its longest option at 320px instead of overflowing.
          */
-        className={`${FOCUS_RING} h-11 cursor-pointer rounded-card border border-border-control bg-well px-3 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:border-brand-teal hover:text-brand-teal-strong md:h-9`}
+        className={`${FOCUS_RING} h-11 min-w-0 flex-1 cursor-pointer rounded-card border border-border-control bg-well px-3 text-sm font-medium text-text-ink transition-colors duration-150 ease-standard hover:border-brand-teal hover:text-brand-teal-strong md:h-9`}
       >
         {CATALOG_SORT_VALUES.map((sortValue) => (
           <option key={sortValue} value={sortValue}>

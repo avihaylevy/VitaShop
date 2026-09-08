@@ -346,10 +346,22 @@ export function CatalogPage() {
           edge to edge, with the hairline drawing the seam over content.
           z-20 sits under the drawer/dialog overlays (z-40+) and over the
           raised hover card (z-10). */}
+      {/* 2026-09-08 (the user, on a phone: "the color buttons are cut
+          because of the sort and filter buttons"). The shelf had `flex-1`
+          — flex-basis 0 — and a wrapping row breaks lines from each item's
+          hypothetical size, so a basis of 0 always fit: the row never
+          wrapped, the shelf shrank to what the 271px controls left (36px
+          at 375). Now `flex-auto`: the basis is the chips' natural width,
+          so the controls wrap UNDER the shelf whenever both do not fit
+          (measured: below ~990px in Hebrew), and the shelf scrolls only
+          when it is alone on its line and still too wide (ISSUE-056).
+          Below sm the controls row is full width and the select fills it;
+          from sm the group sits at the inline end (ms-auto) whether it
+          shares the line or has its own. */}
       <div className="sticky top-[var(--sticky-header-h)] z-20 -mx-7 mt-4 border-b border-border-hairline bg-surface-page px-7 py-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-        <CategoryShelf categories={categories} activeCategorySlug={categorySlug} className="min-w-0 flex-1" />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+        <CategoryShelf categories={categories} activeCategorySlug={categorySlug} className="min-w-0 flex-auto" />
+        <div className="flex w-full items-center gap-2 sm:w-auto sm:ms-auto">
           <button
             type="button"
             aria-haspopup="dialog"
@@ -406,7 +418,7 @@ export function CatalogPage() {
             </button>
           </div>
 
-          <CatalogSortSelect value={urlState.sort} onChange={handleSortChange} />
+          <CatalogSortSelect value={urlState.sort} onChange={handleSortChange} className="min-w-0 flex-1 sm:flex-none" />
         </div>
         </div>
       </div>

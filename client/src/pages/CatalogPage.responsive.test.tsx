@@ -312,6 +312,50 @@ describe('physicalDirectionClasses — detector contract', () => {
  * where the drawer is open with its trigger invisible, or closed while the
  * rail is still hidden.
  */
+describe('CatalogPage responsive — the chrome row WRAPS instead of squeezing the shelf (2026-09-08)', () => {
+  /*
+   * The user, on a phone: "the color buttons are cut because of the sort
+   * and filter buttons". Measured live at 375px: the controls group is
+   * 271px wide at every width, and the shelf got the 36px left over —
+   * because it had `flex-1` (flex-basis 0). A wrapping flex row decides
+   * line breaks from each item's HYPOTHETICAL main size, and a basis of 0
+   * always "fits", so the row never wrapped and the shelf shrank instead.
+   *
+   * The contract: the shelf's basis is AUTO (its chips' natural width,
+   * `flex-auto`), so the row wraps the controls under it whenever chips +
+   * controls exceed the row, and the shelf scrolls only when it is alone
+   * on its line and still too wide (ISSUE-056). jsdom lays nothing out;
+   * this pins the class contract, the browser matrix proves the layout.
+   */
+  it('the shelf has an auto flex basis (never basis 0), and the controls take the full row below sm and sit at the inline end above it', () => {
+    setCatalogData({ products: [product()], totalItems: 1 })
+    const html = renderCatalog('/catalog')
+    const shelf = html.match(/<nav aria-label="ניווט קטגוריות" class="([^"]*)"/)
+    expect(shelf).not.toBeNull()
+    const shelfClasses = shelf![1].split(/\s+/)
+    expect(shelfClasses).toContain('flex-auto')
+    expect(shelfClasses).toContain('min-w-0')
+    expect(shelfClasses).not.toContain('flex-1')
+
+    // The controls group: the element that holds the mobile filter trigger.
+    const controls = html.match(/<div class="([^"]*)"><button type="button" aria-haspopup="dialog"/)
+    expect(controls).not.toBeNull()
+    const controlClasses = controls![1].split(/\s+/)
+    expect(controlClasses).toContain('w-full')
+    expect(controlClasses).toContain('sm:w-auto')
+    expect(controlClasses).toContain('sm:ms-auto')
+
+    // The sort control's wrapper: grows to fill the full-width row below
+    // sm (its select is flex-1 inside it), content-sized from sm.
+    const sort = html.match(/<div class="flex items-center ([^"]*)"><label for="[^"]*"/)
+    expect(sort).not.toBeNull()
+    const sortClasses = sort![1].split(/\s+/)
+    expect(sortClasses).toContain('min-w-0')
+    expect(sortClasses).toContain('flex-1')
+    expect(sortClasses).toContain('sm:flex-none')
+  })
+})
+
 describe('CatalogPage responsive — filter surface breakpoint parity (Checkpoint I)', () => {
   it('hides the mobile filter trigger and shows the rail at exactly the same breakpoint useCloseAboveBreakpoint uses', async () => {
     // ISSUE-052: the rail mounts only when open — closed by default, opened
