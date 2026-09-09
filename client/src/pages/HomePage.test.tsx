@@ -191,6 +191,20 @@ describe('the New Arrivals shelf', () => {
     expect(screen.queryByText(`Product ${NEW_ARRIVALS_COUNT + 1}`)).toBeNull()
   })
 
+  it('2026-09-09: the shelf grid is FOUR columns from lg, never three — four cards must not sit 3 + 1 between 1024 and 1279', async () => {
+    routed(ok(Array.from({ length: 24 }, (_, i) => product(i + 1))))
+    renderHome()
+    const first = await screen.findByText('Product 1')
+    const grid = first.closest('ul')!
+    const classes = grid.className.split(/\s+/)
+    // Below lg the shelf shares the catalogue's steps (mobile untouched).
+    expect(classes).toContain('grid-cols-1')
+    expect(classes).toContain('min-[420px]:grid-cols-2')
+    expect(classes).toContain('lg:grid-cols-4')
+    expect(classes).not.toContain('lg:grid-cols-3')
+    expect(classes).not.toContain('xl:grid-cols-4')
+  })
+
   it('🔴 the cards BOTH link and add to cart — ISSUE-105', async () => {
     /*
      * ⚠️ THIS TEST ASSERTED THE OPPOSITE UNTIL 2026-08-14. Checkpoint F4 made

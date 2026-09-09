@@ -482,7 +482,10 @@ function NewArrivals({
             sentence is ANNOUNCED and not merely drawn.
           */}
           {/* showPackageMeta=false — the lecturer-fixes list: no quantity line on home. */}
-          <ProductGrid products={state.products} onAddToCart={onAddToCart} showPackageMeta={false} />
+          {/* template="shelf" (2026-09-09): four columns from lg, so the four
+              cards never sit 3 + 1 between 1024 and 1279; below lg it is the
+              catalogue's own steps, untouched. */}
+          <ProductGrid products={state.products} onAddToCart={onAddToCart} showPackageMeta={false} template="shelf" />
         </div>
       )}
 

@@ -31,10 +31,21 @@ type ProductGridProps = GridAction & {
    * responsive suite.
    */
   capped?: boolean
+  /**
+   * 2026-09-09 (the user: "one card is placed one row down and alone" on
+   * the home page). `shelf` is the home's four-card row: the catalogue's
+   * steps below lg (mobile untouched), then FOUR columns from 1024 instead
+   * of three — the home has no filter rail, so four 230px cards fit where
+   * the catalogue keeps three. Four cards never sit 3 + 1 again. Takes
+   * precedence over `capped` when both are given.
+   */
+  template?: GridTemplate
 }
 
+export type GridTemplate = 'fluid' | 'capped' | 'shelf'
+
 /**
- * Both templates exported so the LOADING skeleton can render the SAME
+ * All templates exported so the LOADING skeleton can render the SAME
  * grid as the ready state (the skeleton/grid parity contract
  * CatalogPage.responsive.test.tsx pins for the catalog — favourites gets
  * the same guarantee by construction, not by a second copy).
@@ -50,6 +61,8 @@ export const GRID_CLASS = {
     // justify-start = inline-start: the packed row sits right in RTL,
     // left in LTR, from the one logical rule (no direction branch).
     'grid grid-cols-[repeat(auto-fill,minmax(min(var(--card-track-min),100%),var(--card-track-max)))] justify-start gap-3 md:gap-4',
+  // The home shelf — see `template` on the props.
+  shelf: 'grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4 md:gap-4',
 } as const
 
 /**
@@ -57,7 +70,8 @@ export const GRID_CLASS = {
  * `ul`/`li`, keyed by slug. The grid template and gap are the only
  * responsive behavior here; RTL/LTR share the same grid (CSS grid
  * auto-placement already follows document direction, no separate rule
- * needed). TWO templates since area 6 — see GRID_CLASS above.
+ * needed). THREE templates — fluid, capped (area 6), shelf (2026-09-09) —
+ * see GRID_CLASS above.
  *
  * Default (fluid) breakpoints: 1 col below 420px, 2 from 420px, 3 from
  * 1024px (Tailwind's own `lg`), 4 from 1280px (Tailwind's own `xl`) —
@@ -72,14 +86,17 @@ export function ProductGrid({
   emptyState,
   onFavouriteToggled,
   capped = false,
+  template,
   ...action
 }: ProductGridProps) {
   if (products.length === 0) {
     return emptyState ?? null
   }
 
+  const gridClass = GRID_CLASS[template ?? (capped ? 'capped' : 'fluid')]
+
   return (
-    <ul className={capped ? GRID_CLASS.capped : GRID_CLASS.fluid}>
+    <ul className={gridClass}>
       {products.map((product) => (
         <li key={product.slug}>
           <ProductCard

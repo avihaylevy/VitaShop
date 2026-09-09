@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Surface } from '../ui/Surface'
 import { VisuallyHidden } from '../ui/VisuallyHidden'
-import { GRID_CLASS } from './ProductGrid'
+import { GRID_CLASS, type GridTemplate } from './ProductGrid'
 
 const SKELETON_COUNT = 8
 
@@ -12,7 +12,10 @@ const SKELETON_COUNT = 8
  * — Checkpoint B §0/§4. Sighted users see only the skeleton, unchanged.
  * No fetch, no hook beyond translation, no catalogue-state knowledge.
  */
-export function CatalogLoadingState({ capped = false }: { capped?: boolean } = {}) {
+export function CatalogLoadingState({
+  capped = false,
+  template,
+}: { capped?: boolean; template?: GridTemplate } = {}) {
   const { t } = useTranslation('catalog')
 
   return (
@@ -22,10 +25,11 @@ export function CatalogLoadingState({ capped = false }: { capped?: boolean } = {
       </VisuallyHidden>
       {/* GRID_CLASS, the ready grid's own strings — the skeleton/grid
           parity contract (CatalogPage.responsive.test.tsx pins it for the
-          catalog) holds by construction for BOTH templates: a page passing
-          `capped` to its ProductGrid passes it here too, or the content
-          snap-reflows the moment it arrives (area-6 review finding). */}
-      <ul className={capped ? GRID_CLASS.capped : GRID_CLASS.fluid} aria-hidden="true">
+          catalog) holds by construction for EVERY template: a page passing
+          `capped` or `template` to its ProductGrid passes the same here too,
+          or the content snap-reflows the moment it arrives (area-6 review
+          finding). The same lookup as ProductGrid, `template` first. */}
+      <ul className={GRID_CLASS[template ?? (capped ? 'capped' : 'fluid')]} aria-hidden="true">
         {Array.from({ length: SKELETON_COUNT }, (_, index) => (
           <li key={index}>
             <Surface variant="section" bordered className="flex flex-col gap-3 p-4">

@@ -30,9 +30,12 @@ import type { SupportedLanguage } from '../i18n'
  * is it one row.
  *
  * 🔴 Four is kept because it fills the widest row and tiles evenly at the two
- * commonest widths; the orphan between 1024 and 1279 is accepted and named. A
- * label asserting what the layout cannot support is the defect class DEC-064's
- * own note describes, and this comment was an instance of it.
+ * commonest widths. The orphan between 1024 and 1279 WAS accepted and named
+ * here until 2026-09-09, when the user saw it and the home shelf got its own
+ * grid template (`ProductGrid` template="shelf": four columns from 1024), so
+ * four cards are now 4 rows below 420, 2 x 2 from 420 to 1023 and one row
+ * from 1024. A label asserting what the layout cannot support is the defect
+ * class DEC-064's own note describes, and this comment was an instance of it.
  */
 export const NEW_ARRIVALS_COUNT = 4
 
