@@ -96,6 +96,25 @@ async function openPanelAndSend(text: string) {
 }
 
 describe('AgentWidget', () => {
+  it('2026-09-09 (ISSUE-197): the launcher is icon-only below sm — the visible label is hidden there, the name comes from aria-label at every width', () => {
+    stubFetch(agentReply('?'))
+    renderWidget()
+    const button = screen.getByRole('button', { name: i18n.t('agent:button.open') })
+    expect(button.getAttribute('aria-label')).toBe(i18n.t('agent:button.open'))
+    // The visible copy is aria-hidden (never a second name) and display:none
+    // below sm. Not sr-only: index.css's own .sr-only outranks the sm: undo.
+    const label = within(button).getByText(i18n.t('agent:button.open'))
+    expect(label.getAttribute('aria-hidden')).toBe('true')
+    const labelClasses = label.className.split(/\s+/)
+    expect(labelClasses).toContain('hidden')
+    expect(labelClasses).toContain('sm:inline')
+    const buttonClasses = button.className.split(/\s+/)
+    expect(buttonClasses).toContain('px-0')
+    expect(buttonClasses).toContain('sm:px-4')
+    // jsdom lays nothing out: the 44x44 circle, the label's return at sm
+    // and what the circle no longer covers are the browser matrix's to prove.
+  })
+
   it('the floating button opens the panel with the composer focused target present', async () => {
     stubFetch(agentReply('?'))
     renderWidget()

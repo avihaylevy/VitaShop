@@ -110,6 +110,16 @@ export function AgentWidget() {
        * and motion-safe-gated; it hides while the panel is open so the
        * breathing never plays under the scrim.
        */}
+      {/* 2026-09-09 (ISSUE-197, the user's pick): ICON-ONLY BELOW sm. The
+          112px pill sat in the same column as every product card's
+          add-to-cart button on a phone and covered one at any scroll
+          position; a 44px circle covers less than half of it. The visible
+          label is display:none below sm and the button carries the same
+          string as aria-label, so the accessible name is identical at
+          every width. NOT `sr-only sm:not-sr-only`: index.css defines its
+          own .sr-only (the skip link) after the utilities, and it beat
+          the sm: rule — the label never came back on desktop (caught in
+          the matrix, 2026-09-09). px-0 makes h-11/min-w-11 a true circle. */}
       <div className="fixed bottom-4 end-4 z-30">
         <span
           aria-hidden="true"
@@ -121,12 +131,15 @@ export function AgentWidget() {
           ref={buttonRef}
           type="button"
           onClick={() => setPanelOpen(true)}
-          className={`${FOCUS_RING} relative inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-round bg-agent px-4 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgb(122_62_107/0.35)] transition-[background-color,box-shadow,transform] duration-150 ease-standard hover:-translate-y-0.5 hover:bg-agent-strong hover:shadow-[0_8px_20px_rgb(122_62_107/0.45)] active:translate-y-0 active:scale-[0.98] motion-reduce:transition-none motion-reduce:hover:translate-y-0`}
+          aria-label={t('button.open')}
+          className={`${FOCUS_RING} relative inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-round bg-agent px-0 text-[13px] sm:px-4 font-semibold text-white shadow-[0_4px_14px_rgb(122_62_107/0.35)] transition-[background-color,box-shadow,transform] duration-150 ease-standard hover:-translate-y-0.5 hover:bg-agent-strong hover:shadow-[0_8px_20px_rgb(122_62_107/0.45)] active:translate-y-0 active:scale-[0.98] motion-reduce:transition-none motion-reduce:hover:translate-y-0`}
         >
           <Icon size={17}>
             <ChatBubbleIcon />
           </Icon>
-          {t('button.open')}
+          <span aria-hidden="true" className="hidden sm:inline">
+            {t('button.open')}
+          </span>
         </button>
       </div>
 
