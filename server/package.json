@@ -26,22 +26,22 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.7.0",
+    "express-rate-limit": "^8.7.1",
     "express-session": "^1.19.0",
-    "multer": "^2.3.0",
-    "pg": "^8.23.0",
-    "zod": "^4.5.4"
+    "multer": "^2.4.0",
+    "pg": "^8.23.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/connect-pg-simple": "^7.0.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/express-session": "^1.19.0",
-    "@types/multer": "^2.2.0",
+    "@types/multer": "^2.3.0",
     "@types/node": "^24.13.3",
     "@types/pg": "^8.23.1",
     "prisma": "7.10.0",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.2",
     "vitest": "^4.1.11"
   }
